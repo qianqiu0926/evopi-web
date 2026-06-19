@@ -1,0 +1,11 @@
+slug	name	category	sheet	slot	description	use_when	icon_path
+soft-arrow-left	软萌左箭头	方向操作	03-arrows-actions	3	rounded arrow pointing left	返回、向左	icons/soft-arrow-left.png
+soft-add-plus	软萌新增	核心状态	01-core-status	5	pastel circle with a bold plus	新增、创建、添加	icons/soft-add-plus.png
+soft-import-data	软萌导入数据	后台设置	39-admin-settings	10	database with upload arrow	导入、迁移	icons/soft-import-data.png
+soft-user-add	软萌加好友	沟通社交	06-communication-social	10	user face with plus badge	添加成员、关注	icons/soft-user-add.png
+soft-idea-bulb	软萌灵感	情绪反馈	11-emotions-reactions	12	small light bulb with pastel glow	灵感、想法	icons/soft-idea-bulb.png
+soft-image-landscape	软萌图片	媒体创作	05-media-creative	1	rounded photo with sun and hill	图片、相册	icons/soft-image-landscape.png
+soft-waveform-audio	软萌波形	音乐音频	45-music-audio	5	audio waveform line	波形、音频	icons/soft-waveform-audio.png
+soft-arrow-right	软萌右箭头	方向操作	03-arrows-actions	4	rounded arrow pointing right	前进、向右	icons/soft-arrow-right.png
+soft-favorite-collection	软萌精选收藏	品牌高级	50-premium-brand	14	bookmark with heart	收藏、精选	icons/soft-favorite-collection.png
+soft-note-sticky	软萌便签	内容文件	04-content-files	3	sticky note with folded corner	便签、笔记	icons/soft-note-sticky.png
