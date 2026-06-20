@@ -719,6 +719,7 @@ export async function runPiAgent(input: {
   goalName?: string
   workspaceTitle?: string
   message: string
+  visualFrameDataUrl?: string
   agent?: string
   sessionKey?: string
   evomapSearchQuery?: string

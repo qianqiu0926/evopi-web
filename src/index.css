@@ -161,19 +161,23 @@ body[data-theme="notion"] * {
 }
 
 /* ============================================================
-   Notion 主题核心：隐藏所有可爱图标，纯文字/几何
+   Notion 主题核心：保留图标，但用像素风（由 IconThemeSwap 换 src）
+   像素图标鲜艳，所以科技风适度向像素风靠拢：图标锐利、保留彩色
    ============================================================ */
 body[data-theme="notion"] .cute-icon {
-  display: none !important;
+  display: block !important;
+  image-rendering: pixelated;
+  /* 像素图标本身是彩色 PNG，深底上无需滤镜，保持鲜艳 */
+  filter: none;
 }
 
-/* 图标容器留白塌缩 */
 body[data-theme="notion"] .cute-icon-wrap,
 body[data-theme="notion"] .page-head-icon {
-  display: none !important;
+  display: inline-grid !important;
+  image-rendering: pixelated;
 }
 
-/* brand-mark 用文字「P」替代图标 */
+/* brand-mark 仍用文字「P」（像素风里也简洁） */
 body[data-theme="notion"] .brand-mark {
   display: grid !important;
   place-items: center;
@@ -186,15 +190,6 @@ body[data-theme="notion"] .brand-mark {
 
 body[data-theme="notion"] .brand-mark.big {
   font-size: 28px;
-}
-
-/* 导航/卡片里的图标位塌缩，文字直接顶上 */
-body[data-theme="notion"] .nav-button,
-body[data-theme="notion"] .goal-card,
-body[data-theme="notion"] .skill-card,
-body[data-theme="notion"] .memory-item,
-body[data-theme="notion"] .privacy-row {
-  gap: 0;
 }
 
 body[data-theme="notion"] .nav-button {

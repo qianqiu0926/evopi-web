@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import './App.css'
 import {
   assetLibrary,
@@ -39,13 +39,13 @@ import { AuthModal } from './components/AuthModal'
 import { EvolutionMindMap } from './components/EvolutionMindMap'
 import { EvolutionMapCanvas } from './components/EvolutionMapCanvas'
 import { Onboarding } from './components/Onboarding'
+import { IconThemeSwap } from './components/IconThemeSwap'
 import { TechCursor } from './components/TechCursor'
 import { emitPiCoreSignal, type PiCoreSignalKind } from './piCoreSignals'
 import {
   ApiError,
   attachEvoMapReference,
   bootstrapEvoMapDeveloperEnvironment,
-  bootstrapExternalAgents,
   callExternalAgent,
   confirmWeChatSession,
   createAppleReminder,
@@ -65,7 +65,6 @@ import {
   exportSkillToExternalAgent,
   getEvoMapDeveloperEnvironment,
   getWeChatRelayContract,
-  getVolcengineRealtimeConfig,
   getPiClubState,
   getSkill,
   getWeChatSession,
@@ -118,7 +117,6 @@ import {
   type PiRoomPersona,
   type Skill,
   type WeChatRelayContract,
-  type VolcengineRealtimeConfig,
 } from './api'
 import { useActionState, useInlineHint, type ActionStatus } from './hooks/useActionState'
 
@@ -232,7 +230,7 @@ function App() {
   useEffect(() => {
     const interval = window.setInterval(() => {
       const boosted = Date.now() < piBoostUntil
-      if (boosted || page === 'goals' || page === 'club' || page === 'evolution') setPiEmotion('happy')
+      if (boosted || page === 'goals' || page === 'club') setPiEmotion('happy')
       else if (inactive && pendingCount > 0) setPiEmotion('waiting')
       else setPiEmotion('calm')
     }, 500)
@@ -243,10 +241,8 @@ function App() {
   const mood: PetMood = useMemo(() => {
     if (piEmotion === 'happy') return 'happy'
     if (piEmotion === 'waiting') return 'feeding'
-    if (page === 'evolution') return 'happy'
     if (page === 'memory' || page === 'today') return pendingCount > 0 ? 'feeding' : 'idle'
     if (page === 'club') return 'happy'
-    if (page === 'skills') return 'learning'
     return 'idle'
   }, [page, piEmotion])
 
@@ -262,6 +258,7 @@ function App() {
     return (
       <>
         <TechCursor active={theme === 'notion'} />
+    <IconThemeSwap />
         <Onboarding
           userName={onboardingFor.name}
           onFinish={(r) => {
@@ -278,6 +275,7 @@ function App() {
     return (
       <>
         <TechCursor active={theme === 'notion'} />
+    <IconThemeSwap />
         <LaunchPage
           onEnter={(p) => setPage(p)}
           theme={theme}
@@ -298,6 +296,7 @@ function App() {
   return (
     <>
     <TechCursor active={theme === 'notion'} />
+    <IconThemeSwap />
     <AppShell
       page={page}
       setPage={setPage}
@@ -427,7 +426,6 @@ function AppShell({
   onLogout: () => void
 }) {
   const inRoomChat = page === 'room' && activePerson
-  const focusPage = page === 'club'
   const [railCollapsed, setRailCollapsed] = useState(false)
   const headerHint = useInlineHint(2400)
 
@@ -455,7 +453,7 @@ function AppShell({
   }
 
   return (
-    <main className={`app-shell ${inRoomChat ? 'wide-center' : ''} ${focusPage ? 'focus-page' : ''} ${navCollapsed ? 'nav-collapsed' : ''} ${railCollapsed ? 'rail-collapsed' : ''}`}>
+    <main className={`app-shell ${inRoomChat ? 'wide-center' : ''} ${navCollapsed ? 'nav-collapsed' : ''} ${railCollapsed ? 'rail-collapsed' : ''}`}>
       <div className="doodle-bg" aria-hidden="true">
         <span className="blob blob-a" />
         <span className="blob blob-b" />
@@ -538,7 +536,7 @@ function AppShell({
       </aside>
 
       <section className="page-area">
-        {!inRoomChat && !focusPage && (
+        {!inRoomChat && (
           <header className="page-header">
             <div className="page-head-main">
               <CuteIcon name={pageIcon(page)} className="page-head-icon" />
@@ -574,7 +572,7 @@ function AppShell({
         {page === 'privacy' && <PrivacyPage initialLevel={onboardDepth} />}
       </section>
 
-      {!inRoomChat && !focusPage && !railCollapsed && (
+      {!inRoomChat && !railCollapsed && (
         <aside className="state-rail">
           <button
             className="rail-collapse-btn"
@@ -589,7 +587,7 @@ function AppShell({
         </aside>
       )}
 
-      {!inRoomChat && !focusPage && railCollapsed && (
+      {!inRoomChat && railCollapsed && (
         <button
           className="rail-restore-btn"
           onClick={() => setRailCollapsed(false)}
@@ -630,6 +628,7 @@ type SensingSignal = 'idle' | 'collecting' | 'modelPending' | 'attentive' | 'con
 type SensingSource = 'none' | 'vision' | 'voice' | 'multimodal'
 type AnalysisStatus = 'idle' | 'collecting' | 'analyzing' | 'ready' | 'error'
 type VoiceStatus = 'idle' | 'listening' | 'processing' | 'speaking' | 'error'
+type PiCallMode = 'text' | 'observe' | 'voice'
 
 type SpeechRecognitionEventLike = Event & {
   results: {
@@ -688,7 +687,7 @@ const voiceStatusLabel: Record<VoiceStatus, string> = {
   idle: '待机',
   listening: '正在听',
   processing: '整理语音',
-  speaking: '准备回话',
+  speaking: 'Pi 回话中',
   error: '需要接入',
 }
 
@@ -736,8 +735,6 @@ const sensingSignalMeta: Record<SensingSignal, { label: string; bubble: string; 
     mood: 'sleeping',
   },
 }
-
-const analysisStepLabels = ['摄像头帧', '麦克风音色', '语义转写', '小狗回话']
 
 const sensingPromptCue = (
   status: AnalysisStatus,
@@ -803,14 +800,9 @@ function TodayPage({ goRoom, goGoals }: { goRoom: () => void; goGoals: () => voi
   const [sensingConfidence, setSensingConfidence] = useState(0)
   const [voiceStatus, setVoiceStatus] = useState<VoiceStatus>('idle')
   const [voiceTranscript, setVoiceTranscript] = useState('')
-  const [volcengineConfig, setVolcengineConfig] = useState<VolcengineRealtimeConfig | null>(null)
-  const [volcengineStatus, setVolcengineStatus] = useState<'loading' | 'ready' | 'error'>('loading')
-  const [volcengineMessage, setVolcengineMessage] = useState('')
+  const [piCallMode, setPiCallMode] = useState<PiCallMode>('text')
+  const [piVoiceEnabled, setPiVoiceEnabled] = useState(false)
   const [captureHint, setCaptureHint] = useState<'idle' | 'skill' | 'goal'>('idle')
-  const [externalConnections, setExternalConnections] = useState<ExternalAgentConnection[]>([])
-  const [developerEnvironment, setDeveloperEnvironment] = useState<DeveloperEnvironmentConnection | null>(null)
-  const [externalBootState, setExternalBootState] = useState<'loading' | 'ready' | 'error'>('loading')
-  const [externalBootMessage, setExternalBootMessage] = useState('')
   const chatRef = useRef<HTMLDivElement>(null)
   const videoRef = useRef<HTMLVideoElement>(null)
   const streamRef = useRef<MediaStream | null>(null)
@@ -820,67 +812,6 @@ function TodayPage({ goRoom, goGoals }: { goRoom: () => void; goGoals: () => voi
   const send = useActionState()
   const sendHint = useInlineHint(2600)
   const voiceHint = useInlineHint(2200)
-
-  const bootExternalAgents = async (force = false) => {
-    setExternalBootState('loading')
-    setExternalBootMessage('')
-    try {
-      const [runtimeResult, developerResult] = await Promise.all([
-        bootstrapExternalAgents({ force }),
-        bootstrapEvoMapDeveloperEnvironment({ force }),
-      ])
-      setExternalConnections(runtimeResult.connections)
-      setDeveloperEnvironment(developerResult.environment)
-      setExternalBootState('ready')
-      setExternalBootMessage(runtimeResult.imported || developerResult.imported ? '已同步本机开发环境' : '已读取开发环境快照')
-    } catch (error) {
-      setExternalBootState('error')
-      setExternalBootMessage(formatApiError(error))
-    }
-  }
-
-  useEffect(() => {
-    let cancelled = false
-    const timer = window.setTimeout(() => {
-      Promise.all([
-        bootstrapExternalAgents({ force: false }),
-        bootstrapEvoMapDeveloperEnvironment({ force: false }),
-      ])
-        .then(([runtimeResult, developerResult]) => {
-          if (cancelled) return
-          setExternalConnections(runtimeResult.connections)
-          setDeveloperEnvironment(developerResult.environment)
-          setExternalBootState('ready')
-          setExternalBootMessage(runtimeResult.imported || developerResult.imported ? '已同步本机开发环境' : '已读取开发环境快照')
-        })
-        .catch((error) => {
-          if (cancelled) return
-          setExternalBootState('error')
-          setExternalBootMessage(formatApiError(error))
-        })
-    }, 0)
-    return () => {
-      cancelled = true
-      window.clearTimeout(timer)
-    }
-  }, [])
-
-  useEffect(() => {
-    let cancelled = false
-    getVolcengineRealtimeConfig()
-      .then((config) => {
-        if (cancelled) return
-        setVolcengineConfig(config)
-        setVolcengineStatus('ready')
-        setVolcengineMessage(config.configured ? '火山 RTC 已接入' : config.nextAction)
-      })
-      .catch((error) => {
-        if (cancelled) return
-        setVolcengineStatus('error')
-        setVolcengineMessage(formatApiError(error))
-      })
-    return () => { cancelled = true }
-  }, [])
 
   useEffect(() => {
     chatRef.current?.scrollTo({ top: chatRef.current.scrollHeight, behavior: 'smooth' })
@@ -910,14 +841,49 @@ function TodayPage({ goRoom, goGoals }: { goRoom: () => void; goGoals: () => voi
   const activeContext = workbenchContexts.find((item) => item.id === activeContextId) ?? workbenchContexts[0]
   const sensingMeta = sensingSignalMeta[sensingSignal]
   const callMood = voiceStatus === 'speaking' ? 'happy' : sensingMeta.mood
-  const modelPipelineActive = cameraStatus === 'on' || voiceStatus !== 'idle' || sensingSource !== 'none'
-  const volcengineReady = volcengineStatus === 'ready' && Boolean(volcengineConfig?.configured)
-  const volcengineCardTitle = volcengineReady ? '火山 RTC 已接入' : volcengineStatus === 'loading' ? '火山 RTC 检测中' : '火山 RTC 待配置'
-  const volcengineCardCopy = volcengineReady
-    ? `${volcengineConfig?.appIdPreview ?? 'AppID'} · ${volcengineConfig?.scene ?? 'evopi-workbench'}`
-    : volcengineMessage || '等待后端读取火山引擎配置'
 
-  const startCamera = async () => {
+  const captureVideoFrame = () => {
+    const video = videoRef.current
+    if (!video || cameraStatus !== 'on' || video.videoWidth <= 0 || video.videoHeight <= 0) return ''
+    const canvas = document.createElement('canvas')
+    canvas.width = 640
+    canvas.height = Math.max(1, Math.round((video.videoHeight / video.videoWidth) * canvas.width))
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return ''
+    ctx.translate(canvas.width, 0)
+    ctx.scale(-1, 1)
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
+    return canvas.toDataURL('image/jpeg', 0.72)
+  }
+
+  const applyCallMode = (mode: PiCallMode) => {
+    setPiCallMode(mode)
+    setPiVoiceEnabled(mode === 'voice')
+    if (mode === 'text') {
+      if (cameraStatus === 'on' || cameraStatus === 'requesting') stopCamera()
+      recognitionRef.current?.abort()
+      window.speechSynthesis?.cancel()
+      setVoiceStatus('idle')
+      setVoiceTranscript('')
+    }
+    if (mode === 'observe') {
+      if (cameraStatus === 'on') {
+        stopCamera()
+        void startCamera('observe')
+      }
+      setSensingSource(cameraStatus === 'on' ? 'vision' : 'none')
+      setPiVoiceEnabled(false)
+    }
+    if (mode === 'voice') {
+      if (cameraStatus === 'on') {
+        stopCamera()
+        void startCamera('voice')
+      }
+      setSensingSource(cameraStatus === 'on' ? 'multimodal' : 'none')
+    }
+  }
+
+  const startCamera = async (mode: PiCallMode = piCallMode) => {
     if (!navigator.mediaDevices?.getUserMedia) {
       setCameraStatus('error')
       setCameraError('当前浏览器不支持摄像头调用。')
@@ -928,18 +894,21 @@ function TodayPage({ goRoom, goGoals }: { goRoom: () => void; goGoals: () => voi
     setCameraError('')
     setAnalysisStatus('collecting')
     setSensingSignal('collecting')
-    setSensingSource('multimodal')
+    setSensingSource(mode === 'voice' ? 'multimodal' : 'vision')
     setSensingConfidence(18)
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 360 }, audio: true })
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { width: 640, height: 360 },
+        audio: mode === 'voice',
+      })
       streamRef.current = stream
       if (videoRef.current) videoRef.current.srcObject = stream
       setCameraStatus('on')
       setAnalysisStatus('analyzing')
       setSensingSignal('modelPending')
-      setSensingSource('multimodal')
+      setSensingSource(mode === 'voice' ? 'multimodal' : 'vision')
       setSensingConfidence(42)
-      voiceHint.show(volcengineReady ? '视频对话已开启，下一步接入火山 RTC 房间 Token' : '视频对话已开启，火山 RTC 配置待补全')
+      voiceHint.show(mode === 'voice' ? '视频对话已开启，你可以直接说出任务。' : '视频观察已开启，Pi 会结合画面理解你的工作状态。')
       if (analysisTimerRef.current !== null) window.clearTimeout(analysisTimerRef.current)
       analysisTimerRef.current = window.setTimeout(() => {
         setAnalysisStatus('ready')
@@ -974,6 +943,10 @@ function TodayPage({ goRoom, goGoals }: { goRoom: () => void; goGoals: () => voi
 
   const startVoiceInput = () => {
     emitPiCoreSignal('interaction')
+    if (piCallMode !== 'voice') {
+      setPiCallMode('voice')
+      setPiVoiceEnabled(true)
+    }
     if (voiceStatus === 'listening') {
       recognitionRef.current?.stop()
       setVoiceStatus('processing')
@@ -985,7 +958,7 @@ function TodayPage({ goRoom, goGoals }: { goRoom: () => void; goGoals: () => voi
       setSensingSource(cameraStatus === 'on' ? 'multimodal' : 'voice')
       setAnalysisStatus(cameraStatus === 'on' ? 'ready' : 'error')
       setSensingSignal(cameraStatus === 'on' ? 'modelPending' : 'idle')
-      voiceHint.show('当前浏览器不支持本地语音转写，需接入火山引擎流式 ASR')
+      voiceHint.show('当前浏览器暂不支持语音转写，你可以先用文字说明任务。')
       return
     }
     const recognition = new Recognition()
@@ -1064,6 +1037,7 @@ function TodayPage({ goRoom, goGoals }: { goRoom: () => void; goGoals: () => voi
   }
 
   const speakPiReply = (reply: string) => {
+    if (piCallMode !== 'voice' || !piVoiceEnabled) return
     if (!('speechSynthesis' in window)) return
     const utterance = new SpeechSynthesisUtterance(reply.replace(/\*/g, ''))
     utterance.lang = 'zh-CN'
@@ -1082,6 +1056,12 @@ function TodayPage({ goRoom, goGoals }: { goRoom: () => void; goGoals: () => voi
     emitPiCoreSignal(activeContext?.kind === 'goal' ? 'work' : 'delegate')
     const contextText = activeContext ? `当前续接上下文：${activeContext.title}。${activeContext.desc}` : '没有选择历史上下文。'
     const sensingText = sensingPromptCue(analysisStatus, sensingSource, sensingSignal, sensingConfidence, voiceTranscript)
+    const visualFrameDataUrl = cameraStatus === 'on' ? captureVideoFrame() : ''
+    const modeText = piCallMode === 'voice'
+      ? '当前是视频对话模式。用户可能通过语音或文字表达任务，你需要像 1V1 导师一样先复述任务，再推进下一步。只有用户明确确认后，才说开始执行。'
+      : piCallMode === 'observe'
+        ? '当前是开视频观察 + 手写对话模式。请结合画面判断用户是否在电脑前、是否疑惑、疲惫、专注或兴奋，但不要输出技术字段，不要声称百分百准确。Pi 默认不说话，只在文字里温和提示观察到的协作节奏。'
+        : '当前是文字协作模式。不要假装看到了画面或听到了语音。'
 
     setMessages((current) => [...current, { from: 'me', text: clean, time: '现在' }])
     setText('')
@@ -1089,22 +1069,24 @@ function TodayPage({ goRoom, goGoals }: { goRoom: () => void; goGoals: () => voi
     send.run(async () => {
       try {
         const result = await runPiAgent({
-          workspaceTitle: 'EVE 派今日工作台',
+          workspaceTitle: 'EvoPi 今日工作台',
           goalName: activeContext?.kind === 'goal' ? '职业成长' : undefined,
           sessionKey: 'today-eve-workbench',
           message: [
-            '你是 EVE 派，用户的自进化个人助理。',
+            '你是 EvoPi，用户的自进化个人助理。',
             '请用中文自然回复，不要使用星号符号。',
             '你的任务不是只给建议，而是先对话协作，判断这件事应该进入目标舱、继续在工作台完成，还是沉淀成 Skill。',
             contextText,
+            modeText,
             sensingText,
             `用户说：${clean}`,
           ].join('\n'),
+          visualFrameDataUrl: visualFrameDataUrl || undefined,
           timeoutSec: 30,
         })
         const reply = externalAgentOutput(result.result) || '我收到你的想法了。我们先把目标、约束和下一步动作拆清楚。'
         setMessages((current) => [...current, { from: 'them', text: reply, time: '现在' }])
-        if (modelPipelineActive) speakPiReply(reply)
+        if (piCallMode === 'voice' && piVoiceEnabled) speakPiReply(reply)
         setCaptureHint(activeContext?.kind === 'goal' ? 'goal' : 'skill')
       } catch (error) {
         setMessages((current) => [
@@ -1153,9 +1135,27 @@ function TodayPage({ goRoom, goGoals }: { goRoom: () => void; goGoals: () => voi
     <div className="today-workbench">
       <section className="eve-workbench-panel">
         <div className="eve-workbench-copy">
-          <span className="tag blue">EVE 派工作台</span>
-          <h2>告诉 EVE 派你现在想做什么</h2>
+          <span className="tag blue">EvoPi 工作台</span>
+          <h2>告诉 EvoPi 你现在想做什么</h2>
           <p>先在这里对话协作。属于长期目标的事会回到目标舱，不属于目标舱的事先做完，再决定是否沉淀成 Skill 或长期维护目标。</p>
+        </div>
+
+        <div className="pi-call-mode-switch" aria-label="选择协作方式">
+          {([
+            ['text', '文字协作', 'soft-chat-bubble'],
+            ['observe', '开视频观察', 'soft-privacy-eye'],
+            ['voice', '视频对话', 'soft-microphone-voice'],
+          ] as Array<[PiCallMode, string, CuteIconName]>).map(([mode, label, icon]) => (
+            <button
+              className={piCallMode === mode ? 'active' : ''}
+              key={mode}
+              onClick={() => applyCallMode(mode)}
+              type="button"
+            >
+              <CuteIcon name={icon} />
+              {label}
+            </button>
+          ))}
         </div>
 
         <div className="eve-workbench-grid">
@@ -1177,15 +1177,6 @@ function TodayPage({ goRoom, goGoals }: { goRoom: () => void; goGoals: () => voi
                   </div>
                 </article>
               ))}
-              {modelPipelineActive && (
-                <article className="eve-vision-bubble">
-                  <CuteIcon name={sensingSource === 'voice' ? 'soft-microphone-voice' : 'soft-privacy-eye'} />
-                  <div>
-                    <strong>{sensingMeta.label}</strong>
-                    <span>{sensingMeta.bubble}</span>
-                  </div>
-                </article>
-              )}
               {captureHint !== 'idle' && (
                 <article className="eve-capture-bubble">
                   <CuteIcon name={captureHint === 'skill' ? 'soft-settings-gear' : 'soft-goal-flag'} />
@@ -1212,20 +1203,6 @@ function TodayPage({ goRoom, goGoals }: { goRoom: () => void; goGoals: () => voi
                 }}
               />
               <button
-                className={`mini-action ${voiceStatus === 'listening' ? 'active btn-loading' : ''}`}
-                aria-label={voiceStatus === 'listening' ? '停止语音输入' : '语音对话'}
-                onClick={startVoiceInput}
-              >
-                <CuteIcon name="soft-microphone-voice" />
-              </button>
-              <button
-                className={`mini-action ${cameraStatus === 'on' ? 'active' : ''}`}
-                aria-label="视频对话"
-                onClick={() => cameraStatus === 'on' ? stopCamera() : void startCamera()}
-              >
-                <CuteIcon name="soft-privacy-eye" />
-              </button>
-              <button
                 className={`send-button ${statusCls(send.status)}`}
                 aria-label="发送"
                 onClick={onSend}
@@ -1237,77 +1214,68 @@ function TodayPage({ goRoom, goGoals }: { goRoom: () => void; goGoals: () => voi
           </div>
 
           <aside className={`eve-vision-card ${cameraStatus === 'on' ? 'is-live' : ''}`}>
+            <div className="eve-vision-head">
+              <strong>和小狗 Pi 1V1</strong>
+              <span>{piCallMode === 'voice' ? '说清任务，Pi 复述确认后再开始做。' : piCallMode === 'observe' ? '开着视频写字聊，Pi 只观察节奏不抢话。' : '安静文字协作，需要时再开启视频。'}</span>
+            </div>
             <div className="eve-vision-preview">
               {cameraStatus === 'on' ? (
                 <>
                   <video ref={videoRef} autoPlay playsInline muted />
                   <div className="pet-video-avatar">
                     <PetSprite mood={callMood} size={86} />
-                    <span>{voiceStatusLabel[voiceStatus]}</span>
+                    <span>{piCallMode === 'voice' ? voiceStatusLabel[voiceStatus] : '陪你看着'}</span>
                   </div>
                 </>
               ) : (
                 <div className="eve-camera-placeholder">
                   <PetSprite mood={callMood} size={82} />
-                  <strong>{cameraStatus === 'requesting' ? '等待摄像头和麦克风授权' : '和小狗 Pi 视频对话'}</strong>
-                  <span>开启后进入同屏对话，正式情绪与音色识别由模型服务判断。</span>
+                  <strong>{cameraStatus === 'requesting' ? '等待授权' : 'Pi 在这里陪你'}</strong>
+                  <span>{piCallMode === 'voice' ? '开启后直接说任务。' : piCallMode === 'observe' ? '开启后用文字聊，Pi 会参考画面。' : '先从文字开始也可以。'}</span>
                 </div>
               )}
             </div>
-            <div className="eve-vision-head">
-              <strong>视频语音对话</strong>
-              <span>{cameraStatus === 'on' ? sensingMeta.cue : '点击开启后开始本机预览与收音'}</span>
-            </div>
-            <div className="eve-sensing-status">
-              <div>
-                <strong>{sensingMeta.label}</strong>
-                <span>{sensingSourceLabel[sensingSource]} · {analysisStatus === 'idle' ? '等待' : analysisStatus === 'collecting' ? '采集' : analysisStatus === 'analyzing' ? '分析' : analysisStatus === 'ready' ? '就绪' : '异常'}</span>
-              </div>
-              <em>{sensingConfidence}%</em>
-            </div>
-            <div className={`volcengine-status ${volcengineReady ? 'ready' : volcengineStatus === 'error' ? 'error' : ''}`}>
-              <CuteIcon name={volcengineReady ? 'soft-success-check' : 'soft-warning-triangle'} />
-              <div>
-                <strong>{volcengineCardTitle}</strong>
-                <span>{volcengineCardCopy}</span>
-              </div>
-            </div>
-            <div className="analysis-pipeline" aria-label="自动感知链路">
-              {analysisStepLabels.map((label, index) => {
-                const active = modelPipelineActive && (
-                  analysisStatus === 'ready'
-                    ? true
-                    : analysisStatus === 'analyzing'
-                      ? index < 3
-                      : analysisStatus === 'collecting'
-                        ? index < 2
-                        : false
-                )
-                return <span className={active ? 'active' : ''} key={label}>{label}</span>
-              })}
-            </div>
-            {voiceTranscript && (
-              <div className="voice-transcript">
-                <CuteIcon name="soft-waveform-audio" />
-                <span>{voiceTranscript}</span>
-              </div>
-            )}
             <div className="eve-vision-actions">
-              <button className="primary-btn sm" onClick={() => cameraStatus === 'on' ? stopCamera() : void startCamera()}>
+              <button
+                className="primary-btn sm"
+                onClick={() => {
+                  const nextMode = piCallMode === 'text' ? 'observe' : piCallMode
+                  if (cameraStatus === 'on') stopCamera()
+                  else {
+                    setPiCallMode(nextMode)
+                    void startCamera(nextMode)
+                  }
+                }}
+              >
                 <CuteIcon name={cameraStatus === 'on' ? 'soft-success-check' : 'soft-privacy-eye'} />
                 {cameraStatus === 'on' ? '结束视频' : cameraStatus === 'requesting' ? '请求中' : '开启视频'}
               </button>
-              <button className="ghost-btn sm" onClick={startVoiceInput}>
-                <CuteIcon name="soft-microphone-voice" />
-                {voiceStatus === 'listening' ? '停止收音' : '语音输入'}
-              </button>
+              {piCallMode === 'voice' && (
+                <button className={`ghost-btn sm ${voiceStatus === 'listening' ? 'btn-loading' : ''}`} onClick={startVoiceInput}>
+                  <CuteIcon name="soft-microphone-voice" />
+                  {voiceStatus === 'listening' ? '停止听我说' : '开始说话'}
+                </button>
+              )}
+              {piCallMode !== 'text' && (
+                <button
+                  className={`ghost-btn sm ${piVoiceEnabled ? 'active' : ''}`}
+                  onClick={() => setPiVoiceEnabled((current) => !current)}
+                  type="button"
+                >
+                  <CuteIcon name={piVoiceEnabled ? 'soft-waveform-audio' : 'soft-privacy-eye'} />
+                  {piVoiceEnabled ? 'Pi 说话' : '静音观察'}
+                </button>
+              )}
             </div>
+            {voiceTranscript && piCallMode === 'voice' && (
+              <div className="voice-transcript compact">
+                <CuteIcon name="soft-microphone-voice" />
+                <span>{voiceTranscript}</span>
+              </div>
+            )}
             {cameraStatus === 'error' && (
               <div className="inline-hint"><CuteIcon name="soft-warning-triangle" />{cameraError || '摄像头暂不可用'}</div>
             )}
-            <div className="sensing-disclaimer">
-              {volcengineReady ? 'AppKey 已留在后端环境，前端只读取接入状态。下一步生成临时 Token 后即可接 RTC SDK。' : '补齐火山 RTC 配置后，由视觉模型、流式 ASR、声纹/音色与对话模型自动判断。'}
-            </div>
           </aside>
         </div>
       </section>
@@ -1368,52 +1336,6 @@ function TodayPage({ goRoom, goGoals }: { goRoom: () => void; goGoals: () => voi
         <button className="ghost-btn sm" onClick={goRoom}>
           <CuteIcon name="soft-chat-bubble" />进入 PiRoom 深聊
         </button>
-      </section>
-
-      <section className="startup-env-panel">
-        <div className="startup-env-head">
-          <div>
-            <span className="tag blue">开发环境</span>
-            <strong>OpenClaw / Hermes / Pi / EvoMap Developers 启动接入</strong>
-            <small>{externalBootState === 'loading' ? '正在读取本机配置、Skill 与开发框架快照…' : externalBootMessage}</small>
-          </div>
-          <button className="ghost-btn sm" onClick={() => void bootExternalAgents(true)} disabled={externalBootState === 'loading'}>
-            <CuteIcon name="soft-refresh-loop" />重新同步
-          </button>
-        </div>
-        <div className="startup-env-grid">
-          {(['pi', 'openclaw', 'hermes'] as ExternalAgentKind[]).map((kind) => {
-            const connection = externalConnections.find((item) => item.kind === kind)
-            const ready = connection?.status === 'imported' || connection?.status === 'detected'
-            const chips = externalCapabilityChips(connection)
-            return (
-              <article className={`startup-env-card ${ready ? 'ready' : 'missing'}`} key={kind}>
-                <CuteIcon name={externalAgentIcon(kind)} />
-                <div>
-                  <strong>{externalAgentLabel(kind)}</strong>
-                  <span>{ready ? `${connection?.skills.length ?? 0} skills` : '等待导入或配置路径'}</span>
-                  {chips.length > 0 && (
-                    <div className="startup-env-chips">
-                      {chips.slice(0, 3).map((chip) => <em key={chip}>{chip}</em>)}
-                    </div>
-                  )}
-                </div>
-              </article>
-            )
-          })}
-          <article className={`startup-env-card ${developerEnvironment && developerEnvironment.status !== 'missing' ? 'ready' : 'missing'}`}>
-            <CuteIcon name="soft-folder-tab" />
-            <div>
-              <strong>EvoMap Developers</strong>
-              <span>{developerEnvironment?.connected ? 'OAuth 已授权' : developerEnvironment?.configured ? '框架已接入，待授权' : '等待配置开发框架'}</span>
-              {developerCapabilityChips(developerEnvironment).length > 0 && (
-                <div className="startup-env-chips">
-                  {developerCapabilityChips(developerEnvironment).slice(0, 3).map((chip) => <em key={chip}>{chip}</em>)}
-                </div>
-              )}
-            </div>
-          </article>
-        </div>
       </section>
 
       <section className="recent-section">
@@ -1586,6 +1508,9 @@ function GoalWorkspace({
   const [externalOpenClawModel, setExternalOpenClawModel] = useState('')
   const [externalState, setExternalState] = useState<'idle' | 'calling' | 'error'>('idle')
   const [openClawSyncState, setOpenClawSyncState] = useState<'idle' | 'previewing' | 'applying' | 'error'>('idle')
+  const [showEvoMap, setShowEvoMap] = useState(false)
+  const [showRuntime, setShowRuntime] = useState(false)
+  const [showSkillTools, setShowSkillTools] = useState(false)
   const scrollRef = useRef<HTMLDivElement>(null)
   const snippetFilters: Array<{ key: GoalSnippetFilter; label: string }> = [
     { key: 'all', label: '全部' },
@@ -2143,136 +2068,143 @@ function GoalWorkspace({
         </div>
       </section>
 
-      <section className="ws-evomap-panel">
-        <div className="ws-evomap-head">
-          <div>
-            <span className="tag pink">EvoMap</span>
-            <h3>可复用经验</h3>
-          </div>
-          <div className="ws-evomap-search">
-            <input
-              value={evomapQuery}
-              onChange={(e) => setEvomapQuery(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') void runEvoMapSearch()
-              }}
-              placeholder="搜索 EvoMap recipes"
-            />
-            <button className="primary-btn sm" onClick={() => void runEvoMapSearch()} disabled={evomapStatus === 'loading'}>
-              <CuteIcon name="soft-search-spark" />{evomapStatus === 'loading' ? '搜索中' : '搜索'}
-            </button>
-            <button className="ghost-btn sm" onClick={() => void connectEvoMap()}>
-              <CuteIcon name="soft-shield-check" />连接
-            </button>
-          </div>
-        </div>
-
-        {evomapStatus === 'error' && (
-          <div className="ws-evomap-error">
-            <CuteIcon name="soft-warning-triangle" />
-            <span>{evomapError}</span>
+      <section className="ws-compact-accordion">
+        <button className="ws-accordion-head" onClick={() => setShowEvoMap((v) => !v)} aria-expanded={showEvoMap}>
+          <span className="tag pink">EvoMap</span>
+          <strong>可复用经验</strong>
+          <span>{showEvoMap ? '收起' : '展开'}</span>
+        </button>
+        {showEvoMap && (
+          <div className="ws-accordion-body">
+            <div className="ws-evomap-head">
+              <div className="ws-evomap-search">
+                <input
+                  value={evomapQuery}
+                  onChange={(e) => setEvomapQuery(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') void runEvoMapSearch()
+                  }}
+                  placeholder="搜索 EvoMap recipes"
+                />
+                <button className="primary-btn sm" onClick={() => void runEvoMapSearch()} disabled={evomapStatus === 'loading'}>
+                  <CuteIcon name="soft-search-spark" />{evomapStatus === 'loading' ? '搜索中' : '搜索'}
+                </button>
+                <button className="ghost-btn sm" onClick={() => void connectEvoMap()}>
+                  <CuteIcon name="soft-shield-check" />连接
+                </button>
+              </div>
+            </div>
+            {evomapStatus === 'error' && (
+              <div className="ws-evomap-error">
+                <CuteIcon name="soft-warning-triangle" />
+                <span>{evomapError}</span>
+              </div>
+            )}
+            <div className="ws-evomap-results">
+              {evomapStatus === 'loading' && (
+                <div className="ws-evomap-empty">
+                  <CuteIcon name="soft-loading-loop" />
+                  <span>正在读取资料...</span>
+                </div>
+              )}
+              {evomapStatus === 'ready' && evomapRecipes.length === 0 && (
+                <div className="ws-evomap-empty">
+                  <CuteIcon name="soft-search-spark" />
+                  <span>这次搜索没有返回内容。</span>
+                </div>
+              )}
+              {evomapRecipes.map((recipe) => {
+                const id = recipeId(recipe)
+                const attached = Boolean(id && referencedEvoMapIds.includes(id))
+                const reuseGraph = id ? reuseByRecipeId[id] : undefined
+                return (
+                  <article className="ws-evomap-recipe" key={id ?? recipeTitle(recipe)}>
+                    <div>
+                      <strong>{recipeTitle(recipe)}</strong>
+                      <span>{recipeDescription(recipe) || recipeStatus(recipe)}</span>
+                    </div>
+                    <div className="ws-evomap-recipe-actions">
+                      <em className="tag">{recipe.livemode === false ? 'Test' : recipeStatus(recipe)}</em>
+                      <button className="ghost-btn sm" onClick={() => void referenceEvoMapRecipe(recipe)} disabled={!id || attached}>
+                        <CuteIcon name="soft-import-data" />{attached ? '已引用' : '引用'}
+                      </button>
+                      <button className="ghost-btn sm" onClick={() => void inspectReuseGraph(recipe)} disabled={!id || reuseLoadingId === id}>
+                        <CuteIcon name="soft-refresh-loop" />{reuseLoadingId === id ? '读取中' : '图谱'}
+                      </button>
+                    </div>
+                    {reuseGraph && (
+                      <div className="ws-evomap-reuse">
+                        {(reuseGraph.relatedRecipes ?? reuseGraph.reusedInRecipes ?? []).slice(0, 3).map((item) => (
+                          <span className="tag mint" key={recipeId(item) ?? recipeTitle(item)}>{recipeTitle(item)}</span>
+                        ))}
+                        {(reuseGraph.relatedRecipes ?? reuseGraph.reusedInRecipes ?? []).length === 0 && (
+                          <span>暂无关联。</span>
+                        )}
+                      </div>
+                    )}
+                  </article>
+                )
+              })}
+            </div>
           </div>
         )}
-
-        <div className="ws-evomap-results">
-          {evomapStatus === 'loading' && (
-            <div className="ws-evomap-empty">
-              <CuteIcon name="soft-loading-loop" />
-              <span>正在读取 EvoMap Developers...</span>
-            </div>
-          )}
-          {evomapStatus === 'ready' && evomapRecipes.length === 0 && (
-            <div className="ws-evomap-empty">
-              <CuteIcon name="soft-search-spark" />
-              <span>这次搜索没有返回 recipe。</span>
-            </div>
-          )}
-          {evomapRecipes.map((recipe) => {
-            const id = recipeId(recipe)
-            const attached = Boolean(id && referencedEvoMapIds.includes(id))
-            const reuseGraph = id ? reuseByRecipeId[id] : undefined
-            return (
-              <article className="ws-evomap-recipe" key={id ?? recipeTitle(recipe)}>
-                <div>
-                  <strong>{recipeTitle(recipe)}</strong>
-                  <span>{recipeDescription(recipe) || recipeStatus(recipe)}</span>
-                </div>
-                <div className="ws-evomap-recipe-actions">
-                  <em className="tag">{recipe.livemode === false ? 'Test' : recipeStatus(recipe)}</em>
-                  <button className="ghost-btn sm" onClick={() => void referenceEvoMapRecipe(recipe)} disabled={!id || attached}>
-                    <CuteIcon name="soft-import-data" />{attached ? '已引用' : '引用'}
-                  </button>
-                  <button className="ghost-btn sm" onClick={() => void inspectReuseGraph(recipe)} disabled={!id || reuseLoadingId === id}>
-                    <CuteIcon name="soft-refresh-loop" />{reuseLoadingId === id ? '读取中' : '图谱'}
-                  </button>
-                </div>
-                {reuseGraph && (
-                  <div className="ws-evomap-reuse">
-                    {(reuseGraph.relatedRecipes ?? reuseGraph.reusedInRecipes ?? []).slice(0, 3).map((item) => (
-                      <span className="tag mint" key={recipeId(item) ?? recipeTitle(item)}>{recipeTitle(item)}</span>
-                    ))}
-                    {(reuseGraph.relatedRecipes ?? reuseGraph.reusedInRecipes ?? []).length === 0 && (
-                      <span>暂无关联 recipe。</span>
-                    )}
-                  </div>
-                )}
-              </article>
-            )
-          })}
-        </div>
       </section>
 
-      <section className="ws-external-panel">
-        <div className="ws-external-copy">
-          <span className="tag blue">Runtime</span>
-          <h3>调用执行环境</h3>
-          <p>可交给 Pi / OpenClaw / Hermes 执行，也可直接走 EvoMap Developers 工作流。</p>
-        </div>
-        <div className="ws-external-controls">
-          <select
-            value={externalKind}
-            onChange={(e) => {
-              setExternalKind(e.target.value as WorkspaceRuntimeKind)
-              setSelectedExternalSkillId('')
-            }}
-          >
-            {workspaceRuntimeKinds.map((kind) => (
-              <option value={kind} key={kind}>{workspaceRuntimeLabel(kind)}</option>
-            ))}
-          </select>
-          <select
-            value={effectiveSelectedExternalSkillId}
-            onChange={(e) => setSelectedExternalSkillId(e.target.value)}
-            aria-label="选择外部 Skill"
-          >
-            <option value="">默认能力</option>
-            {callableExternalSkills.map((skill) => (
-              <option value={skill.id} key={skill.id}>{skill.title ?? skill.name}</option>
-            ))}
-          </select>
-          <input
-            value={externalPrompt}
-            onChange={(e) => setExternalPrompt(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') void runExternalAgent()
-            }}
-            placeholder="给 Agent runtime 的任务"
-          />
-          {externalKind === 'openclaw' && (
-            <input
-              value={externalOpenClawModel}
-              onChange={(e) => setExternalOpenClawModel(e.target.value)}
-              placeholder="可选模型：custom-nowcoding/gpt-5.4"
-            />
-          )}
-          <button className="primary-btn sm" onClick={() => void runExternalAgent()} disabled={externalState === 'calling'}>
-            <CuteIcon name="soft-send-plane" />{externalState === 'calling' ? '调用中' : '调用'}
-          </button>
-        </div>
-        {externalState === 'error' && (
-          <div className="ws-evomap-error">
-            <CuteIcon name="soft-warning-triangle" />
-            <span>Agent runtime 暂时不可用，可先到隐私权限页扫描或导入开发环境。</span>
+      <section className="ws-compact-accordion">
+        <button className="ws-accordion-head" onClick={() => setShowRuntime((v) => !v)} aria-expanded={showRuntime}>
+          <span className="tag blue">执行</span>
+          <strong>调用执行环境</strong>
+          <span>{showRuntime ? '收起' : '展开'}</span>
+        </button>
+        {showRuntime && (
+          <div className="ws-accordion-body">
+            <div className="ws-external-controls">
+              <select
+                value={externalKind}
+                onChange={(e) => {
+                  setExternalKind(e.target.value as WorkspaceRuntimeKind)
+                  setSelectedExternalSkillId('')
+                }}
+              >
+                {workspaceRuntimeKinds.map((kind) => (
+                  <option value={kind} key={kind}>{workspaceRuntimeLabel(kind)}</option>
+                ))}
+              </select>
+              <select
+                value={effectiveSelectedExternalSkillId}
+                onChange={(e) => setSelectedExternalSkillId(e.target.value)}
+                aria-label="选择外部 Skill"
+              >
+                <option value="">默认能力</option>
+                {callableExternalSkills.map((skill) => (
+                  <option value={skill.id} key={skill.id}>{skill.title ?? skill.name}</option>
+                ))}
+              </select>
+              <input
+                value={externalPrompt}
+                onChange={(e) => setExternalPrompt(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') void runExternalAgent()
+                }}
+                placeholder="给 Agent runtime 的任务"
+              />
+              {externalKind === 'openclaw' && (
+                <input
+                  value={externalOpenClawModel}
+                  onChange={(e) => setExternalOpenClawModel(e.target.value)}
+                  placeholder="可选模型：custom-nowcoding/gpt-5.4"
+                />
+              )}
+              <button className="primary-btn sm" onClick={() => void runExternalAgent()} disabled={externalState === 'calling'}>
+                <CuteIcon name="soft-send-plane" />{externalState === 'calling' ? '调用中' : '调用'}
+              </button>
+            </div>
+            {externalState === 'error' && (
+              <div className="ws-evomap-error">
+                <CuteIcon name="soft-warning-triangle" />
+                <span>执行环境暂时不可用，可稍后再试。</span>
+              </div>
+            )}
           </div>
         )}
       </section>
@@ -2286,6 +2218,12 @@ function GoalWorkspace({
               <span>缓存 {contextCache.length} 条 · 模板库 {snippets.length} 条</span>
             </div>
           </div>
+          <button className="ghost-btn sm ws-skill-toggle" onClick={() => setShowSkillTools((value) => !value)} aria-expanded={showSkillTools}>
+            <CuteIcon name="soft-settings-gear" />{showSkillTools ? '收起高级' : skillSaved ? '沉淀已完成' : '高级沉淀'}
+          </button>
+        </header>
+
+        {showSkillTools && (
           <div className="ws-skill-actions">
             <button
               className="ghost-btn sm"
@@ -2326,7 +2264,7 @@ function GoalWorkspace({
               </>
             )}
           </div>
-        </header>
+        )}
 
         {savedSkill?.recipeLink && (
           <EvoMapSkillStatusPanel

@@ -435,9 +435,10 @@ async function callAgent(input) {
 
   try {
     if (!minimaxApiKey) throw new Error('MINIMAX_API_KEY is not configured')
-    const reply = await callMiniMax(prompt, persona)
+    const visualFrameDataUrl = normalizeImageDataUrl(input.visualFrameDataUrl)
+    const reply = await callMiniMax(prompt, persona, visualFrameDataUrl)
     stdout = reply
-    json = { reply, provider: 'minimax', model: minimaxModel }
+    json = { reply, provider: 'minimax', model: minimaxModel, visualFrameUsed: Boolean(visualFrameDataUrl) }
   } catch (error) {
     status = 'runtime_error'
     runtimeReason = error instanceof Error ? error.message : 'MiniMax request failed'
@@ -484,9 +485,15 @@ async function callAgent(input) {
   return { result, operation }
 }
 
-async function callMiniMax(prompt, persona) {
+async function callMiniMax(prompt, persona, visualFrameDataUrl) {
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), 90_000)
+  const userContent = visualFrameDataUrl
+    ? [
+        { type: 'text', text: prompt || '请先给我一个判断。' },
+        { type: 'image_url', image_url: { url: visualFrameDataUrl } },
+      ]
+    : prompt || '请先给我一个判断。'
   try {
     const res = await fetch(`${minimaxBaseUrl}/chat/completions`, {
       method: 'POST',
@@ -499,7 +506,7 @@ async function callMiniMax(prompt, persona) {
         model: minimaxModel,
         messages: [
           { role: 'system', content: systemPrompt(persona) },
-          { role: 'user', content: prompt || '请先给我一个判断。' },
+          { role: 'user', content: userContent },
         ],
         temperature: 0.75,
         stream: false,
@@ -517,6 +524,15 @@ async function callMiniMax(prompt, persona) {
   } finally {
     clearTimeout(timeout)
   }
+}
+
+function normalizeImageDataUrl(value) {
+  if (typeof value !== 'string') return ''
+  const trimmed = value.trim()
+  if (!trimmed) return ''
+  if (!/^data:image\/(png|jpe?g|webp);base64,/i.test(trimmed)) return ''
+  const maxLength = 4_800_000
+  return trimmed.length <= maxLength ? trimmed : ''
 }
 
 function systemPrompt(persona) {

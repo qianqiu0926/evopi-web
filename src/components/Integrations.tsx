@@ -22,6 +22,7 @@ import { emitPiCoreSignal } from '../piCoreSignals'
    ⚠️ 跳转是真实外链动作，openIntegrations=false 时仅演示
    ============================================================ */
 export function Integrations() {
+  const [open, setOpen] = useState(false)
   const [agentOn, setAgentOn] = useState<Record<string, boolean>>({})
   const [hint, setHint] = useState<string | null>(null)
   const [wechatConnector, setWechatConnector] = useState<MessagingConnector | null>(null)
@@ -171,80 +172,93 @@ export function Integrations() {
   }
 
   return (
-    <div className="integrations">
-      <div className="integrations-head">
+    <div className={`integrations ${open ? 'is-open' : ''}`}>
+      <button
+        className="integrations-head collapsible-head"
+        onClick={() => setOpen((value) => !value)}
+        aria-expanded={open}
+      >
         <img className="cute-icon" src="/cute-line-icons/soft-refresh-loop.png" alt="" />
-        <strong>系统外接</strong>
-      </div>
-      <div className="integrations-list">
-        {integrations.map((it) => (
-          <div className="integration-row" key={it.id}>
-            <button
-              className="integration-main"
-              onClick={() => jump(it.url, it.name)}
-              title={`跳转到${it.name}`}
-            >
-              <img className="cute-icon" src={`/cute-line-icons/${it.icon}.png`} alt="" />
-              <div>
-                <strong>{it.name}</strong>
-                <span>{it.desc}</span>
-              </div>
-            </button>
-            <div className="integration-aux">
-              <kbd className="kbd">{it.shortcut}</kbd>
-              {it.id === 'wechat' ? (
-                <WeChatConnectorControls
-                  connector={wechatConnector}
-                  session={wechatSession}
-                  busy={wechatBusy}
-                  agentOn={Boolean(agentOn.wechat)}
-                  onStart={() => void startWeChatSession()}
-                  onConfirm={() => void confirmWeChat()}
-                  onFollowUp={() => void followUpInWeChat()}
-                  onDisconnect={() => void disconnectWeChatConnector()}
-                />
-              ) : it.agentSupported && (
+        <div>
+          <strong>外部应用</strong>
+          <span>{wechatConnector?.status === 'connected' ? '微信已连接' : '微信、飞书、邮件等低频入口'}</span>
+        </div>
+        <em>{open ? '收起' : '展开'}</em>
+      </button>
+      {open && (
+        <>
+          <div className="integrations-list">
+            {integrations.map((it) => (
+              <div className="integration-row" key={it.id}>
                 <button
-                  className={`agent-toggle ${agentOn[it.id] ? 'on' : ''}`}
-                  onClick={() => {
-                    if (!agentOn[it.id]) emitPiCoreSignal('delegate')
-                    setAgentOn((p) => ({ ...p, [it.id]: !p[it.id] }))
-                    showHint(!agentOn[it.id] ? `已开启${it.name}代理：Agent 将代为跟进` : `已关闭${it.name}代理`)
-                  }}
-                  title={`让 Agent 去${it.name}工作`}
+                  className="integration-main"
+                  onClick={() => jump(it.url, it.name)}
+                  title={`跳转到${it.name}`}
                 >
-                  <img className="cute-icon" src="/cute-line-icons/soft-sparkle-twinkle.png" alt="" />
-                  {agentOn[it.id] ? '代理中' : '开代理'}
+                  <img className="cute-icon" src={`/cute-line-icons/${it.icon}.png`} alt="" />
+                  <div>
+                    <strong>{it.name}</strong>
+                    <span>{it.desc}</span>
+                  </div>
                 </button>
-              )}
-            </div>
-            {it.id === 'wechat' && wechatSession?.status === 'qr_pending' && (
-              <div className="wechat-qr-box">
-                <img src={wechatSession.qrDataUrl} alt="微信连接二维码" />
-                <div>
-                  <strong>扫码连接 EvoPi Agent</strong>
-                  <span>验证码 {wechatSession.manualCode} · {wechatSession.expiresInSec}s 后过期</span>
+                <div className="integration-aux">
+                  <kbd className="kbd">{it.shortcut}</kbd>
+                  {it.id === 'wechat' ? (
+                    <WeChatConnectorControls
+                      connector={wechatConnector}
+                      session={wechatSession}
+                      busy={wechatBusy}
+                      agentOn={Boolean(agentOn.wechat)}
+                      onStart={() => void startWeChatSession()}
+                      onConfirm={() => void confirmWeChat()}
+                      onFollowUp={() => void followUpInWeChat()}
+                      onDisconnect={() => void disconnectWeChatConnector()}
+                    />
+                  ) : it.agentSupported && (
+                    <button
+                      className={`agent-toggle ${agentOn[it.id] ? 'on' : ''}`}
+                      onClick={() => {
+                        if (!agentOn[it.id]) emitPiCoreSignal('delegate')
+                        setAgentOn((p) => ({ ...p, [it.id]: !p[it.id] }))
+                        showHint(!agentOn[it.id] ? `已开启${it.name}代理：Agent 将代为跟进` : `已关闭${it.name}代理`)
+                      }}
+                      title={`让 Agent 去${it.name}工作`}
+                    >
+                      <img className="cute-icon" src="/cute-line-icons/soft-sparkle-twinkle.png" alt="" />
+                      {agentOn[it.id] ? '代理中' : '开代理'}
+                    </button>
+                  )}
                 </div>
+                {it.id === 'wechat' && wechatSession?.status === 'qr_pending' && (
+                  <div className="wechat-qr-box">
+                    <img src={wechatSession.qrDataUrl} alt="微信连接二维码" />
+                    <div>
+                      <strong>扫码连接 EvoPi Agent</strong>
+                      <span>验证码 {wechatSession.manualCode} · {wechatSession.expiresInSec}s 后过期</span>
+                    </div>
+                  </div>
+                )}
+                {it.id === 'wechat' && wechatConnector?.status === 'connected' && (
+                  <div className="wechat-inbound-box">
+                    <textarea
+                      value={wechatInboundText}
+                      onChange={(e) => setWechatInboundText(e.target.value)}
+                      rows={2}
+                      placeholder="模拟一条微信入站消息"
+                    />
+                    <button className="agent-toggle on" onClick={() => void sendInboundToAgent()} disabled={wechatBusy !== 'idle' || !wechatInboundText.trim()}>
+                      {wechatBusy === 'inbound' ? '处理中' : '发给 Pi'}
+                    </button>
+                    {wechatReply && <p>{wechatReply.slice(0, 180)}</p>}
+                  </div>
+                )}
               </div>
-            )}
-            {it.id === 'wechat' && wechatConnector?.status === 'connected' && (
-              <div className="wechat-inbound-box">
-                <textarea
-                  value={wechatInboundText}
-                  onChange={(e) => setWechatInboundText(e.target.value)}
-                  rows={2}
-                  placeholder="模拟一条微信入站消息"
-                />
-                <button className="agent-toggle on" onClick={() => void sendInboundToAgent()} disabled={wechatBusy !== 'idle' || !wechatInboundText.trim()}>
-                  {wechatBusy === 'inbound' ? '处理中' : '发给 Pi'}
-                </button>
-                {wechatReply && <p>{wechatReply.slice(0, 180)}</p>}
-              </div>
-            )}
+            ))}
           </div>
-        ))}
-      </div>
-      {hint && <div className="integration-hint">{hint}</div>}
+          {hint && <div className="integration-hint">{hint}</div>}
+        </>
+      )}
+      {!open && hint && <div className="integration-hint compact">{hint}</div>}
     </div>
   )
 }

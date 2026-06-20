@@ -1756,7 +1756,8 @@ body[data-theme="glass"] .ws-workspace {
    ============================================================ */
 .piclub-page {
   display: grid;
-  gap: 18px;
+  gap: 14px;
+  min-width: 0;
 }
 
 .piclub-hero,
@@ -1767,7 +1768,7 @@ body[data-theme="glass"] .ws-workspace {
 }
 
 .piclub-hero {
-  grid-template-columns: minmax(0, 1.45fr) minmax(320px, 0.8fr);
+  grid-template-columns: repeat(auto-fit, minmax(min(280px, 100%), 1fr));
   align-items: stretch;
 }
 
@@ -1776,22 +1777,32 @@ body[data-theme="glass"] .ws-workspace {
   align-items: center;
   justify-content: space-between;
   gap: 14px;
+  min-width: 0;
+  border: 1.5px dashed var(--line-soft);
+  border-radius: var(--r-md);
+  padding: 9px 11px;
+  background: color-mix(in srgb, var(--cute-mint) 22%, var(--surface));
 }
 
 .piclub-topbar > div {
   display: grid;
   gap: 2px;
   text-align: right;
+  min-width: 0;
 }
 
 .piclub-topbar strong {
-  font-size: 18px;
+  font-size: 15px;
 }
 
 .piclub-topbar span {
+  display: block;
   color: var(--muted);
-  font-size: 12px;
+  overflow: hidden;
+  font-size: 11.5px;
   font-weight: 800;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .piclub-hero-copy,
@@ -1807,8 +1818,8 @@ body[data-theme="glass"] .ws-workspace {
 .piclub-hero-copy {
   display: grid;
   align-content: center;
-  gap: 12px;
-  padding: 22px;
+  gap: 10px;
+  padding: 18px;
   background:
     radial-gradient(circle at 12% 20%, rgba(218, 246, 232, 0.78), transparent 26%),
     linear-gradient(135deg, rgba(236, 247, 255, 0.82), rgba(255, 244, 220, 0.7));
@@ -1817,15 +1828,16 @@ body[data-theme="glass"] .ws-workspace {
 .piclub-hero-copy h2 {
   max-width: 760px;
   margin: 0;
-  font-size: 28px;
-  line-height: 1.18;
+  font-size: 23px;
+  line-height: 1.22;
 }
 
 .piclub-hero-copy p {
   max-width: 720px;
   margin: 0;
   color: var(--muted);
-  line-height: 1.6;
+  font-size: 13px;
+  line-height: 1.55;
 }
 
 .piclub-hero-actions {
@@ -1836,8 +1848,9 @@ body[data-theme="glass"] .ws-workspace {
 
 .piclub-camera-card {
   display: grid;
-  gap: 11px;
-  padding: 18px;
+  align-content: start;
+  gap: 10px;
+  padding: 16px;
   background: var(--cute-pink);
 }
 
@@ -1850,16 +1863,16 @@ body[data-theme="glass"] .ws-workspace {
 .piclub-camera-orbit {
   display: grid;
   place-items: center;
-  width: 64px;
-  height: 64px;
+  width: 54px;
+  height: 54px;
   border: var(--border-w) solid var(--line);
-  border-radius: 18px;
+  border-radius: 16px;
   background: var(--paper);
 }
 
 .piclub-camera-orbit .cute-icon {
-  width: 40px;
-  height: 40px;
+  width: 34px;
+  height: 34px;
 }
 
 .piclub-camera-form {
@@ -1869,14 +1882,19 @@ body[data-theme="glass"] .ws-workspace {
 }
 
 .piclub-grid {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(280px, 100%), 1fr));
+}
+
+.piclub-grid.wide {
+  grid-template-columns: repeat(auto-fit, minmax(min(360px, 100%), 1fr));
 }
 
 .piclub-panel,
 .piclub-feed {
   display: grid;
-  gap: 12px;
-  padding: 16px;
+  gap: 11px;
+  min-width: 0;
+  padding: 14px;
 }
 
 .piclub-panel-note {
@@ -1905,7 +1923,7 @@ body[data-theme="glass"] .ws-workspace {
 }
 
 .club-room-grid {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr));
 }
 
 .club-room-card,
@@ -1928,7 +1946,7 @@ body[data-theme="glass"] .ws-workspace {
 .club-post-cover {
   display: grid;
   align-content: space-between;
-  min-height: 156px;
+  min-height: 136px;
   border: var(--border-w) solid var(--line);
   border-radius: var(--r-sm);
   padding: 14px;
@@ -1979,8 +1997,9 @@ body[data-theme="glass"] .ws-workspace {
 .club-room-cover strong,
 .club-post-cover strong {
   align-self: end;
-  font-size: 20px;
+  font-size: 17px;
   line-height: 1.18;
+  overflow-wrap: anywhere;
 }
 
 .club-room-cover em {
@@ -2040,14 +2059,14 @@ body[data-theme="glass"] .ws-workspace {
 }
 
 .club-product-card {
-  grid-template-columns: 42px minmax(0, 1fr) auto;
+  grid-template-columns: 38px minmax(0, 1fr);
   align-items: start;
-  padding: 14px;
+  padding: 12px;
 }
 
 .club-product-card > .cute-icon {
-  width: 36px;
-  height: 36px;
+  width: 34px;
+  height: 34px;
 }
 
 .club-product-tags,
@@ -2060,14 +2079,17 @@ body[data-theme="glass"] .ws-workspace {
 }
 
 .club-product-actions {
-  display: grid;
-  justify-items: end;
+  display: flex;
+  grid-column: 1 / -1;
+  justify-content: space-between;
+  align-items: center;
   gap: 8px;
+  flex-wrap: wrap;
 }
 
 .club-feed-list {
-  column-width: 280px;
-  column-gap: 14px;
+  column-width: 260px;
+  column-gap: 12px;
 }
 
 .club-post-card {
@@ -2078,15 +2100,15 @@ body[data-theme="glass"] .ws-workspace {
 }
 
 .club-post-card:nth-child(2n) .club-post-cover {
-  min-height: 198px;
+  min-height: 168px;
 }
 
 .club-post-card:nth-child(3n) .club-post-cover {
-  min-height: 132px;
+  min-height: 122px;
 }
 
 .club-post-cover {
-  min-height: 178px;
+  min-height: 150px;
   border: 0;
   border-bottom: var(--border-w) solid var(--line);
   border-radius: 0;
@@ -3812,7 +3834,7 @@ body[data-theme="glass"] .mm-core {
 
 .eve-workbench-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(260px, 340px);
+  grid-template-columns: minmax(0, 1.05fr) minmax(300px, 360px);
   gap: 14px;
   align-items: stretch;
 }
@@ -3826,7 +3848,7 @@ body[data-theme="glass"] .mm-core {
 
 .eve-chat-card {
   display: grid;
-  grid-template-rows: minmax(360px, 52vh) auto;
+  grid-template-rows: minmax(260px, 42vh) auto;
   overflow: hidden;
 }
 
@@ -3963,7 +3985,7 @@ body[data-theme="glass"] .mm-core {
 
 .eve-chat-input {
   display: grid;
-  grid-template-columns: 34px minmax(0, 1fr) 42px 42px 52px;
+  grid-template-columns: 34px minmax(0, 1fr) 52px;
   gap: 9px;
   align-items: end;
   border-top: 2px solid var(--line);
@@ -3980,7 +4002,8 @@ body[data-theme="glass"] .mm-core {
 .eve-chat-input textarea {
   width: 100%;
   min-width: 0;
-  max-height: 150px;
+  min-height: 82px;
+  max-height: 120px;
   border: 0;
   outline: none;
   resize: vertical;
@@ -4002,9 +4025,35 @@ body[data-theme="glass"] .mm-core {
 
 .eve-vision-card {
   display: grid;
-  grid-template-rows: 210px auto auto auto auto auto;
+  grid-template-rows: auto 210px auto auto;
   gap: 12px;
   padding: 12px;
+}
+
+.pi-call-mode-switch {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.pi-call-mode-switch button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 36px;
+  border: 1.5px solid var(--line-soft);
+  border-radius: 999px;
+  padding: 0 12px;
+  background: var(--surface-soft);
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.pi-call-mode-switch button.active {
+  border-color: var(--line);
+  background: color-mix(in srgb, var(--cute-mint) 38%, var(--surface));
+  box-shadow: 3px 3px 0 var(--line-soft);
 }
 
 .eve-vision-preview {
@@ -4284,11 +4333,11 @@ body[data-theme="glass"] .mm-core {
   }
 
   .eve-chat-card {
-    grid-template-rows: minmax(260px, 42vh) auto;
+    grid-template-rows: minmax(240px, 36vh) auto;
   }
 
   .eve-vision-card {
-    grid-template-rows: minmax(180px, 30vh) auto auto auto auto auto;
+    grid-template-rows: auto minmax(180px, 28vh) auto auto;
   }
 
   .context-card-grid {
@@ -4302,7 +4351,7 @@ body[data-theme="glass"] .mm-core {
   }
 
   .eve-chat-card {
-    grid-template-rows: minmax(220px, 34vh) auto;
+    grid-template-rows: minmax(200px, 30vh) auto;
   }
 
   .eve-message,
@@ -4311,7 +4360,7 @@ body[data-theme="glass"] .mm-core {
   }
 
   .eve-chat-input {
-    grid-template-columns: 28px minmax(0, 1fr) 38px 38px 46px;
+    grid-template-columns: 28px minmax(0, 1fr) 46px;
     gap: 7px;
     padding: 8px;
   }
@@ -10331,9 +10380,9 @@ body[data-theme="notion"] button:hover ~ .tech-cursor-layer .tech-cursor-ring {
 }
 
 .piclub-compose-launch {
-  grid-template-columns: 62px minmax(0, 1fr);
+  grid-template-columns: 54px minmax(0, 1fr);
   align-items: center;
-  min-height: 194px;
+  min-height: 156px;
   text-align: left;
   cursor: pointer;
   background:
@@ -10349,8 +10398,8 @@ body[data-theme="notion"] button:hover ~ .tech-cursor-layer .tech-cursor-ring {
 .piclub-compose-plus {
   display: grid;
   place-items: center;
-  width: 58px;
-  height: 58px;
+  width: 50px;
+  height: 50px;
   border: var(--border-w) solid var(--line);
   border-radius: 50%;
   background: var(--surface);
@@ -10358,8 +10407,8 @@ body[data-theme="notion"] button:hover ~ .tech-cursor-layer .tech-cursor-ring {
 }
 
 .piclub-compose-plus .cute-icon {
-  width: 34px;
-  height: 34px;
+  width: 30px;
+  height: 30px;
 }
 
 .piclub-compose-launch div {
@@ -10369,13 +10418,13 @@ body[data-theme="notion"] button:hover ~ .tech-cursor-layer .tech-cursor-ring {
 }
 
 .piclub-compose-launch strong {
-  font-size: 19px;
+  font-size: 17px;
   line-height: 1.2;
 }
 
 .piclub-compose-launch span:not(.piclub-compose-plus) {
   color: var(--muted);
-  font-size: 13px;
+  font-size: 12.5px;
   font-weight: 800;
   line-height: 1.55;
 }

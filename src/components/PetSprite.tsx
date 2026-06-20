@@ -46,16 +46,27 @@ export function PetSprite({
   mood,
   size = 120,
   paused = false,
+  variant,
 }: {
   mood: PetMood
   size?: number
   paused?: boolean
+  variant?: 'dog' | 'fox'
 }) {
   const anim = petAnimations.find((a) => a.mood === mood) ?? petAnimations[0]
   const frames = framesByMood[mood] ?? framesByMood.idle
   const [frame, setFrame] = useState(0)
   const raf = useRef<number | null>(null)
   const frameRef = useRef(0)
+  // 未显式指定 variant 时按主题自动切换：notion 用银白月狐，其它用小狗
+  const [theme, setTheme] = useState<string>(() => document.body.dataset.theme ?? 'cute')
+  useEffect(() => {
+    const obs = new MutationObserver(() => setTheme(document.body.dataset.theme ?? 'cute'))
+    obs.observe(document.body, { attributes: true, attributeFilter: ['data-theme'] })
+    return () => obs.disconnect()
+  }, [])
+  const useFox = variant === 'fox' || (variant === undefined && theme === 'notion')
+  const src = useFox ? '/pet/yinyue-yaohu.webp' : petSheet.src
 
   useEffect(() => {
     if (paused) return
@@ -97,7 +108,7 @@ export function PetSprite({
       style={{
         width: size,
         height: displayH,
-        backgroundImage: `url(${petSheet.src})`,
+        backgroundImage: `url(${src})`,
         backgroundRepeat: 'no-repeat',
         backgroundSize: `${sheetW}px ${sheetH}px`,
         backgroundPosition: `${bgX}px ${bgY}px`,

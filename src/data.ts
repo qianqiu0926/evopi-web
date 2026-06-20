@@ -2,7 +2,7 @@
    EvoPi · 产品数据层
    - 启动页问候 / 快捷入口
    - 工作台（Notion 风，精简）
-   - 目标舱 / 记忆库 / PiRoom / PiClub / 技能中心 / 进化日志 / 隐私设置
+   - 目标舱 / 记忆库 / PiRoom / PiClub
    - PiRoom：人物导入 + 对话 + 资产资料库
    - PiClub：EvoPi 社区、组织、朋友圈、照片与产品投放
    UI 全中文，仅 EvoPi/EvoMap/Gene/Capsule/PiRoom/PiCore/PiClub/VibeCoding 专有名保留英文
@@ -14,7 +14,7 @@ export type Depth = 0 | 1 | 2 | 3 | 4
 export type PageMeta = { title: string; desc?: string }
 
 export const pageMeta: Record<string, PageMeta> = {
-  today: { title: '今日工作台', desc: '告诉 EVE 派你现在想做什么，它会和你一起推进' },
+  today: { title: '今日工作台', desc: '告诉 EvoPi 你现在想做什么，它会和你一起推进' },
   goals: { title: '目标舱', desc: '每个长期目标都是一个会进化的专属工作舱' },
   memory: { title: '记忆库', desc: 'EvoPi 整理的记忆，确认后才会保留' },
   room: { title: 'PiRoom', desc: '邀请不同视角进房间，一起把事想清楚' },
@@ -580,7 +580,7 @@ export type NavGroup = {
 export const navGroups: NavGroup[] = [
   {
     id: 'work',
-    label: '日常工作',
+    label: '工作',
     items: [
       { key: 'today', label: '今日工作台', icon: 'soft-dashboard-tiles' },
       { key: 'goals', label: '目标舱', icon: 'soft-goal-flag' },
@@ -589,19 +589,10 @@ export const navGroups: NavGroup[] = [
   },
   {
     id: 'grow',
-    label: '成长与对话',
+    label: '协作',
     items: [
       { key: 'room', label: 'PiRoom', icon: 'soft-chat-bubble' },
       { key: 'club', label: 'PiClub', icon: 'soft-role-users' },
-      { key: 'skills', label: '技能中心', icon: 'soft-settings-gear' },
-      { key: 'evolution', label: '进化日志', icon: 'soft-log-lines' },
-    ],
-  },
-  {
-    id: 'system',
-    label: '系统',
-    items: [
-      { key: 'privacy', label: '隐私权限', icon: 'soft-privacy-eye' },
     ],
   },
 ]

@@ -42,6 +42,7 @@ function parseRedditRss(xmlText: string, limit: number): AgentTaskResult[] {
 
 export function AgentTasks() {
   const [tasks, setTasks] = useState<AgentTask[]>(presetAgentTasks)
+  const [open, setOpen] = useState(false)
   const [adding, setAdding] = useState(false)
   const [draftName, setDraftName] = useState('')
   const [draftSub, setDraftSub] = useState('')
@@ -173,10 +174,22 @@ export function AgentTasks() {
   }
 
   return (
-    <div className="agent-tasks">
-      <div className="agent-tasks-head">
+    <div className={`agent-tasks ${open ? 'is-open' : ''}`}>
+      <button
+        className="agent-tasks-head collapsible-head"
+        onClick={() => setOpen((value) => !value)}
+        aria-expanded={open}
+      >
         <img className="cute-icon" src="/cute-line-icons/soft-sparkle-twinkle.png" alt="" />
-        <strong>Agent 代理任务</strong>
+        <div>
+          <strong>Pi 代理任务</strong>
+          <span>{tasks.filter((task) => task.status === 'authorized' || task.status === 'running').length} 个运行中 · {tasks.length} 个任务</span>
+        </div>
+        <em>{open ? '收起' : '展开'}</em>
+      </button>
+
+      {open && (
+        <>
         <button
           className="agent-add-btn"
           onClick={() => setAdding((v) => !v)}
@@ -185,7 +198,6 @@ export function AgentTasks() {
         >
           {adding ? '−' : '+'}
         </button>
-      </div>
 
       {adding && (
         <div className="agent-add-form">
@@ -300,6 +312,8 @@ export function AgentTasks() {
           </div>
         ))}
       </div>
+        </>
+      )}
     </div>
   )
 }
