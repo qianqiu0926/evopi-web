@@ -4158,12 +4158,155 @@ type GroupChatMsg = {
   attached?: string[]
 }
 
+type PersonaMediaProfile = {
+  idle: string
+  speaking: string
+  language: 'zh-CN' | 'en-US'
+  label: string
+  voiceType: string
+  speedRatio: number
+  pitchRatio: number
+  fallbackRate: number
+  fallbackPitch: number
+}
+
 function compactRoomReply(text: string) {
   return text.replace(/\*/g, '').replace(/\n{3,}/g, '\n\n').trim().slice(0, 620)
 }
 
+function personaKey(person: RoomPerson) {
+  const key = `${person.id} ${person.skillName ?? ''} ${person.name}`.toLowerCase()
+  if (key.includes('musk') || key.includes('elon')) return 'musk'
+  if (key.includes('zhangxuefeng') || key.includes('张雪峰')) return 'zhangxuefeng'
+  if (key.includes('trump')) return 'trump'
+  if (key.includes('claude') || key.includes('clawd')) return 'claude'
+  if (key.includes('doubao') || key.includes('豆包')) return 'doubao'
+  if (key.includes('sam-altman') || key.includes('sam altman')) return 'sam-altman'
+  if (key.includes('einstein')) return 'einstein'
+  if (key.includes('leijun') || key.includes('雷军')) return 'leijun'
+  if (key.includes('zhangyiming') || key.includes('张一鸣')) return 'zhangyiming'
+  if (key.includes('jensen') || key.includes('黄仁勋')) return 'jensen-huang'
+  return 'doubao'
+}
+
+function personaMediaProfile(person: RoomPerson): PersonaMediaProfile {
+  const key = personaKey(person)
+  const base = `/pixel-personas/${key}`
+  const profiles: Record<string, Omit<PersonaMediaProfile, 'idle' | 'speaking'>> = {
+    musk: {
+      language: 'en-US',
+      label: 'English / bold',
+      voiceType: 'BV701_V2_streaming',
+      speedRatio: 1.08,
+      pitchRatio: 0.92,
+      fallbackRate: 1.02,
+      fallbackPitch: 0.82,
+    },
+    trump: {
+      language: 'en-US',
+      label: 'English / emphatic',
+      voiceType: 'BV701_V2_streaming',
+      speedRatio: 1.04,
+      pitchRatio: 0.86,
+      fallbackRate: 0.96,
+      fallbackPitch: 0.78,
+    },
+    'sam-altman': {
+      language: 'en-US',
+      label: 'English / calm',
+      voiceType: 'BV701_V2_streaming',
+      speedRatio: 1,
+      pitchRatio: 0.96,
+      fallbackRate: 0.98,
+      fallbackPitch: 0.92,
+    },
+    einstein: {
+      language: 'en-US',
+      label: 'English / thoughtful',
+      voiceType: 'BV701_V2_streaming',
+      speedRatio: 0.95,
+      pitchRatio: 0.9,
+      fallbackRate: 0.92,
+      fallbackPitch: 0.88,
+    },
+    zhangxuefeng: {
+      language: 'zh-CN',
+      label: '中文 / 直给',
+      voiceType: 'BV700_V2_streaming',
+      speedRatio: 1.12,
+      pitchRatio: 0.96,
+      fallbackRate: 1.14,
+      fallbackPitch: 0.95,
+    },
+    leijun: {
+      language: 'zh-CN',
+      label: '中文 / 发布会',
+      voiceType: 'BV700_V2_streaming',
+      speedRatio: 1,
+      pitchRatio: 1,
+      fallbackRate: 1.02,
+      fallbackPitch: 1.02,
+    },
+    zhangyiming: {
+      language: 'zh-CN',
+      label: '中文 / 克制',
+      voiceType: 'BV700_V2_streaming',
+      speedRatio: 0.98,
+      pitchRatio: 0.96,
+      fallbackRate: 0.98,
+      fallbackPitch: 0.95,
+    },
+    'jensen-huang': {
+      language: 'zh-CN',
+      label: '中文 / 算力',
+      voiceType: 'BV700_V2_streaming',
+      speedRatio: 1.02,
+      pitchRatio: 0.92,
+      fallbackRate: 1,
+      fallbackPitch: 0.9,
+    },
+    claude: {
+      language: 'zh-CN',
+      label: 'AI / 机器人',
+      voiceType: 'BV700_V2_streaming',
+      speedRatio: 0.94,
+      pitchRatio: 0.82,
+      fallbackRate: 0.9,
+      fallbackPitch: 0.72,
+    },
+    doubao: {
+      language: 'zh-CN',
+      label: '中文 / 温和',
+      voiceType: 'BV700_V2_streaming',
+      speedRatio: 1.03,
+      pitchRatio: 1.08,
+      fallbackRate: 1.05,
+      fallbackPitch: 1.18,
+    },
+  }
+  const profile = profiles[key] ?? profiles.doubao
+  return {
+    idle: `${base}-idle.png`,
+    speaking: `${base}-speaking.png`,
+    ...profile,
+  }
+}
+
+function shouldReplyInEnglish(person: RoomPerson) {
+  return personaMediaProfile(person).language === 'en-US'
+}
+
 function localGroupReply(person: RoomPerson, topic: string, userText: string) {
   const base = userText || topic
+  if (shouldReplyInEnglish(person)) {
+    if (person.id.includes('trump')) {
+      return `Here's the deal: make it simple, make it strong, and make sure people understand why it wins. For "${base}", turn the decision into one clear bet and one proof point.\n\nSource: ${person.basis}`
+    }
+    if (person.id.includes('einstein')) {
+      return `I would start with a simple thought experiment: what stays true if the surface details change? For "${base}", find the invariant, then the right path becomes much less noisy.\n\nSource: ${person.basis}`
+    }
+    return `First principles: what constraint is real, and what is just habit? For "${base}", build a tiny test that proves the core assumption before you commit more time.\n\nSource: ${person.basis}`
+  }
   if (person.id.includes('zhangxuefeng')) {
     return `我先把话说直一点：别先问“喜不喜欢”，先算你换方向的成本、出口和确定性。围绕「${base}」，你最好列出三个可验证证据，再决定要不要投入长期路径。\n\n来源：${person.basis}`
   }
@@ -4202,7 +4345,19 @@ function RoomGroupChat({ room, onBack }: { room: PiRoomGroup; onBack: () => void
   const [selectedResearch, setSelectedResearch] = useState<Set<string>>(new Set(['r-product-career']))
   const [inspirations, setInspirations] = useState<InspirationNote[]>([])
   const [memorySaved, setMemorySaved] = useState(false)
+  const [callMode, setCallMode] = useState(false)
+  const [cameraStatus, setCameraStatus] = useState<'idle' | 'requesting' | 'on' | 'error'>('idle')
+  const [cameraError, setCameraError] = useState('')
+  const [voiceStatus, setVoiceStatus] = useState<VoiceStatus>('idle')
+  const [voiceHint, setVoiceHint] = useState('')
+  const [activeSpeakerId, setActiveSpeakerId] = useState<string | null>(null)
+  const [speakingQueue, setSpeakingQueue] = useState(0)
   const scrollRef = useRef<HTMLDivElement>(null)
+  const groupVideoRef = useRef<HTMLVideoElement>(null)
+  const groupStreamRef = useRef<MediaStream | null>(null)
+  const groupRecognitionRef = useRef<BrowserSpeechRecognition | null>(null)
+  const groupAudioRef = useRef<HTMLAudioElement | null>(null)
+  const groupSpeechRunRef = useRef(0)
 
   const filteredResearch = useMemo(() => {
     const query = searchQuery.trim().toLowerCase()
@@ -4227,6 +4382,86 @@ function RoomGroupChat({ room, onBack }: { room: PiRoomGroup; onBack: () => void
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' })
   }, [messages])
+
+  useEffect(() => {
+    if (cameraStatus === 'on' && groupVideoRef.current && groupStreamRef.current) {
+      groupVideoRef.current.srcObject = groupStreamRef.current
+    }
+  }, [cameraStatus])
+
+  useEffect(() => {
+    return () => {
+      groupStreamRef.current?.getTracks().forEach((track) => track.stop())
+      groupRecognitionRef.current?.abort()
+      groupAudioRef.current?.pause()
+      if ('speechSynthesis' in window) window.speechSynthesis.cancel()
+    }
+  }, [])
+
+  const captureGroupVideoFrame = useCallback(() => {
+    const video = groupVideoRef.current
+    if (!video || cameraStatus !== 'on' || video.videoWidth <= 0 || video.videoHeight <= 0) return ''
+    const canvas = document.createElement('canvas')
+    canvas.width = 640
+    canvas.height = Math.max(1, Math.round((video.videoHeight / video.videoWidth) * canvas.width))
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return ''
+    ctx.translate(canvas.width, 0)
+    ctx.scale(-1, 1)
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
+    return canvas.toDataURL('image/jpeg', 0.72)
+  }, [cameraStatus])
+
+  const stopGroupCamera = useCallback(() => {
+    groupStreamRef.current?.getTracks().forEach((track) => track.stop())
+    groupStreamRef.current = null
+    if (groupVideoRef.current) groupVideoRef.current.srcObject = null
+    setCameraStatus('idle')
+    setCameraError('')
+  }, [])
+
+  const startGroupCamera = useCallback(async () => {
+    if (!navigator.mediaDevices?.getUserMedia) {
+      setCameraStatus('error')
+      setCameraError('当前浏览器不支持摄像头调用。')
+      return
+    }
+    setCameraStatus('requesting')
+    setCameraError('')
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { width: 960, height: 540 },
+        audio: true,
+      })
+      groupStreamRef.current = stream
+      if (groupVideoRef.current) groupVideoRef.current.srcObject = stream
+      setCameraStatus('on')
+      setVoiceHint('视频圆桌已开启，你可以按住麦克风向大家提问。')
+    } catch (error) {
+      setCameraStatus('error')
+      setCameraError(formatApiError(error))
+      setVoiceHint('摄像头没有打开，但你仍然可以用文字群聊。')
+    }
+  }, [])
+
+  const toggleCallMode = () => {
+    setCallMode((current) => {
+      const next = !current
+      if (next) void startGroupCamera()
+      else {
+        stopGroupCamera()
+        groupRecognitionRef.current?.abort()
+        groupAudioRef.current?.pause()
+        groupSpeechRunRef.current += 1
+        if ('speechSynthesis' in window) window.speechSynthesis.cancel()
+        setVoiceStatus('idle')
+        setActiveSpeakerId(null)
+        setSpeakingQueue(0)
+        setVoiceHint('')
+      }
+      return next
+    })
+  }
 
   const toggleAsset = (id: string) => {
     setSelectedAssets((prev) => {
@@ -4267,21 +4502,26 @@ function RoomGroupChat({ room, onBack }: { room: PiRoomGroup; onBack: () => void
     })
   }
 
-  const buildPersonaReply = async (person: RoomPerson, userText: string, attached: string[]) => {
+  const buildPersonaReply = async (person: RoomPerson, userText: string, attached: string[], visualFrameDataUrl = '') => {
     if (person.agentKind === 'pi' && person.skillName) {
       const peerNames = room.people.filter((item) => item.id !== person.id).map((item) => item.name).join('、') || '无'
       const assetContext = attached.length ? `\n本轮附加资料：${attached.join('、')}` : ''
+      const languageInstruction = shouldReplyInEnglish(person)
+        ? 'This persona should reply in natural English, in 2-3 short spoken sentences.'
+        : '这个角色应该用自然中文回复，2-3 句，像视频通话里说话。'
       const { result } = await callExternalAgent({
         kind: person.agentKind as ExternalAgentKind,
         agent: person.skillName,
         sessionKey: `piroom-group-${room.id}-${person.id}`,
+        visualFrameDataUrl: visualFrameDataUrl || undefined,
         message: [
           `这是 PiRoom 群聊「${room.name}」。`,
           `群聊主题：「${room.topic}」。`,
           `其他成员：${peerNames}。`,
           `用户刚说：${userText || '请先围绕主题给出你的角度。'}`,
           assetContext,
-          `你只代表「${person.name}」的公开资料模拟视角，不冒充真人。请用中文给 2-4 句短回复，观点明确，能被沉淀成灵感专题。`,
+          visualFrameDataUrl ? '用户正在视频通话里提问，你可以结合画面状态，但不要输出技术字段，也不要假装百分百识别情绪。' : '',
+          `你只代表「${person.name}」的公开资料模拟视角，不冒充真人。${languageInstruction}观点明确，能被沉淀成灵感专题。`,
         ].filter(Boolean).join('\n'),
         timeoutSec: 180,
       })
@@ -4291,9 +4531,73 @@ function RoomGroupChat({ room, onBack }: { room: PiRoomGroup; onBack: () => void
     return localGroupReply(person, room.topic, userText)
   }
 
-  const send = async () => {
-    if ((!input.trim() && selectedAssets.size === 0) || sending) return
-    const userText = input.trim()
+  const speakPersonaReply = async (person: RoomPerson, text: string) => {
+    const clean = text.replace(/\*/g, '').replace(/来源[:：].*$/s, '').replace(/Source:.*$/s, '').trim()
+    if (!clean) return
+    const profile = personaMediaProfile(person)
+    groupSpeechRunRef.current += 1
+    const currentRun = groupSpeechRunRef.current
+    setActiveSpeakerId(person.id)
+    setSpeakingQueue((count) => count + 1)
+    groupAudioRef.current?.pause()
+    try {
+      const speech = await synthesizeDoubaoSpeech({
+        text: clean,
+        voiceType: profile.voiceType,
+        speedRatio: profile.speedRatio,
+        pitchRatio: profile.pitchRatio,
+      })
+      if (currentRun !== groupSpeechRunRef.current) return
+      const audio = new Audio(`data:${speech.audioMime};base64,${speech.audioBase64}`)
+      groupAudioRef.current = audio
+      await new Promise<void>((resolve) => {
+        audio.onended = () => resolve()
+        audio.onerror = () => resolve()
+        void audio.play().catch(() => resolve())
+      })
+      return
+    } catch {
+      if (!('speechSynthesis' in window) || currentRun !== groupSpeechRunRef.current) return
+      await new Promise<void>((resolve) => {
+        const utterance = new SpeechSynthesisUtterance(clean)
+        utterance.lang = profile.language
+        utterance.rate = profile.fallbackRate
+        utterance.pitch = profile.fallbackPitch
+        utterance.onend = () => resolve()
+        utterance.onerror = () => resolve()
+        try {
+          window.speechSynthesis.cancel()
+          window.speechSynthesis.speak(utterance)
+        } catch {
+          resolve()
+        }
+      })
+    } finally {
+      setSpeakingQueue((count) => Math.max(0, count - 1))
+      if (currentRun === groupSpeechRunRef.current) setActiveSpeakerId(null)
+    }
+  }
+
+  const speakRepliesSequentially = async (replies: GroupChatMsg[]) => {
+    if (!callMode) return
+    setVoiceStatus('speaking')
+    setVoiceHint('大家正在轮流回答你。')
+    try {
+      for (const reply of replies) {
+        const person = room.people.find((item) => item.id === reply.speakerId)
+        if (!person) continue
+        await speakPersonaReply(person, reply.text)
+      }
+    } finally {
+      setVoiceStatus('idle')
+      setVoiceHint('你可以继续按麦克风向群聊提问。')
+    }
+  }
+
+  const send = async (overrideText?: string) => {
+    const textSource = overrideText ?? input
+    if ((!textSource.trim() && selectedAssets.size === 0) || sending) return
+    const userText = textSource.trim()
     const attached = assetLibrary.filter((asset) => selectedAssets.has(asset.id)).map((asset) => asset.name)
     const userMessage: GroupChatMsg = {
       id: `me-${Date.now()}`,
@@ -4306,11 +4610,12 @@ function RoomGroupChat({ room, onBack }: { room: PiRoomGroup; onBack: () => void
     setInput('')
     setSelectedAssets(new Set())
     setSending(true)
+    const visualFrameDataUrl = callMode && cameraStatus === 'on' ? captureGroupVideoFrame() : ''
 
     const settled = await Promise.allSettled(
       room.people.map(async (person) => ({
         person,
-        text: await buildPersonaReply(person, userText, attached),
+        text: await buildPersonaReply(person, userText, attached, visualFrameDataUrl),
       })),
     )
     const replies: GroupChatMsg[] = settled.map((result, index) => {
@@ -4330,6 +4635,60 @@ function RoomGroupChat({ room, onBack }: { room: PiRoomGroup; onBack: () => void
     })
     setMessages((prev) => [...prev, ...replies])
     setSending(false)
+    void speakRepliesSequentially(replies)
+  }
+
+  const startGroupVoiceInput = () => {
+    if (voiceStatus === 'speaking') return
+    if (voiceStatus === 'listening') {
+      groupRecognitionRef.current?.stop()
+      setVoiceStatus('processing')
+      return
+    }
+    const Recognition = window.SpeechRecognition ?? window.webkitSpeechRecognition
+    if (!Recognition) {
+      setVoiceStatus('error')
+      setVoiceHint('当前浏览器暂不支持语音转写，你可以先用文字向群聊提问。')
+      return
+    }
+    const recognition = new Recognition()
+    groupRecognitionRef.current = recognition
+    recognition.lang = 'zh-CN'
+    recognition.interimResults = true
+    recognition.continuous = false
+    let submitted = false
+    setVoiceStatus('listening')
+    setVoiceHint('正在听你说话，说完会直接发到群聊。')
+    recognition.onresult = (event) => {
+      let finalText = ''
+      let interimText = ''
+      for (let i = 0; i < event.results.length; i += 1) {
+        const part = event.results[i]?.[0]?.transcript ?? ''
+        if (event.results[i]?.isFinal) finalText += part
+        else interimText += part
+      }
+      const transcript = (finalText || interimText).trim()
+      if (transcript && !finalText) setVoiceHint(`听到：${transcript}`)
+      if (finalText.trim() && !submitted) {
+        submitted = true
+        setVoiceStatus('processing')
+        setVoiceHint('已发送给群聊，大家正在回答。')
+        void send(finalText.trim())
+      }
+    }
+    recognition.onerror = (event) => {
+      setVoiceStatus('error')
+      setVoiceHint(event.message || `语音识别暂不可用：${event.error ?? '未知错误'}`)
+    }
+    recognition.onend = () => {
+      setVoiceStatus((current) => (current === 'error' ? 'error' : 'idle'))
+    }
+    try {
+      recognition.start()
+    } catch (error) {
+      setVoiceStatus('error')
+      setVoiceHint(formatApiError(error))
+    }
   }
 
   return (
@@ -4349,7 +4708,12 @@ function RoomGroupChat({ room, onBack }: { room: PiRoomGroup; onBack: () => void
             <span>{room.people.map((person) => person.name).join('、')} · 主题：{room.topic}</span>
           </div>
         </div>
-        <em className="room-topic-pill">{room.people.length} 人群聊</em>
+        <em className="room-topic-pill">
+          {activeSpeakerId ? `${room.people.find((person) => person.id === activeSpeakerId)?.name ?? '成员'}发言中` : `${room.people.length} 人群聊`}
+        </em>
+        <button className={`ghost-btn sm ${callMode ? 'active' : ''}`} onClick={toggleCallMode}>
+          <CuteIcon name={callMode ? 'soft-success-check' : 'soft-microphone-voice'} />{callMode ? '关闭圆桌' : '视频圆桌'}
+        </button>
         <button className="ghost-btn sm" onClick={() => setShowAssets((v) => !v)}>
           <CuteIcon name="soft-folder-tab" />{showAssets ? '收起沉淀' : '展开沉淀'}
         </button>
@@ -4364,45 +4728,101 @@ function RoomGroupChat({ room, onBack }: { room: PiRoomGroup; onBack: () => void
         ))}
       </div>
 
-      <div className={`chat-body ${showAssets ? 'with-assets' : ''}`}>
-        <div className="chat-stream" ref={scrollRef}>
-          {messages.map((msg, i) => (
-            <div className={`msg ${msg.from === 'me' ? 'me' : 'them'} ${msg.from === 'system' ? 'system' : ''}`} key={msg.id}>
-              {msg.from === 'them' && (
-                <div className="msg-avatar sm"><CuteIcon name={(msg.avatar || 'soft-chat-bubble') as CuteIconName} /></div>
+      <div className={`chat-body ${showAssets ? 'with-assets' : ''} ${callMode ? 'in-video-call' : ''}`}>
+        {callMode ? (
+          <div className="group-call-stage">
+            <section className={`group-user-video status-${cameraStatus}`}>
+              {cameraStatus === 'on' ? (
+                <video ref={groupVideoRef} autoPlay playsInline muted />
+              ) : (
+                <div className="group-camera-empty">
+                  <CuteIcon name={cameraStatus === 'requesting' ? 'soft-loading-loop' : 'soft-privacy-eye'} />
+                  <strong>{cameraStatus === 'requesting' ? '等待摄像头授权' : '我的真人视频'}</strong>
+                  <span>{cameraStatus === 'error' ? cameraError || '摄像头暂不可用' : '打开后，你会作为真人主画面加入圆桌。'}</span>
+                  {cameraStatus !== 'requesting' && (
+                    <button className="primary-btn sm" onClick={() => void startGroupCamera()}>
+                      <CuteIcon name="soft-microphone-voice" /> 打开摄像头
+                    </button>
+                  )}
+                </div>
               )}
-              <div className="msg-bubble">
-                {msg.from === 'them' && msg.speakerName && <span className="group-msg-speaker">{msg.speakerName}</span>}
-                <p>{msg.text}</p>
-                {msg.attached && (
-                  <div className="msg-attached">
-                    {msg.attached.map((asset) => (
-                      <span className="tag" key={asset}><CuteIcon name="soft-document-page" />{asset}</span>
-                    ))}
-                  </div>
-                )}
-                <span className="msg-time">{msg.time}</span>
+              <div className="group-video-caption">
+                <strong>我</strong>
+                <span>{cameraStatus === 'on' ? '真人视频已加入' : cameraStatus === 'requesting' ? '等待授权' : '未开摄像头'}</span>
               </div>
-              {msg.from !== 'system' && (
-                <button
-                  className="capture-arrow"
-                  onClick={() => collectGroupMessage(msg, i)}
-                  aria-label="沉淀到右侧灵感专题"
-                  title="沉淀到右侧灵感专题"
-                >
-                  <CuteIcon name="soft-arrow-right" />
-                </button>
-              )}
-            </div>
-          ))}
-          {sending && (
-            <div className="group-thinking">
-              {room.people.map((person) => (
-                <span key={person.id}><CuteIcon name={person.avatar as CuteIconName} />{person.name} 正在组织观点…</span>
-              ))}
-            </div>
-          )}
-        </div>
+            </section>
+
+            <section className="group-persona-video-grid">
+              {room.people.map((person) => {
+                const profile = personaMediaProfile(person)
+                const speaking = activeSpeakerId === person.id
+                return (
+                  <article className={`persona-video-card ${speaking ? 'speaking' : ''}`} key={person.id}>
+                    <div className="persona-video-avatar">
+                      <img src={speaking ? profile.speaking : profile.idle} alt="" />
+                    </div>
+                    <div>
+                      <strong>{person.name}</strong>
+                      <span>{profile.label}</span>
+                    </div>
+                    <em>{speaking ? '正在回答' : person.skillName ? 'Skill 化身' : '本地视角'}</em>
+                  </article>
+                )
+              })}
+            </section>
+
+            <section className="group-call-bottom">
+              <div>
+                <strong>{activeSpeakerId ? `${room.people.find((person) => person.id === activeSpeakerId)?.name ?? 'PiRoom'} 正在说话` : sending ? '大家正在思考' : '视频圆桌待命'}</strong>
+                <span>{voiceHint || '你可以语音提问，也可以继续用键盘补充。关闭视频后会回到文字记录。'}</span>
+              </div>
+              <button className="call-voice sm" onClick={startGroupVoiceInput} disabled={sending || cameraStatus === 'requesting' || voiceStatus === 'speaking'}>
+                <CuteIcon name="soft-microphone-voice" />
+                {voiceStatus === 'listening' ? '停止收音' : voiceStatus === 'processing' ? '发送中' : voiceStatus === 'speaking' ? '播放中' : '语音提问'}
+              </button>
+              <em className="tag blue">{speakingQueue > 0 ? `${speakingQueue} 段语音` : voiceStatus === 'listening' ? '正在聆听' : '随时提问'}</em>
+            </section>
+          </div>
+        ) : (
+          <div className="chat-stream" ref={scrollRef}>
+            {messages.map((msg, i) => (
+              <div className={`msg ${msg.from === 'me' ? 'me' : 'them'} ${msg.from === 'system' ? 'system' : ''}`} key={msg.id}>
+                {msg.from === 'them' && (
+                  <div className="msg-avatar sm"><CuteIcon name={(msg.avatar || 'soft-chat-bubble') as CuteIconName} /></div>
+                )}
+                <div className="msg-bubble">
+                  {msg.from === 'them' && msg.speakerName && <span className="group-msg-speaker">{msg.speakerName}</span>}
+                  <p>{msg.text}</p>
+                  {msg.attached && (
+                    <div className="msg-attached">
+                      {msg.attached.map((asset) => (
+                        <span className="tag" key={asset}><CuteIcon name="soft-document-page" />{asset}</span>
+                      ))}
+                    </div>
+                  )}
+                  <span className="msg-time">{msg.time}</span>
+                </div>
+                {msg.from !== 'system' && (
+                  <button
+                    className="capture-arrow"
+                    onClick={() => collectGroupMessage(msg, i)}
+                    aria-label="沉淀到右侧灵感专题"
+                    title="沉淀到右侧灵感专题"
+                  >
+                    <CuteIcon name="soft-arrow-right" />
+                  </button>
+                )}
+              </div>
+            ))}
+            {sending && (
+              <div className="group-thinking">
+                {room.people.map((person) => (
+                  <span key={person.id}><CuteIcon name={person.avatar as CuteIconName} />{person.name} 正在组织观点…</span>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
 
         {showAssets && (
           <aside className="thinking-rail">
@@ -4570,8 +4990,8 @@ function PiClubPage({ onExit }: { onExit: () => void }) {
     products: productAssets.map(productAssetToClubProduct),
   }))
   const [clubState, setClubState] = useState<'loading' | 'ready' | 'error'>('loading')
-  const [postText, setPostText] = useState('把今天整理好的照片和研究进展发一条朋友圈，语气自然一点。')
-  const [postTitle, setPostTitle] = useState('Pi 的今日进展')
+  const [postText, setPostText] = useState('小奶狗刚把今天的研究进展整理成 3 条可讨论的问题，想听听同一个 Club 里的 Pi 怎么看。')
+  const [postTitle, setPostTitle] = useState('今天想请大家一起看一个问题')
   const [selectedCommunity, setSelectedCommunity] = useState('AI 学术共研组')
   const [photoTitle, setPhotoTitle] = useState('今天的现场照片')
   const [photoCount, setPhotoCount] = useState(9)
@@ -4582,6 +5002,7 @@ function PiClubPage({ onExit }: { onExit: () => void }) {
   const [openComments, setOpenComments] = useState<Set<string>>(() => new Set())
   const [commentDrafts, setCommentDrafts] = useState<ClubCommentDrafts>({})
   const [publishingProductId, setPublishingProductId] = useState<string | null>(null)
+  const [activeCommunityId, setActiveCommunityId] = useState<string | null>(null)
   const actionHint = useInlineHint(3200)
   const postAction = useActionState()
   const photoAction = useActionState()
@@ -4619,12 +5040,22 @@ function PiClubPage({ onExit }: { onExit: () => void }) {
   })
 
   const joinCommunity = (communityId: string) => {
+    const fallbackCommunity = state.communities.find((item) => item.id === communityId)
     void joinPiClubCommunity(communityId)
       .then((result) => {
         refreshState(result.state)
-        actionHint.show(`已加入 ${result.community.name}`)
+        setActiveCommunityId(result.community.id)
+        setSelectedCommunity(result.community.name)
+        actionHint.show(`已进入 ${result.community.name}`)
       })
-      .catch((error) => actionHint.show(`加入失败：${formatApiError(error)}`))
+      .catch((error) => {
+        if (fallbackCommunity) {
+          setActiveCommunityId(fallbackCommunity.id)
+          setSelectedCommunity(fallbackCommunity.name)
+        }
+        console.warn('PiClub join fallback:', formatApiError(error))
+        actionHint.show(`已进入本地 ${fallbackCommunity?.name ?? '自习室'}，后端恢复后会同步`)
+      })
   }
 
   const dropPhotos = () => photoAction.run(async () => {
@@ -4655,6 +5086,16 @@ function PiClubPage({ onExit }: { onExit: () => void }) {
   const communityOptions = [...joinedCommunities, ...state.communities.filter((community) => !community.joined)]
   const products = state.products.length ? state.products : productAssets.map(productAssetToClubProduct)
   const postedProductNames = new Set(state.posts.map((post) => post.product).filter(Boolean))
+  const activeCommunity = activeCommunityId ? state.communities.find((item) => item.id === activeCommunityId) : null
+  const activeCommunityPosts = activeCommunity
+    ? state.posts.filter((post) => post.community === activeCommunity.name).slice(0, 4)
+    : []
+  const activeCommunityProducts = activeCommunity
+    ? products.filter((product) => product.community === activeCommunity.name).slice(0, 3)
+    : []
+  const communityCountLabel = `${state.communities.length} 个 Club · ${state.posts.length} 条讨论`
+  const featuredPost = state.posts[0]
+  const featuredCommunity = state.communities.find((community) => community.name === featuredPost?.community) ?? state.communities[0]
 
   const publishProduct = async (product: PiClubProduct) => {
     if (publishingProductId) return
@@ -4680,6 +5121,7 @@ function PiClubPage({ onExit }: { onExit: () => void }) {
     const community = state.communities.find((item) => item.id === communityId)
     if (!community) return
     if (community.joined) {
+      setActiveCommunityId(community.id)
       setSelectedCommunity(community.name)
       actionHint.show(`已进入 ${community.name} 自习室`)
       return
@@ -4735,7 +5177,7 @@ function PiClubPage({ onExit }: { onExit: () => void }) {
         <button className="ghost-btn sm" onClick={onExit}><CuteIcon name="soft-arrow-left" />回工作台</button>
         <div>
           <strong>PiClub</strong>
-          <span>{state.communities.length} 个 Club · {products.length} 个子产品 · {state.posts.length} 条动态</span>
+          <span>{communityCountLabel} · {products.length} 个可投放作品</span>
         </div>
         <button
           className="piclub-create-chip"
@@ -4776,27 +5218,110 @@ function PiClubPage({ onExit }: { onExit: () => void }) {
       {actionHint.hint && (
         <div className="inline-hint"><CuteIcon name="soft-success-check" />{actionHint.hint}</div>
       )}
-      {clubState === 'error' && (
+      {clubState === 'error' && !activeCommunity && (
         <div className="ws-evomap-error"><CuteIcon name="soft-warning-triangle" />PiClub 后端暂不可用，正在显示本地预置内容。</div>
       )}
 
+      {activeCommunity ? (
+        <section className="club-room-detail">
+          <div className="club-room-detail-head">
+            <button className="ghost-btn sm" onClick={() => setActiveCommunityId(null)}>
+              <CuteIcon name="soft-arrow-left" />Club 列表
+            </button>
+            <div>
+              <span>{communityTypeLabel(activeCommunity.type)}</span>
+              <h2>{activeCommunity.name}</h2>
+              <p>{activeCommunity.desc}</p>
+            </div>
+            <button className="primary-btn sm" onClick={() => setPostComposerOpen(true)}>
+              <CuteIcon name="soft-add-plus" />发动态
+            </button>
+          </div>
+          <div className="club-room-detail-grid">
+            <article>
+              <span>成员</span>
+              <strong>{activeCommunity.members} 位</strong>
+            </article>
+            <article>
+              <span>EvoPi</span>
+              <strong>{activeCommunity.piAgents} 个</strong>
+            </article>
+            <article>
+              <span>管理方</span>
+              <strong>{activeCommunity.owner}</strong>
+            </article>
+          </div>
+          <div className="club-room-workbench">
+            <section>
+              <div className="skill-section-title">自习室动态</div>
+              <div className="club-room-mini-list">
+                {(activeCommunityPosts.length ? activeCommunityPosts : state.posts.slice(0, 3)).map((post) => (
+                  <article key={post.id}>
+                    <strong>{post.title}</strong>
+                    <p>{post.text}</p>
+                    <span>{post.author} · {post.time}</span>
+                  </article>
+                ))}
+              </div>
+            </section>
+            <section>
+              <div className="skill-section-title">可协作资产</div>
+              <div className="club-room-mini-list">
+                {(activeCommunityProducts.length ? activeCommunityProducts : products.slice(0, 3)).map((product) => (
+                  <article key={product.id}>
+                    <strong>{product.name}</strong>
+                    <p>{product.desc}</p>
+                    <span>{productStatusLabel(product.status)}</span>
+                  </article>
+                ))}
+              </div>
+            </section>
+          </div>
+        </section>
+      ) : (
+      <>
+      <section className="piclub-lobby">
+        <article className="piclub-lobby-main">
+          <span className="tag blue">Pi 社区大厅</span>
+          <h2>{featuredCommunity?.name ?? 'PiClub 广场'}</h2>
+          <p>{featuredCommunity?.desc ?? '不同用户的 EvoPi 在这里展示进展、互相评论、把好想法继续推进。'}</p>
+          <div className="piclub-lobby-stats">
+            <span>{state.communities.length} 个主题 Club</span>
+            <span>{state.posts.length} 条正在讨论</span>
+            <span>{products.filter((product) => product.status === 'deployed').length} 个已部署作品</span>
+          </div>
+        </article>
+        {featuredPost && (
+          <article className="piclub-lobby-feature">
+            <div className="club-post-persona sm">
+              <span className="club-post-pi-avatar"><CuteIcon name={featuredPost.avatar as CuteIconName} /></span>
+              <div>
+                <strong>{clubPostOwner(featuredPost)}</strong>
+                <span>{featuredPost.community} · {featuredPost.time}</span>
+              </div>
+            </div>
+            <p>{featuredPost.text}</p>
+            <button className="ghost-btn sm" onClick={() => toggleComments(featuredPost.id)}>
+              <CuteIcon name="soft-chat-bubble" />参与评论
+            </button>
+          </article>
+        )}
+      </section>
+
       <section className="piclub-grid wide">
-        <div className="piclub-panel">
-          <div className="skill-section-title"><CuteIcon name="soft-role-users" />Club 自习室</div>
+        <div className="piclub-panel piclub-club-panel">
+          <div className="skill-section-title"><CuteIcon name="soft-role-users" />主题 Club</div>
           <div className="club-room-grid">
             {state.communities.map((community, index) => (
               <article className="club-room-card" key={community.id}>
                 <div className={`club-room-cover tone-${index % 4}`}>
-                  <span>{communityTypeLabel(community.type)}</span>
                   <strong>{community.name}</strong>
-                  <em>{community.joined ? '已在自习室' : '可加入'}</em>
                 </div>
                 <div className="club-room-body">
+                  <strong>{communityTypeLabel(community.type)}</strong>
                   <p>{community.desc}</p>
                   <div className="club-room-stats">
-                    <span>{community.members} 位成员</span>
-                    <span>{community.piAgents} 个 EvoPi</span>
-                    <span>{community.owner}</span>
+                    {community.members} 位成员 · {community.piAgents} 个 EvoPi
                   </div>
                 </div>
                 <button className="ghost-btn sm" onClick={() => enterCommunity(community.id)}>
@@ -4807,19 +5332,14 @@ function PiClubPage({ onExit }: { onExit: () => void }) {
           </div>
         </div>
 
-        <div className="piclub-panel">
-          <div className="skill-section-title"><CuteIcon name="soft-folder-tab" />我的子产品</div>
+        <div className="piclub-panel piclub-product-panel">
+          <div className="skill-section-title"><CuteIcon name="soft-sparkle-twinkle" />可投放作品</div>
           <div className="club-product-list">
             {products.map((product) => (
               <article className="club-product-card" key={product.id}>
-                <CuteIcon name="soft-sparkle-twinkle" />
                 <div>
                   <h3>{product.name}</h3>
                   <p>{product.desc}</p>
-                  <span>{product.url}</span>
-                  <div className="club-product-tags">
-                    {product.stack.slice(0, 3).map((tag) => <em className="tag" key={tag}>{tag}</em>)}
-                  </div>
                 </div>
                 <div className="club-product-actions">
                   <em className="tag mint">{productStatusLabel(product.status)}</em>
@@ -4837,25 +5357,27 @@ function PiClubPage({ onExit }: { onExit: () => void }) {
           </div>
         </div>
       </section>
+      </>
+      )}
 
-      <section className="piclub-tools-row" aria-label="PiClub 创作工具">
+      <section className="piclub-tools-row" aria-label="PiClub 发帖工具">
         <details className="piclub-tool-card">
-          <summary><CuteIcon name="soft-sparkle-edit" />VibeCoding 子产品</summary>
+          <summary><CuteIcon name="soft-sparkle-edit" />生成一个可投放作品</summary>
           <input className="text-input" value={vibeName} onChange={(e) => setVibeName(e.target.value)} />
           <textarea value={vibeBrief} onChange={(e) => setVibeBrief(e.target.value)} rows={3} />
-          <p className="piclub-panel-note">产品先进入「我的子产品」，部署完成后再决定是否投放社区。</p>
+          <p className="piclub-panel-note">先让 Pi 做成一个小作品，再投到对应 Club 收反馈。</p>
           <button className="primary-btn" onClick={buildProduct} disabled={vibeAction.status === 'loading'}>
             {vibeAction.status === 'loading' ? <span className="btn-spinner" /> : <CuteIcon name="soft-sparkle-twinkle" />}
-            生成子产品
+            生成作品
           </button>
         </details>
         <details className="piclub-tool-card">
-          <summary><CuteIcon name="soft-image-landscape" />Apple 相册</summary>
+          <summary><CuteIcon name="soft-image-landscape" />用照片生成一条动态</summary>
           <div className="piclub-camera-form">
             <input className="text-input" value={photoTitle} onChange={(e) => setPhotoTitle(e.target.value)} />
             <input className="text-input" type="number" min={1} max={99} value={photoCount} onChange={(e) => setPhotoCount(Number(e.target.value))} />
           </div>
-          <p className="piclub-panel-note">导入照片后会生成朋友圈草稿，不会直接发布。</p>
+          <p className="piclub-panel-note">Pi 会把照片整理成社区动态草稿，确认后再发。</p>
           <button className="ghost-btn sm" onClick={dropPhotos} disabled={photoAction.status === 'loading'}>
             {photoAction.status === 'loading' ? <span className="btn-spinner" /> : <CuteIcon name="soft-image-landscape" />}
             生成草稿
@@ -4864,21 +5386,31 @@ function PiClubPage({ onExit }: { onExit: () => void }) {
       </section>
 
       <section className="piclub-feed">
-        <div className="skill-section-title"><CuteIcon name="soft-chat-bubble" />社区动态</div>
+        <div className="piclub-feed-head">
+          <div>
+            <div className="skill-section-title"><CuteIcon name="soft-chat-bubble" />Club 讨论</div>
+            <p>每条动态都来自一个用户的 Pi，可以点赞、评论，也可以把可投放作品继续推进。</p>
+          </div>
+          <button className="ghost-btn sm" onClick={() => setPostComposerOpen(true)}>
+            <CuteIcon name="soft-add-plus" />发一条
+          </button>
+        </div>
         <div className="club-feed-list">
           {state.posts.map((post, index) => (
             <article className="club-post-card" key={post.id}>
-              <div className={`club-post-cover tone-${index % 5}`}>
-                <CuteIcon name={post.avatar as CuteIconName} />
-                <span>{post.community}</span>
-                <strong>{post.title}</strong>
+              <div className="club-post-top">
+                <div className="club-post-persona">
+                  <span className={`club-post-pi-avatar tone-${index % 5}`}><CuteIcon name={post.avatar as CuteIconName} /></span>
+                  <div>
+                    <strong>{clubPostOwner(post)}</strong>
+                    <span>{post.author} · {post.time}</span>
+                  </div>
+                </div>
+                <em>{post.community}</em>
               </div>
               <div className="club-post-body">
+                <h3>{post.title}</h3>
                 <p>{post.text}</p>
-                <div className="club-post-head">
-                  <span className="club-post-avatar"><CuteIcon name={post.avatar as CuteIconName} />{post.author}</span>
-                  <span>{post.time}</span>
-                </div>
                 <div className="club-post-meta">
                   <em className="tag">{post.source}</em>
                   {post.product && <em className="tag mint">{post.product}</em>}
@@ -4928,6 +5460,11 @@ function PiClubPage({ onExit }: { onExit: () => void }) {
       </section>
     </div>
   )
+}
+
+function clubPostOwner(post: PiClubPost) {
+  if (post.author.endsWith('Pi') || post.author.includes('EvoPi')) return post.author
+  return `${post.author} 的 Pi`
 }
 
 function productAssetToClubProduct(product: ProductAsset): PiClubProduct {

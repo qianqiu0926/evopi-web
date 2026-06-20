@@ -714,6 +714,7 @@ export async function callExternalAgent(input: {
   skillName?: string
   model?: string
   sessionKey?: string
+  visualFrameDataUrl?: string
   local?: boolean
   timeoutSec?: number
 }) {

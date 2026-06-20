@@ -1929,6 +1929,70 @@ body[data-theme="glass"] .ws-workspace {
   background: color-mix(in srgb, var(--cute-mint) 22%, var(--surface));
 }
 
+.piclub-lobby {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(280px, 0.85fr);
+  gap: 12px;
+  min-width: 0;
+}
+
+.piclub-lobby-main,
+.piclub-lobby-feature {
+  display: grid;
+  align-content: start;
+  gap: 12px;
+  min-width: 0;
+  border: var(--border-w) solid var(--line);
+  border-radius: var(--r-md);
+  padding: 16px;
+  background: var(--surface);
+  box-shadow: var(--shadow-card);
+}
+
+.piclub-lobby-main {
+  background:
+    linear-gradient(135deg, color-mix(in srgb, var(--cute-mint) 36%, transparent), transparent 56%),
+    var(--surface);
+}
+
+.piclub-lobby-main h2 {
+  margin: 0;
+  font-size: 24px;
+  line-height: 1.16;
+}
+
+.piclub-lobby-main p,
+.piclub-lobby-feature p,
+.piclub-feed-head p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 780;
+  line-height: 1.55;
+}
+
+.piclub-lobby-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.piclub-lobby-stats span {
+  border: 1.5px solid var(--line-soft);
+  border-radius: 999px;
+  padding: 5px 9px;
+  background: rgba(255, 255, 255, 0.58);
+  color: var(--muted);
+  font-size: 11.5px;
+  font-weight: 900;
+}
+
+.piclub-lobby-feature {
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--cute-blue) 24%, transparent), transparent 64%),
+    var(--paper);
+}
+
 .piclub-topbar > div {
   display: grid;
   gap: 2px;
@@ -2021,7 +2085,8 @@ body[data-theme="glass"] .ws-workspace {
 .piclub-tools-row {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(280px, 100%), 1fr));
-  gap: 12px;
+  gap: 8px;
+  align-items: start;
 }
 
 .piclub-tool-card summary {
@@ -2078,7 +2143,7 @@ body[data-theme="glass"] .ws-workspace {
 }
 
 .piclub-grid.wide {
-  grid-template-columns: minmax(0, 1.15fr) minmax(300px, 0.85fr);
+  grid-template-columns: minmax(0, 0.95fr) minmax(280px, 0.72fr);
 }
 
 .piclub-panel,
@@ -2088,6 +2153,18 @@ body[data-theme="glass"] .ws-workspace {
   gap: 11px;
   min-width: 0;
   padding: 14px;
+}
+
+.piclub-club-panel,
+.piclub-product-panel {
+  box-shadow: 3px 3px 0 var(--line-soft);
+}
+
+.piclub-product-panel {
+  border-style: dashed;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.4), transparent 42%),
+    var(--surface-soft);
 }
 
 .piclub-panel-note {
@@ -2113,11 +2190,11 @@ body[data-theme="glass"] .ws-workspace {
 .club-product-list {
   display: grid;
   align-content: start;
-  gap: 10px;
+  gap: 8px;
 }
 
 .club-room-grid {
-  grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr));
+  grid-template-columns: 1fr;
 }
 
 .club-room-card,
@@ -2125,7 +2202,7 @@ body[data-theme="glass"] .ws-workspace {
 .club-post-card {
   display: grid;
   gap: 12px;
-  border: 1.5px dashed var(--line-soft);
+  border: 1.5px solid var(--line-soft);
   border-radius: var(--r-md);
   background: var(--paper);
   overflow: hidden;
@@ -2133,19 +2210,20 @@ body[data-theme="glass"] .ws-workspace {
 
 .club-room-card {
   align-content: start;
-  grid-template-columns: minmax(136px, 0.55fr) minmax(0, 1fr) auto;
+  grid-template-columns: 118px minmax(0, 1fr) auto;
   align-items: center;
-  padding: 8px;
+  gap: 14px;
+  padding: 12px;
 }
 
 .club-room-cover,
 .club-post-cover {
   display: grid;
-  align-content: space-between;
-  min-height: 112px;
+  align-content: center;
+  min-height: 96px;
   border: var(--border-w) solid var(--line);
   border-radius: var(--r-sm);
-  padding: 14px;
+  padding: 12px;
   background:
     radial-gradient(circle at 20% 22%, rgba(255, 255, 255, 0.78), transparent 23%),
     linear-gradient(135deg, var(--cute-mint), var(--cute-blue));
@@ -2178,7 +2256,6 @@ body[data-theme="glass"] .ws-workspace {
     linear-gradient(135deg, var(--cute-peach), var(--cute-blue));
 }
 
-.club-room-cover span,
 .club-post-cover span {
   width: max-content;
   max-width: 100%;
@@ -2192,34 +2269,28 @@ body[data-theme="glass"] .ws-workspace {
 
 .club-room-cover strong,
 .club-post-cover strong {
-  align-self: end;
-  font-size: 17px;
+  font-size: 15px;
   line-height: 1.18;
   overflow-wrap: anywhere;
 }
 
-.club-room-cover em {
-  justify-self: end;
-  border: 2px solid var(--line);
-  border-radius: 999px;
-  padding: 4px 9px;
-  background: var(--surface);
-  font-size: 11px;
-  font-style: normal;
-  font-weight: 950;
-}
-
 .club-room-body {
   display: grid;
-  gap: 8px;
-  padding: 2px 4px 0;
+  gap: 6px;
+  padding: 0;
+}
+
+.club-room-body > strong {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 900;
 }
 
 .club-room-body p,
 .club-product-card p,
 .club-product-card span,
 .club-post-body p,
-.club-post-head span,
+.club-post-persona span,
 .club-comment-empty {
   color: var(--muted);
   line-height: 1.5;
@@ -2227,20 +2298,9 @@ body[data-theme="glass"] .ws-workspace {
 }
 
 .club-room-stats {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-
-.club-room-stats span {
-  min-height: 24px;
-  border: 1.5px solid var(--line-soft);
-  border-radius: 999px;
-  padding: 3px 8px;
-  background: var(--surface-soft);
   color: var(--muted);
-  font-size: 11px;
-  font-weight: 850;
+  font-size: 12px;
+  font-weight: 800;
 }
 
 .club-room-card .ghost-btn {
@@ -2250,19 +2310,16 @@ body[data-theme="glass"] .ws-workspace {
 
 .club-product-card h3,
 .club-post-card h3 {
-  margin: 6px 0 4px;
+  margin: 0;
   font-size: 16px;
+  line-height: 1.28;
 }
 
 .club-product-card {
-  grid-template-columns: 38px minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr);
   align-items: start;
   padding: 12px;
-}
-
-.club-product-card > .cute-icon {
-  width: 34px;
-  height: 34px;
+  gap: 10px;
 }
 
 .club-product-tags,
@@ -2276,75 +2333,232 @@ body[data-theme="glass"] .ws-workspace {
 
 .club-product-actions {
   display: flex;
-  grid-column: 1 / -1;
   justify-content: space-between;
   align-items: center;
   gap: 8px;
   flex-wrap: wrap;
 }
 
+.club-room-detail {
+  display: grid;
+  gap: 14px;
+  border: var(--border-w) solid var(--line);
+  border-radius: var(--r-md);
+  padding: 16px;
+  background: var(--surface);
+  box-shadow: var(--shadow-card);
+}
+
+.club-room-detail-head {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 14px;
+  align-items: start;
+}
+
+.club-room-detail-head span {
+  display: block;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.club-room-detail-head h2 {
+  margin: 2px 0 4px;
+  font-size: 24px;
+}
+
+.club-room-detail-head p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.club-room-detail-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.club-room-detail-grid article,
+.club-room-mini-list article {
+  border: 1.5px dashed var(--line-soft);
+  border-radius: var(--r-sm);
+  padding: 10px 12px;
+  background: var(--paper);
+}
+
+.club-room-detail-grid span,
+.club-room-mini-list span {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 850;
+}
+
+.club-room-detail-grid strong,
+.club-room-mini-list strong {
+  display: block;
+  margin-top: 3px;
+  font-size: 14px;
+}
+
+.club-room-workbench {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 12px;
+}
+
+.club-room-workbench section,
+.club-room-mini-list {
+  display: grid;
+  align-content: start;
+  gap: 10px;
+  min-width: 0;
+}
+
+.club-room-mini-list p {
+  margin: 4px 0 6px;
+  color: var(--muted);
+  font-size: 12.5px;
+  line-height: 1.45;
+}
+
 .club-feed-list {
-  column-width: 260px;
-  column-gap: 12px;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(360px, 100%), 1fr));
+  gap: 12px;
 }
 
 .club-post-card {
-  width: 100%;
-  margin: 0 0 14px;
-  break-inside: avoid;
-  display: inline-grid;
+  position: relative;
+  display: grid;
+  gap: 0;
+  background: var(--surface);
+  box-shadow: 4px 4px 0 var(--line-soft);
 }
 
-.club-post-card:nth-child(2n) .club-post-cover {
-  min-height: 168px;
+.club-post-card::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 6px;
+  background: var(--cute-mint);
 }
 
-.club-post-card:nth-child(3n) .club-post-cover {
-  min-height: 122px;
+.club-post-card:nth-child(2n)::before {
+  background: var(--cute-blue);
 }
 
-.club-post-cover {
-  min-height: 150px;
-  border: 0;
-  border-bottom: var(--border-w) solid var(--line);
-  border-radius: 0;
+.club-post-card:nth-child(3n)::before {
+  background: var(--cute-pink);
 }
 
-.club-post-cover .cute-icon {
+.club-post-top {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: start;
+  min-width: 0;
+  padding: 14px 14px 10px 18px;
+  border-bottom: 1.5px dashed var(--line-soft);
+  background:
+    linear-gradient(90deg, rgba(255, 255, 255, 0.62), transparent 56%),
+    var(--paper);
+}
+
+.club-post-top > em {
+  max-width: 160px;
+  overflow: hidden;
+  border: 1.5px solid var(--line-soft);
+  border-radius: 999px;
+  padding: 4px 8px;
+  background: var(--surface);
+  color: var(--muted);
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 900;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.club-post-persona {
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr);
+  gap: 9px;
+  align-items: center;
+  min-width: 0;
+}
+
+.club-post-persona.sm {
+  grid-template-columns: 36px minmax(0, 1fr);
+}
+
+.club-post-persona div {
+  min-width: 0;
+}
+
+.club-post-persona strong,
+.club-post-persona span {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.club-post-persona strong {
+  font-size: 13.5px;
+}
+
+.club-post-pi-avatar {
+  display: grid;
+  place-items: center;
   width: 42px;
   height: 42px;
   border: 2px solid var(--line);
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--cute-mint) 58%, var(--surface));
+}
+
+.club-post-persona.sm .club-post-pi-avatar {
+  width: 36px;
+  height: 36px;
   border-radius: 14px;
-  padding: 6px;
-  background: rgba(255, 255, 255, 0.72);
+}
+
+.club-post-pi-avatar.tone-1 {
+  background: color-mix(in srgb, var(--cute-pink) 58%, var(--surface));
+}
+
+.club-post-pi-avatar.tone-2 {
+  background: color-mix(in srgb, var(--cute-blue) 58%, var(--surface));
+}
+
+.club-post-pi-avatar.tone-3 {
+  background: color-mix(in srgb, var(--cute-yellow) 58%, var(--surface));
+}
+
+.club-post-pi-avatar.tone-4 {
+  background: color-mix(in srgb, var(--cute-peach) 58%, var(--surface));
+}
+
+.club-post-pi-avatar .cute-icon {
+  width: 24px;
+  height: 24px;
 }
 
 .club-post-body {
   display: grid;
   gap: 10px;
-  padding: 12px;
+  padding: 12px 14px 14px 18px;
 }
 
-.club-post-avatar {
-  display: inline-flex;
-  gap: 6px;
-  align-items: center;
-  color: var(--text);
-  font-weight: 900;
-}
-
-.club-post-avatar .cute-icon {
-  display: grid;
-  place-items: center;
-  width: 22px;
-  height: 22px;
-}
-
-.club-post-head {
+.piclub-feed-head {
   display: flex;
   justify-content: space-between;
-  gap: 10px;
-  align-items: baseline;
+  gap: 12px;
+  align-items: start;
+  min-width: 0;
 }
 
 .club-post-actions {
@@ -2358,7 +2572,7 @@ body[data-theme="glass"] .ws-workspace {
   align-items: center;
   gap: 5px;
   min-height: 32px;
-  border: 0;
+  border: 1.5px solid var(--line-soft);
   border-radius: 999px;
   padding: 0 9px;
   background: var(--surface-soft);
@@ -6160,6 +6374,83 @@ body[data-theme="glass"] .focus-hero {
   font-style: normal;
   font-weight: 900;
   white-space: nowrap;
+}
+
+.group-chat-header .ghost-btn.active {
+  background: var(--cute-yellow);
+  box-shadow: 2px 2px 0 var(--line-soft);
+}
+
+.group-call-strip {
+  display: grid;
+  grid-template-columns: 124px minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  border-bottom: var(--border-w) solid var(--line);
+  padding: 10px 16px;
+  background: color-mix(in srgb, var(--cute-blue) 22%, var(--surface));
+}
+
+.group-video-tile {
+  display: grid;
+  place-items: center;
+  width: 124px;
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  border: 1.5px solid var(--line);
+  border-radius: var(--r-sm);
+  background: var(--surface);
+}
+
+.group-video-tile video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transform: scaleX(-1);
+}
+
+.group-video-tile > div {
+  display: grid;
+  place-items: center;
+  gap: 3px;
+  color: var(--muted);
+  font-size: 10.5px;
+  font-weight: 850;
+  text-align: center;
+}
+
+.group-video-tile .cute-icon {
+  width: 22px;
+  height: 22px;
+}
+
+.group-call-copy {
+  min-width: 0;
+}
+
+.group-call-copy strong,
+.group-call-copy span {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.group-call-copy strong {
+  font-size: 13px;
+}
+
+.group-call-copy span {
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 11.5px;
+  font-weight: 850;
+}
+
+.call-voice.sm {
+  min-height: 36px;
+  padding: 0 12px;
+  font-size: 12px;
 }
 
 .group-member-strip {
@@ -10226,6 +10517,10 @@ body[data-theme="glass"] .onboard-card {
   .piclub-grid.wide {
     grid-template-columns: 1fr;
   }
+
+  .piclub-lobby {
+    grid-template-columns: 1fr;
+  }
 }
 
 @media (max-width: 720px) {
@@ -10328,6 +10623,20 @@ body[data-theme="glass"] .onboard-card {
 
   .piclub-compose-row {
     grid-template-columns: 1fr;
+  }
+
+  .piclub-feed-head,
+  .club-post-top {
+    grid-template-columns: 1fr;
+  }
+
+  .club-post-top > em {
+    max-width: 100%;
+    justify-self: start;
+  }
+
+  .piclub-lobby-main h2 {
+    font-size: 21px;
   }
 }
 
@@ -13328,6 +13637,91 @@ body[data-theme="notion"] .rail-collapse-btn:hover,
 body[data-theme="notion"] .rail-restore-btn:hover {
   background: rgba(95, 180, 255, 0.12) !important;
   border-color: rgba(95, 180, 255, 0.58) !important;
+}
+
+body[data-theme="notion"] .piclub-topbar,
+body[data-theme="notion"] .piclub-lobby-main,
+body[data-theme="notion"] .piclub-lobby-feature,
+body[data-theme="notion"] .piclub-panel,
+body[data-theme="notion"] .piclub-feed,
+body[data-theme="notion"] .piclub-tool-card,
+body[data-theme="notion"] .piclub-compose-drawer,
+body[data-theme="notion"] .club-room-card,
+body[data-theme="notion"] .club-product-card,
+body[data-theme="notion"] .club-post-card,
+body[data-theme="notion"] .club-room-detail,
+body[data-theme="notion"] .club-room-detail-grid article,
+body[data-theme="notion"] .club-room-mini-list article,
+body[data-theme="notion"] .club-comment {
+  background: #101827 !important;
+  border-color: rgba(95, 180, 255, 0.2) !important;
+  color: #eef4ff !important;
+  box-shadow: none !important;
+}
+
+body[data-theme="notion"] .piclub-lobby-main,
+body[data-theme="notion"] .piclub-lobby-feature,
+body[data-theme="notion"] .piclub-product-panel,
+body[data-theme="notion"] .club-post-top {
+  background: #111a2b !important;
+}
+
+body[data-theme="notion"] .piclub-lobby-main h2,
+body[data-theme="notion"] .club-post-persona strong,
+body[data-theme="notion"] .club-post-body h3,
+body[data-theme="notion"] .club-room-cover strong,
+body[data-theme="notion"] .club-product-card h3,
+body[data-theme="notion"] .club-comment strong {
+  color: #eef4ff !important;
+}
+
+body[data-theme="notion"] .piclub-lobby-main p,
+body[data-theme="notion"] .piclub-lobby-feature p,
+body[data-theme="notion"] .piclub-feed-head p,
+body[data-theme="notion"] .club-room-body p,
+body[data-theme="notion"] .club-product-card p,
+body[data-theme="notion"] .club-post-body p,
+body[data-theme="notion"] .club-post-persona span,
+body[data-theme="notion"] .club-room-stats,
+body[data-theme="notion"] .piclub-panel-note,
+body[data-theme="notion"] .club-comment-empty,
+body[data-theme="notion"] .club-comment em {
+  color: #b6c4dc !important;
+}
+
+body[data-theme="notion"] .piclub-lobby-stats span,
+body[data-theme="notion"] .club-post-top > em,
+body[data-theme="notion"] .club-post-actions button {
+  background: rgba(95, 180, 255, 0.1) !important;
+  border-color: rgba(95, 180, 255, 0.28) !important;
+  color: #dceeff !important;
+}
+
+body[data-theme="notion"] .club-post-actions button.active {
+  background: rgba(95, 180, 255, 0.18) !important;
+  border-color: rgba(95, 180, 255, 0.5) !important;
+  color: var(--tech-cyan) !important;
+}
+
+body[data-theme="notion"] .club-post-card::before {
+  background: var(--tech-cyan) !important;
+}
+
+body[data-theme="notion"] .club-post-pi-avatar,
+body[data-theme="notion"] .club-post-pi-avatar.tone-1,
+body[data-theme="notion"] .club-post-pi-avatar.tone-2,
+body[data-theme="notion"] .club-post-pi-avatar.tone-3,
+body[data-theme="notion"] .club-post-pi-avatar.tone-4 {
+  background: rgba(95, 180, 255, 0.12) !important;
+  border-color: rgba(95, 180, 255, 0.34) !important;
+}
+
+body[data-theme="notion"] .club-room-cover,
+body[data-theme="notion"] .club-room-cover.tone-1,
+body[data-theme="notion"] .club-room-cover.tone-2,
+body[data-theme="notion"] .club-room-cover.tone-3 {
+  background: rgba(95, 180, 255, 0.1) !important;
+  border-color: rgba(95, 180, 255, 0.28) !important;
 }
 
 @keyframes mapPetRun {
