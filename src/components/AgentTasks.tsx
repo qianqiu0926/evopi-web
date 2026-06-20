@@ -6,6 +6,7 @@ import {
   type AgentTaskFreq,
   type AgentTaskResult,
 } from '../data'
+import { emitPiCoreSignal } from '../piCoreSignals'
 
 /* ============================================================
    AgentTasks · Agent 代理任务（Pi 伙伴下方）
@@ -84,6 +85,7 @@ export function AgentTasks() {
   // 执行单个任务（授权后才允许）
   const runTask = useCallback(
     async (id: string) => {
+      emitPiCoreSignal('delegate')
       setTasks((prev) =>
         prev.map((t) => (t.id === id ? { ...t, status: 'running', lastRun: nowStr() } : t)),
       )
@@ -112,6 +114,7 @@ export function AgentTasks() {
   // 授权一个任务：授权一次后启动自动定时（演示：按频率模拟，真实定时需后端 cron）
   const authorize = useCallback(
     (id: string) => {
+      emitPiCoreSignal('delegate')
       setTasks((prev) =>
         prev.map((t) => {
           if (t.id !== id) return t
@@ -148,6 +151,7 @@ export function AgentTasks() {
 
   // 添加新任务
   const addTask = () => {
+    emitPiCoreSignal('delegate')
     const sub = draftSub.trim() || 'worldnews'
     const name = draftName.trim() || `r/${sub} ${freqLabel(draftFreq)}`
     const t: AgentTask = {

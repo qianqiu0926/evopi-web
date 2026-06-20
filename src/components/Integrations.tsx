@@ -11,6 +11,7 @@ import {
   type MessagingConnector,
 } from '../api'
 import { integrations } from '../data'
+import { emitPiCoreSignal } from '../piCoreSignals'
 
 /* ============================================================
    Integrations · 系统外接（Pi 伙伴下方）
@@ -116,6 +117,7 @@ export function Integrations() {
   }
 
   const followUpInWeChat = async () => {
+    emitPiCoreSignal('delegate')
     setWechatBusy('followup')
     try {
       await sendWeChatFollowUp({ message: 'EvoPi 已接入微信，后续会把需要用户确认的 Agent 跟进发送到这里。' })
@@ -131,6 +133,7 @@ export function Integrations() {
   const sendInboundToAgent = async () => {
     const message = wechatInboundText.trim()
     if (!message) return
+    emitPiCoreSignal('delegate')
     setWechatBusy('inbound')
     try {
       const result = await sendWeChatInbound({
@@ -204,6 +207,7 @@ export function Integrations() {
                 <button
                   className={`agent-toggle ${agentOn[it.id] ? 'on' : ''}`}
                   onClick={() => {
+                    if (!agentOn[it.id]) emitPiCoreSignal('delegate')
                     setAgentOn((p) => ({ ...p, [it.id]: !p[it.id] }))
                     showHint(!agentOn[it.id] ? `已开启${it.name}代理：Agent 将代为跟进` : `已关闭${it.name}代理`)
                   }}

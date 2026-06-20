@@ -3908,8 +3908,7 @@ body[data-theme="glass"] .mm-core {
 .eve-message-tags,
 .context-actions,
 .eve-capture-actions,
-.eve-vision-actions,
-.vision-signal-grid {
+.eve-vision-actions {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
@@ -4003,12 +4002,13 @@ body[data-theme="glass"] .mm-core {
 
 .eve-vision-card {
   display: grid;
-  grid-template-rows: 190px auto auto auto auto;
+  grid-template-rows: 210px auto auto auto auto auto;
   gap: 12px;
   padding: 12px;
 }
 
 .eve-vision-preview {
+  position: relative;
   display: grid;
   place-items: center;
   overflow: hidden;
@@ -4017,6 +4017,10 @@ body[data-theme="glass"] .mm-core {
   background:
     radial-gradient(circle at 50% 42%, rgba(218, 246, 232, 0.7), transparent 36%),
     var(--surface-soft);
+}
+
+.eve-vision-card.is-live .eve-vision-preview {
+  background: var(--line);
 }
 
 .eve-vision-preview video {
@@ -4039,6 +4043,10 @@ body[data-theme="glass"] .mm-core {
   height: 42px;
 }
 
+.eve-camera-placeholder .pet-sprite {
+  filter: drop-shadow(3px 4px 0 rgba(35, 45, 66, 0.16));
+}
+
 .eve-camera-placeholder span,
 .eve-vision-head span {
   color: var(--muted);
@@ -4052,10 +4060,78 @@ body[data-theme="glass"] .mm-core {
   gap: 4px;
 }
 
-.vision-signal-grid button {
-  flex: 1 1 calc(50% - 6px);
-  min-height: 34px;
+.pet-video-avatar {
+  position: absolute;
+  right: 10px;
+  bottom: 10px;
+  display: grid;
+  place-items: center;
+  min-width: 104px;
+  border: 2px solid var(--line);
+  border-radius: 18px;
+  padding: 6px 8px 7px;
+  background: color-mix(in srgb, var(--cute-yellow) 72%, var(--surface));
+  box-shadow: 3px 3px 0 var(--shadow-hard);
+}
+
+.pet-video-avatar span {
+  margin-top: -2px;
+  color: var(--text);
+  font-size: 11px;
+  font-weight: 950;
+}
+
+.eve-sensing-status {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
   border: 1.5px solid var(--line-soft);
+  border-radius: var(--r-md);
+  padding: 10px 12px;
+  background: color-mix(in srgb, var(--cute-blue) 28%, var(--surface));
+}
+
+.eve-sensing-status div {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.eve-sensing-status span,
+.voice-transcript span,
+.sensing-disclaimer {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.45;
+}
+
+.eve-sensing-status em {
+  display: grid;
+  place-items: center;
+  width: 46px;
+  height: 46px;
+  border: 2px solid var(--line);
+  border-radius: 50%;
+  background: var(--surface);
+  font-size: 13px;
+  font-style: normal;
+  font-weight: 950;
+  box-shadow: 2px 2px 0 var(--line-soft);
+}
+
+.analysis-pipeline {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.analysis-pipeline span {
+  display: grid;
+  place-items: center;
+  min-height: 32px;
+  border: 1.5px dashed var(--line-soft);
   border-radius: 999px;
   background: var(--surface);
   color: var(--muted);
@@ -4063,10 +4139,34 @@ body[data-theme="glass"] .mm-core {
   font-weight: 900;
 }
 
-.vision-signal-grid button.active {
+.analysis-pipeline span.active {
+  border-style: solid;
   border-color: var(--line);
-  background: var(--cute-blue);
+  background: color-mix(in srgb, var(--cute-mint) 46%, var(--surface));
   color: var(--text);
+}
+
+.voice-transcript {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  border: 1.5px solid var(--line-soft);
+  border-radius: var(--r-md);
+  padding: 8px 10px;
+  background: color-mix(in srgb, var(--cute-pink) 22%, var(--surface));
+}
+
+.voice-transcript .cute-icon {
+  width: 24px;
+  height: 24px;
+}
+
+.sensing-disclaimer {
+  border: 1.5px dashed var(--line-soft);
+  border-radius: var(--r-md);
+  padding: 9px 10px;
+  background: var(--surface-soft);
 }
 
 .context-continuation {
@@ -4147,7 +4247,7 @@ body[data-theme="glass"] .mm-core {
   }
 
   .eve-vision-card {
-    grid-template-rows: minmax(160px, 28vh) auto auto auto auto;
+    grid-template-rows: minmax(180px, 30vh) auto auto auto auto auto;
   }
 
   .context-card-grid {
@@ -4186,17 +4286,17 @@ body[data-theme="glass"] .mm-core {
 }
 
 body[data-pi-emotion="happy"] .pet-sprite {
-  animation: petExcitedHop 0.72s ease-in-out infinite;
+  animation: petRunHappy 0.58s ease-in-out infinite;
 }
 
-body[data-pi-emotion="confused"] .picore-panel {
+body[data-pi-emotion="waiting"] .picore-panel {
   box-shadow: var(--shadow-offset-lg) var(--shadow-offset-lg) 0 var(--shadow-hard), 0 0 0 4px color-mix(in srgb, var(--cute-yellow) 45%, transparent);
 }
 
-@keyframes petExcitedHop {
+@keyframes petRunHappy {
   0%, 100% { transform: translateY(0); }
-  40% { transform: translateY(-8px); }
-  68% { transform: translateY(2px); }
+  35% { transform: translateY(-9px) translateX(3px); }
+  68% { transform: translateY(1px) translateX(-3px); }
 }
 
 .focus-hero {
@@ -4880,7 +4980,7 @@ body[data-theme="glass"] .focus-hero {
     linear-gradient(180deg, color-mix(in srgb, var(--cute-blue) 14%, transparent), transparent 30%),
     var(--surface);
   display: grid;
-  grid-template-rows: minmax(286px, 0.56fr) minmax(0, 1fr);
+  grid-template-rows: 268px minmax(0, 1fr);
   gap: 0;
   min-height: 0;
   min-width: 0;
@@ -4892,18 +4992,18 @@ body[data-theme="glass"] .focus-hero {
   display: grid;
   min-height: 0;
   min-width: 0;
-  gap: 9px;
-  padding: 16px;
+  gap: 8px;
+  padding: 12px 16px;
   overflow: hidden;
 }
 
 .research-desk {
-  grid-template-rows: auto auto 102px 32px 38px;
+  grid-template-rows: auto 34px 76px 28px 30px;
   border-bottom: var(--border-w) solid var(--line);
 }
 
 .inspiration-desk {
-  grid-template-rows: auto auto minmax(0, 1fr) auto auto;
+  grid-template-rows: auto auto minmax(44px, 1fr) auto auto;
   background:
     linear-gradient(135deg, color-mix(in srgb, var(--cute-yellow) 24%, transparent), transparent 38%),
     var(--surface-soft);
@@ -4946,7 +5046,7 @@ body[data-theme="glass"] .focus-hero {
   gap: 7px;
   border: var(--border-w) solid var(--line);
   border-radius: var(--r-sm);
-  padding: 7px 10px;
+  padding: 5px 9px;
   background: var(--surface-soft);
   box-shadow: 2px 2px 0 var(--line-soft);
 }
@@ -4991,7 +5091,7 @@ body[data-theme="glass"] .focus-hero {
 
 .research-card.primary {
   height: 100%;
-  padding: 8px 10px;
+  padding: 7px 9px;
 }
 
 .research-card > div {
@@ -5011,8 +5111,8 @@ body[data-theme="glass"] .focus-hero {
 
 .research-check {
   display: grid;
-  width: 28px;
-  height: 28px;
+  width: 26px;
+  height: 26px;
   place-items: center;
   border: 1.5px solid var(--line);
   border-radius: 50%;
@@ -5037,7 +5137,7 @@ body[data-theme="glass"] .focus-hero {
   display: block;
   margin-top: 3px;
   overflow: hidden;
-  font-size: 12.6px;
+  font-size: 12.2px;
   line-height: 1.38;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
@@ -5059,8 +5159,8 @@ body[data-theme="glass"] .focus-hero {
 }
 
 .research-card.primary .mini-link {
-  min-height: 22px;
-  margin-top: 4px;
+  min-height: 20px;
+  margin-top: 3px;
 }
 
 .mini-link {
@@ -5095,7 +5195,7 @@ body[data-theme="glass"] .focus-hero {
 .research-candidates {
   display: flex;
   gap: 6px;
-  height: 32px;
+  height: 28px;
   min-height: 0;
   overflow-x: auto;
   scrollbar-width: none;
@@ -5110,11 +5210,11 @@ body[data-theme="glass"] .focus-hero {
   flex: 0 0 auto;
   align-items: center;
   gap: 8px;
-  min-height: 30px;
+  min-height: 28px;
   max-width: 240px;
   border: 1.5px solid var(--line-soft);
   border-radius: var(--r-sm);
-  padding: 4px 8px;
+  padding: 3px 8px;
   background: rgba(255, 255, 255, 0.68);
   color: var(--text);
   text-align: left;
@@ -5147,11 +5247,11 @@ body[data-theme="glass"] .focus-hero {
   grid-template-columns: auto minmax(0, 1fr);
   align-items: center;
   gap: 10px;
-  height: 38px;
+  height: 30px;
   border: 1.5px solid var(--line-soft);
   border-radius: var(--r-md);
   min-width: 0;
-  padding: 5px 8px;
+  padding: 4px 8px;
   background: color-mix(in srgb, var(--cute-yellow) 18%, var(--surface));
 }
 
@@ -5173,6 +5273,7 @@ body[data-theme="glass"] .focus-hero {
 }
 
 .asset-mini-head span {
+  display: none;
   margin-left: 0;
   color: var(--muted);
   font-size: 11px;
@@ -5198,7 +5299,7 @@ body[data-theme="glass"] .focus-hero {
   gap: 5px;
   max-width: 132px;
   min-width: 0;
-  min-height: 24px;
+  min-height: 22px;
   border: 1px solid var(--line-soft);
   border-radius: 999px;
   padding: 0 10px;
@@ -5228,7 +5329,7 @@ body[data-theme="glass"] .focus-hero {
   gap: 10px;
   border: 1.5px solid var(--line);
   border-radius: var(--r-md);
-  padding: 12px 13px;
+  padding: 9px 11px;
   min-width: 0;
   background: var(--surface);
   box-shadow: 2px 2px 0 var(--line-soft);
@@ -5240,7 +5341,7 @@ body[data-theme="glass"] .focus-hero {
 
 .memory-topic h3 {
   margin-top: 4px;
-  font-size: 15.5px;
+  font-size: 14.6px;
   line-height: 1.32;
 }
 
@@ -5273,7 +5374,7 @@ body[data-theme="glass"] .focus-hero {
   min-width: 0;
   border: 1px solid var(--line-soft);
   border-radius: var(--r-sm);
-  padding: 8px 9px;
+  padding: 7px 8px;
   background: rgba(255, 255, 255, 0.72);
 }
 
@@ -5303,9 +5404,9 @@ body[data-theme="glass"] .focus-hero {
   border: 1.5px solid color-mix(in srgb, var(--line) 62%, transparent);
   border-radius: var(--r-md);
   min-width: 0;
-  max-height: 118px;
+  max-height: 92px;
   overflow-y: auto;
-  padding: 10px 12px;
+  padding: 8px 10px;
   background: color-mix(in srgb, var(--cute-mint) 34%, var(--surface));
   scrollbar-width: thin;
 }
@@ -5325,7 +5426,7 @@ body[data-theme="glass"] .focus-hero {
 .pi-organizer ul {
   display: grid;
   gap: 5px;
-  margin: 7px 0 0;
+  margin: 6px 0 0;
   padding-left: 17px;
 }
 
@@ -5342,7 +5443,7 @@ body[data-theme="glass"] .focus-hero {
   gap: 8px;
   width: 100%;
   min-width: 0;
-  min-height: 42px;
+  min-height: 40px;
   border: var(--border-w) solid var(--line);
   border-radius: var(--r-sm);
   background: var(--cute-yellow);
@@ -7163,17 +7264,22 @@ body[data-theme="glass"] .evo-evidence-chips em {
     radial-gradient(ellipse 72% 28% at 50% 88%, var(--cute-mint) 0%, transparent 72%),
     radial-gradient(circle at 50% 42%, rgba(255, 255, 255, 0.72), transparent 38%),
     var(--surface-soft);
-  cursor: pointer;
   overflow: hidden;
   transition: transform var(--dur-fast) var(--ease-press);
 }
 
-.pet-stage:hover {
-  transform: translateY(-2px);
+.pet-stage.mood-happy {
+  background:
+    radial-gradient(ellipse 72% 28% at 50% 88%, var(--cute-mint) 0%, transparent 72%),
+    radial-gradient(circle at 68% 30%, color-mix(in srgb, var(--cute-pink) 68%, transparent), transparent 28%),
+    var(--surface-soft);
 }
 
-.pet-stage:active {
-  transform: scale(0.98);
+.pet-stage.mood-waiting {
+  background:
+    radial-gradient(ellipse 72% 28% at 50% 88%, var(--cute-yellow) 0%, transparent 72%),
+    radial-gradient(circle at 50% 42%, rgba(255, 255, 255, 0.72), transparent 38%),
+    var(--surface-soft);
 }
 
 body[data-theme="glass"] .pet-stage {
@@ -7193,6 +7299,57 @@ body[data-theme="glass"] .pet-stage {
   background: var(--line-soft);
   filter: blur(3px);
   opacity: 0.42;
+}
+
+.pet-hearts {
+  pointer-events: none;
+  position: absolute;
+  inset: 34px 30px auto auto;
+  z-index: 2;
+  width: 82px;
+  height: 92px;
+}
+
+.pet-hearts span {
+  position: absolute;
+  color: #ff7caf;
+  font-size: 24px;
+  font-weight: 950;
+  text-shadow: 1px 1px 0 var(--line);
+  animation: petHeartFloat 1.8s ease-in-out infinite;
+}
+
+.pet-hearts span:nth-child(1) {
+  left: 6px;
+  bottom: 8px;
+}
+
+.pet-hearts span:nth-child(2) {
+  left: 36px;
+  bottom: 26px;
+  animation-delay: -0.55s;
+  font-size: 19px;
+}
+
+.pet-hearts span:nth-child(3) {
+  left: 18px;
+  bottom: 48px;
+  animation-delay: -1.05s;
+  font-size: 15px;
+}
+
+@keyframes petHeartFloat {
+  0% {
+    opacity: 0;
+    transform: translateY(12px) scale(0.72) rotate(-8deg);
+  }
+  20% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-34px) scale(1.05) rotate(8deg);
+  }
 }
 
 .pet-sprite {

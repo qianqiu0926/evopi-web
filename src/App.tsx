@@ -33,12 +33,14 @@ import {
 import type { Asset, ChatMsg, Goal, GoalSnippet, ProductAsset, RoomPerson } from './data'
 import { GroupedNav } from './components/GroupedNav'
 import { PiCorePanel } from './components/PiCorePanel'
+import { PetSprite } from './components/PetSprite'
 import { InteractiveBg } from './components/InteractiveBg'
 import { AuthModal } from './components/AuthModal'
 import { EvolutionMindMap } from './components/EvolutionMindMap'
 import { EvolutionMapCanvas } from './components/EvolutionMapCanvas'
 import { Onboarding } from './components/Onboarding'
 import { TechCursor } from './components/TechCursor'
+import { emitPiCoreSignal, type PiCoreSignalKind } from './piCoreSignals'
 import {
   ApiError,
   attachEvoMapReference,
@@ -123,6 +125,7 @@ import { useActionState, useInlineHint, type ActionStatus } from './hooks/useAct
    ============================================================ */
 type AppPage = 'launch' | 'today' | 'goals' | 'memory' | 'room' | 'club' | 'skills' | 'evolution' | 'privacy'
 type Theme = 'cute' | 'notion' | 'glass'
+type PiCoreEmotion = 'calm' | 'happy' | 'waiting'
 type WorkspaceRuntimeKind = ExternalAgentKind | 'evomap-developers'
 type ExternalRuntimePathForm = {
   openclaw: {
@@ -182,27 +185,68 @@ function App() {
   const [theme, setTheme] = useState<Theme>('cute')
   const [activePerson, setActivePerson] = useState<RoomPerson | null>(null)
   const [navCollapsed, setNavCollapsed] = useState(false) // 控制台整体收起
-  const [paused, setPaused] = useState(false) // PiCore 暂停
   const [user, setUser] = useState<AuthUser | null>(null) // 登录态
   const [authOpen, setAuthOpen] = useState<Mode>(null) // 'login' | 'register' | null
   const [onboardingFor, setOnboardingFor] = useState<AuthUser | null>(null) // 新用户需先完成预配置
   const [onboardDepth, setOnboardDepth] = useState(2) // 预配置推导的初始介入深度
+  const [piEmotion, setPiEmotion] = useState<PiCoreEmotion>('calm')
+  const [piBoostUntil, setPiBoostUntil] = useState(0)
+  const [inactive, setInactive] = useState(false)
 
   useEffect(() => { document.body.dataset.theme = theme }, [theme])
+  useEffect(() => { document.body.dataset.piEmotion = piEmotion }, [piEmotion])
   useEffect(() => {
     const area = document.querySelector('.page-area')
     if (area) area.scrollTop = 0
   }, [page])
 
+  useEffect(() => {
+    let idleTimer = window.setTimeout(() => setInactive(true), 15000)
+    const markActive = () => {
+      setInactive(false)
+      window.clearTimeout(idleTimer)
+      idleTimer = window.setTimeout(() => setInactive(true), 15000)
+    }
+    const events: Array<keyof WindowEventMap> = ['pointerdown', 'keydown', 'scroll']
+    events.forEach((event) => window.addEventListener(event, markActive, { passive: true }))
+    return () => {
+      window.clearTimeout(idleTimer)
+      events.forEach((event) => window.removeEventListener(event, markActive))
+    }
+  }, [])
+
+  useEffect(() => {
+    const boost = (duration = 6200) => setPiBoostUntil(Date.now() + duration)
+    const onSignal = (event: Event) => {
+      const kind = (event as CustomEvent<{ kind?: PiCoreSignalKind }>).detail?.kind
+      if (kind === 'delegate') boost(7800)
+      else if (kind === 'work' || kind === 'confirm') boost(6200)
+      else setInactive(false)
+    }
+    window.addEventListener('evopi:picore-signal', onSignal)
+    return () => window.removeEventListener('evopi:picore-signal', onSignal)
+  }, [])
+
+  useEffect(() => {
+    const interval = window.setInterval(() => {
+      const boosted = Date.now() < piBoostUntil
+      if (boosted || page === 'goals' || page === 'club' || page === 'evolution') setPiEmotion('happy')
+      else if (inactive && pendingCount > 0) setPiEmotion('waiting')
+      else setPiEmotion('calm')
+    }, 500)
+    return () => window.clearInterval(interval)
+  }, [inactive, page, piBoostUntil])
+
   // 由页面状态推断 PiCore 心情（产品方案语义）
   const mood: PetMood = useMemo(() => {
-    if (paused) return 'sleeping'
+    if (piEmotion === 'happy') return 'happy'
+    if (piEmotion === 'waiting') return 'feeding'
     if (page === 'evolution') return 'happy'
     if (page === 'memory' || page === 'today') return pendingCount > 0 ? 'feeding' : 'idle'
     if (page === 'club') return 'happy'
     if (page === 'skills') return 'learning'
     return 'idle'
-  }, [page, paused])
+  }, [page, piEmotion])
 
   // 认证完成：新用户走 onboarding，老用户直接进入
   const handleAuthed = (u: AuthUser, isNew: boolean) => {
@@ -262,8 +306,7 @@ function App() {
       navCollapsed={navCollapsed}
       setNavCollapsed={setNavCollapsed}
       mood={mood}
-      paused={paused}
-      setPaused={setPaused}
+      piEmotion={piEmotion}
       user={user}
       onboardDepth={onboardDepth}
       onAuth={(m) => setAuthOpen(m)}
@@ -364,7 +407,7 @@ function LaunchPage({
    ============================================================ */
 function AppShell({
   page, setPage, theme, setTheme, activePerson, setActivePerson,
-  navCollapsed, setNavCollapsed, mood, paused, setPaused, user, onboardDepth, onAuth, onLogout,
+  navCollapsed, setNavCollapsed, mood, piEmotion, user, onboardDepth, onAuth, onLogout,
 }: {
   page: AppPage
   setPage: (p: AppPage) => void
@@ -375,8 +418,7 @@ function AppShell({
   navCollapsed: boolean
   setNavCollapsed: (v: boolean) => void
   mood: PetMood
-  paused: boolean
-  setPaused: (v: boolean) => void
+  piEmotion: PiCoreEmotion
   user: AuthUser | null
   onboardDepth: number
   onAuth: (m: 'login' | 'register') => void
@@ -407,6 +449,7 @@ function AppShell({
   const selectPage = (key: string) => {
     setPage(key as AppPage)
     setActivePerson(null)
+    emitPiCoreSignal(key === 'goals' || key === 'club' ? 'work' : 'interaction')
   }
 
   return (
@@ -540,7 +583,7 @@ function AppShell({
             <CuteIcon name="soft-arrow-right" />
             <span>收起</span>
           </button>
-          <PiCorePanel mood={mood} paused={paused} onTogglePause={() => setPaused(!paused)} />
+          <PiCorePanel mood={mood} emotion={piEmotion} />
         </aside>
       )}
 
@@ -581,7 +624,46 @@ function pageIcon(page: string): CuteIconName {
    ============================================================ */
 
 type WorkbenchContextKind = 'goal' | 'collab' | 'skill'
-type VisualSignal = 'attentive' | 'confused' | 'happy' | 'away'
+type SensingSignal = 'idle' | 'collecting' | 'modelPending' | 'attentive' | 'confused' | 'happy' | 'away'
+type SensingSource = 'none' | 'vision' | 'voice' | 'multimodal'
+type AnalysisStatus = 'idle' | 'collecting' | 'analyzing' | 'ready' | 'error'
+type VoiceStatus = 'idle' | 'listening' | 'processing' | 'speaking' | 'error'
+
+type SpeechRecognitionEventLike = Event & {
+  results: {
+    length: number
+    [index: number]: {
+      isFinal?: boolean
+      0?: { transcript?: string }
+    }
+  }
+}
+
+type SpeechRecognitionErrorEventLike = Event & {
+  error?: string
+  message?: string
+}
+
+type BrowserSpeechRecognition = {
+  lang: string
+  interimResults: boolean
+  continuous: boolean
+  onresult: ((event: SpeechRecognitionEventLike) => void) | null
+  onerror: ((event: SpeechRecognitionErrorEventLike) => void) | null
+  onend: (() => void) | null
+  start: () => void
+  stop: () => void
+  abort: () => void
+}
+
+type BrowserSpeechRecognitionConstructor = new () => BrowserSpeechRecognition
+
+declare global {
+  interface Window {
+    SpeechRecognition?: BrowserSpeechRecognitionConstructor
+    webkitSpeechRecognition?: BrowserSpeechRecognitionConstructor
+  }
+}
 
 type WorkbenchContextCard = {
   id: string
@@ -593,27 +675,79 @@ type WorkbenchContextCard = {
   cta: string
 }
 
-const visualSignalMeta: Record<VisualSignal, { label: string; bubble: string; cue: string }> = {
+const sensingSourceLabel: Record<SensingSource, string> = {
+  none: '未开启',
+  vision: '视觉',
+  voice: '语音',
+  multimodal: '视觉 + 语音',
+}
+
+const voiceStatusLabel: Record<VoiceStatus, string> = {
+  idle: '待机',
+  listening: '正在听',
+  processing: '整理语音',
+  speaking: '准备回话',
+  error: '需要接入',
+}
+
+const sensingSignalMeta: Record<SensingSignal, { label: string; bubble: string; cue: string; mood: PetMood }> = {
+  idle: {
+    label: '等待授权',
+    bubble: '开启视频或语音后，我会把画面、语音和对话语义合并给模型判断。',
+    cue: '本地未采集，Pi 保持低打扰待机。',
+    mood: 'idle',
+  },
+  collecting: {
+    label: '采集中',
+    bubble: '我正在接收你的摄像头和麦克风状态，先不要求你手动选择情绪。',
+    cue: '采集链路已启动，等待模型侧分析。',
+    mood: 'learning',
+  },
+  modelPending: {
+    label: '等待模型判定',
+    bubble: '页面已准备好自动感知入口，正式接入火山引擎后会由模型判断专注、疑虑、开心或离开。',
+    cue: '当前不做人工选择，也不冒充情绪识别结果。',
+    mood: 'learning',
+  },
   attentive: {
-    label: '专注中',
-    bubble: '我看到你在电脑前，我们可以直接把这件事往下拆。',
-    cue: 'Pi 正在同步你的注意力状态。',
+    label: '专注协作',
+    bubble: '模型判断你在电脑前，我会直接帮你推进任务。',
+    cue: 'Pi 会同步你的注意力状态。',
+    mood: 'learning',
   },
   confused: {
-    label: '有点疑惑',
-    bubble: '看到你可能有点疑惑，我会先把下一步拆成更小的判断，不急着推进。',
-    cue: 'Pi 会放慢解释速度，先补背景。',
+    label: '疑虑升高',
+    bubble: '模型判断你可能有点疑惑，我会先补背景，再给更小的下一步。',
+    cue: 'Pi 会放慢解释速度，先补上下文。',
+    mood: 'feeding',
   },
   happy: {
-    label: '有好点子',
-    bubble: '你看起来状态不错，像是刚冒出一个好 idea。要不要我帮你马上记成一个小产品方向？',
-    cue: '小宠物会兴奋地跳一下。',
+    label: '高能灵感',
+    bubble: '模型判断你状态很好，像是有了新想法。我会立刻帮你抓住这个方向。',
+    cue: '小狗 Pi 会进入兴奋反馈。',
+    mood: 'happy',
   },
   away: {
     label: '暂时离开',
-    bubble: '你似乎不在电脑前。我会先做低风险整理，等你回来再确认是否执行。',
+    bubble: '模型判断你不在电脑前。我会只做低风险整理，等你回来再确认执行。',
     cue: 'Pi 进入低打扰自动整理模式。',
+    mood: 'sleeping',
   },
+}
+
+const analysisStepLabels = ['摄像头帧', '麦克风音色', '语义转写', '小狗回话']
+
+const sensingPromptCue = (
+  status: AnalysisStatus,
+  source: SensingSource,
+  signal: SensingSignal,
+  confidence: number,
+  transcript: string,
+) => {
+  if (source === 'none') return '用户尚未开启视觉或语音自动感知。'
+  const meta = sensingSignalMeta[signal]
+  const base = `自动感知链路：${sensingSourceLabel[source]}；状态：${meta.label}；分析阶段：${status}；置信度参考：${confidence}%。${meta.cue}`
+  return transcript ? `${base} 最近语音转写：${transcript}` : base
 }
 
 const workbenchContexts: WorkbenchContextCard[] = [
@@ -661,7 +795,12 @@ function TodayPage({ goRoom, goGoals }: { goRoom: () => void; goGoals: () => voi
   const [activeContextId, setActiveContextId] = useState<string | null>(workbenchContexts[0]?.id ?? null)
   const [cameraStatus, setCameraStatus] = useState<'idle' | 'requesting' | 'on' | 'error'>('idle')
   const [cameraError, setCameraError] = useState('')
-  const [visualSignal, setVisualSignal] = useState<VisualSignal>('attentive')
+  const [analysisStatus, setAnalysisStatus] = useState<AnalysisStatus>('idle')
+  const [sensingSignal, setSensingSignal] = useState<SensingSignal>('idle')
+  const [sensingSource, setSensingSource] = useState<SensingSource>('none')
+  const [sensingConfidence, setSensingConfidence] = useState(0)
+  const [voiceStatus, setVoiceStatus] = useState<VoiceStatus>('idle')
+  const [voiceTranscript, setVoiceTranscript] = useState('')
   const [captureHint, setCaptureHint] = useState<'idle' | 'skill' | 'goal'>('idle')
   const [externalConnections, setExternalConnections] = useState<ExternalAgentConnection[]>([])
   const [developerEnvironment, setDeveloperEnvironment] = useState<DeveloperEnvironmentConnection | null>(null)
@@ -670,10 +809,11 @@ function TodayPage({ goRoom, goGoals }: { goRoom: () => void; goGoals: () => voi
   const chatRef = useRef<HTMLDivElement>(null)
   const videoRef = useRef<HTMLVideoElement>(null)
   const streamRef = useRef<MediaStream | null>(null)
+  const analysisTimerRef = useRef<number | null>(null)
+  const recognitionRef = useRef<BrowserSpeechRecognition | null>(null)
   // 发送：loading → 清空 + 提示
   const send = useActionState()
   const sendHint = useInlineHint(2600)
-  // 语音：仅就近提示
   const voiceHint = useInlineHint(2200)
 
   const bootExternalAgents = async (force = false) => {
@@ -722,13 +862,13 @@ function TodayPage({ goRoom, goGoals }: { goRoom: () => void; goGoals: () => voi
 
   useEffect(() => {
     chatRef.current?.scrollTo({ top: chatRef.current.scrollHeight, behavior: 'smooth' })
-  }, [messages, cameraStatus, visualSignal])
+  }, [messages, cameraStatus, sensingSignal, voiceStatus])
 
   useEffect(() => {
-    if (cameraStatus === 'on') document.body.dataset.piEmotion = visualSignal
-    else delete document.body.dataset.piEmotion
-    return () => { delete document.body.dataset.piEmotion }
-  }, [cameraStatus, visualSignal])
+    if (sensingSignal !== 'idle') document.body.dataset.piVision = sensingSignal
+    else delete document.body.dataset.piVision
+    return () => { delete document.body.dataset.piVision }
+  }, [sensingSignal])
 
   useEffect(() => {
     if (cameraStatus === 'on' && videoRef.current && streamRef.current) {
@@ -738,43 +878,139 @@ function TodayPage({ goRoom, goGoals }: { goRoom: () => void; goGoals: () => voi
 
   useEffect(() => {
     return () => {
+      if (analysisTimerRef.current !== null) window.clearTimeout(analysisTimerRef.current)
+      recognitionRef.current?.abort()
       streamRef.current?.getTracks().forEach((track) => track.stop())
       streamRef.current = null
     }
   }, [])
 
   const activeContext = workbenchContexts.find((item) => item.id === activeContextId) ?? workbenchContexts[0]
-  const visualMeta = visualSignalMeta[visualSignal]
+  const sensingMeta = sensingSignalMeta[sensingSignal]
+  const callMood = voiceStatus === 'speaking' ? 'happy' : sensingMeta.mood
+  const modelPipelineActive = cameraStatus === 'on' || voiceStatus !== 'idle' || sensingSource !== 'none'
 
   const startCamera = async () => {
     if (!navigator.mediaDevices?.getUserMedia) {
       setCameraStatus('error')
       setCameraError('当前浏览器不支持摄像头调用。')
+      setAnalysisStatus('error')
       return
     }
     setCameraStatus('requesting')
     setCameraError('')
+    setAnalysisStatus('collecting')
+    setSensingSignal('collecting')
+    setSensingSource('multimodal')
+    setSensingConfidence(18)
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 360 }, audio: false })
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 360 }, audio: true })
       streamRef.current = stream
       if (videoRef.current) videoRef.current.srcObject = stream
       setCameraStatus('on')
-      setVisualSignal('attentive')
+      setAnalysisStatus('analyzing')
+      setSensingSignal('modelPending')
+      setSensingSource('multimodal')
+      setSensingConfidence(42)
+      voiceHint.show('视频对话已开启，正式情绪识别等待模型服务接入')
+      if (analysisTimerRef.current !== null) window.clearTimeout(analysisTimerRef.current)
+      analysisTimerRef.current = window.setTimeout(() => {
+        setAnalysisStatus('ready')
+        setSensingSignal('modelPending')
+        setSensingConfidence(56)
+      }, 900)
     } catch (error) {
       setCameraStatus('error')
+      setAnalysisStatus('error')
+      setSensingSignal('idle')
+      setSensingSource('none')
+      setSensingConfidence(0)
       setCameraError(formatApiError(error))
     }
   }
 
   const stopCamera = () => {
+    if (analysisTimerRef.current !== null) {
+      window.clearTimeout(analysisTimerRef.current)
+      analysisTimerRef.current = null
+    }
     streamRef.current?.getTracks().forEach((track) => track.stop())
     streamRef.current = null
     if (videoRef.current) videoRef.current.srcObject = null
     setCameraStatus('idle')
-    delete document.body.dataset.piEmotion
+    setAnalysisStatus('idle')
+    setSensingSignal('idle')
+    setSensingSource(voiceStatus === 'idle' ? 'none' : 'voice')
+    setSensingConfidence(0)
+    delete document.body.dataset.piVision
+  }
+
+  const startVoiceInput = () => {
+    emitPiCoreSignal('interaction')
+    if (voiceStatus === 'listening') {
+      recognitionRef.current?.stop()
+      setVoiceStatus('processing')
+      return
+    }
+    const Recognition = window.SpeechRecognition ?? window.webkitSpeechRecognition
+    if (!Recognition) {
+      setVoiceStatus('error')
+      setSensingSource(cameraStatus === 'on' ? 'multimodal' : 'voice')
+      setAnalysisStatus(cameraStatus === 'on' ? 'ready' : 'error')
+      setSensingSignal(cameraStatus === 'on' ? 'modelPending' : 'idle')
+      voiceHint.show('当前浏览器不支持本地语音转写，需接入火山引擎流式 ASR')
+      return
+    }
+    const recognition = new Recognition()
+    recognitionRef.current = recognition
+    recognition.lang = 'zh-CN'
+    recognition.interimResults = true
+    recognition.continuous = false
+    setVoiceTranscript('')
+    setVoiceStatus('listening')
+    setSensingSource(cameraStatus === 'on' ? 'multimodal' : 'voice')
+    setAnalysisStatus('collecting')
+    setSensingSignal('collecting')
+    setSensingConfidence(26)
+    recognition.onresult = (event) => {
+      let finalText = ''
+      let interimText = ''
+      for (let i = 0; i < event.results.length; i += 1) {
+        const part = event.results[i]?.[0]?.transcript ?? ''
+        if (event.results[i]?.isFinal) finalText += part
+        else interimText += part
+      }
+      const transcript = (finalText || interimText).trim()
+      setVoiceTranscript(transcript)
+      if (transcript) setText((current) => current.trim() ? current : transcript)
+      if (finalText.trim()) {
+        setVoiceStatus('processing')
+        setAnalysisStatus('ready')
+        setSensingSignal('modelPending')
+        setSensingConfidence(58)
+      }
+    }
+    recognition.onerror = (event) => {
+      setVoiceStatus('error')
+      setAnalysisStatus(cameraStatus === 'on' ? 'ready' : 'error')
+      setSensingSignal(cameraStatus === 'on' ? 'modelPending' : 'idle')
+      voiceHint.show(event.message || `语音识别暂不可用：${event.error ?? '未知错误'}`)
+    }
+    recognition.onend = () => {
+      setVoiceStatus((current) => (current === 'listening' ? 'processing' : current === 'error' ? 'error' : 'idle'))
+      setAnalysisStatus((current) => (current === 'collecting' ? 'ready' : current))
+      setSensingSignal((current) => (current === 'collecting' ? 'modelPending' : current))
+    }
+    try {
+      recognition.start()
+    } catch (error) {
+      setVoiceStatus('error')
+      voiceHint.show(formatApiError(error))
+    }
   }
 
   const continueContext = (context: WorkbenchContextCard) => {
+    emitPiCoreSignal(context.kind === 'goal' ? 'work' : 'interaction')
     setActiveContextId(context.id)
     if (context.kind === 'goal') {
       setMessages((current) => [
@@ -800,13 +1036,25 @@ function TodayPage({ goRoom, goGoals }: { goRoom: () => void; goGoals: () => voi
     ])
   }
 
+  const speakPiReply = (reply: string) => {
+    if (!('speechSynthesis' in window)) return
+    const utterance = new SpeechSynthesisUtterance(reply.replace(/\*/g, ''))
+    utterance.lang = 'zh-CN'
+    utterance.rate = 1
+    utterance.pitch = 1.04
+    utterance.onend = () => setVoiceStatus('idle')
+    utterance.onerror = () => setVoiceStatus('idle')
+    window.speechSynthesis.cancel()
+    setVoiceStatus('speaking')
+    window.speechSynthesis.speak(utterance)
+  }
+
   const onSend = () => {
     const clean = text.trim()
     if (!clean) return
+    emitPiCoreSignal(activeContext?.kind === 'goal' ? 'work' : 'delegate')
     const contextText = activeContext ? `当前续接上下文：${activeContext.title}。${activeContext.desc}` : '没有选择历史上下文。'
-    const visionText = cameraStatus === 'on'
-      ? `本地摄像头观察状态：${visualMeta.label}。${visualMeta.cue}`
-      : '用户尚未开启本机摄像头观察。'
+    const sensingText = sensingPromptCue(analysisStatus, sensingSource, sensingSignal, sensingConfidence, voiceTranscript)
 
     setMessages((current) => [...current, { from: 'me', text: clean, time: '现在' }])
     setText('')
@@ -822,13 +1070,14 @@ function TodayPage({ goRoom, goGoals }: { goRoom: () => void; goGoals: () => voi
             '请用中文自然回复，不要使用星号符号。',
             '你的任务不是只给建议，而是先对话协作，判断这件事应该进入目标舱、继续在工作台完成，还是沉淀成 Skill。',
             contextText,
-            visionText,
+            sensingText,
             `用户说：${clean}`,
           ].join('\n'),
           timeoutSec: 30,
         })
         const reply = externalAgentOutput(result.result) || '我收到你的想法了。我们先把目标、约束和下一步动作拆清楚。'
         setMessages((current) => [...current, { from: 'them', text: reply, time: '现在' }])
+        if (modelPipelineActive) speakPiReply(reply)
         setCaptureHint(activeContext?.kind === 'goal' ? 'goal' : 'skill')
       } catch (error) {
         setMessages((current) => [
@@ -844,6 +1093,7 @@ function TodayPage({ goRoom, goGoals }: { goRoom: () => void; goGoals: () => voi
   }
 
   const captureAsSkill = () => {
+    emitPiCoreSignal('confirm')
     setCaptureHint('skill')
     setMessages((current) => [
       ...current,
@@ -858,6 +1108,7 @@ function TodayPage({ goRoom, goGoals }: { goRoom: () => void; goGoals: () => voi
   }
 
   const captureAsGoal = () => {
+    emitPiCoreSignal('work')
     setCaptureHint('goal')
     setMessages((current) => [
       ...current,
@@ -899,12 +1150,12 @@ function TodayPage({ goRoom, goGoals }: { goRoom: () => void; goGoals: () => voi
                   </div>
                 </article>
               ))}
-              {cameraStatus === 'on' && (
+              {modelPipelineActive && (
                 <article className="eve-vision-bubble">
-                  <CuteIcon name="soft-privacy-eye" />
+                  <CuteIcon name={sensingSource === 'voice' ? 'soft-microphone-voice' : 'soft-privacy-eye'} />
                   <div>
-                    <strong>{visualMeta.label}</strong>
-                    <span>{visualMeta.bubble}</span>
+                    <strong>{sensingMeta.label}</strong>
+                    <span>{sensingMeta.bubble}</span>
                   </div>
                 </article>
               )}
@@ -934,15 +1185,15 @@ function TodayPage({ goRoom, goGoals }: { goRoom: () => void; goGoals: () => voi
                 }}
               />
               <button
-                className={`mini-action ${voiceHint.hint ? 'btn-loading' : ''}`}
-                aria-label="语音"
-                onClick={() => voiceHint.show('语音输入即将上线')}
+                className={`mini-action ${voiceStatus === 'listening' ? 'active btn-loading' : ''}`}
+                aria-label={voiceStatus === 'listening' ? '停止语音输入' : '语音对话'}
+                onClick={startVoiceInput}
               >
                 <CuteIcon name="soft-microphone-voice" />
               </button>
               <button
                 className={`mini-action ${cameraStatus === 'on' ? 'active' : ''}`}
-                aria-label="摄像头观察"
+                aria-label="视频对话"
                 onClick={() => cameraStatus === 'on' ? stopCamera() : void startCamera()}
               >
                 <CuteIcon name="soft-privacy-eye" />
@@ -958,41 +1209,70 @@ function TodayPage({ goRoom, goGoals }: { goRoom: () => void; goGoals: () => voi
             </div>
           </div>
 
-          <aside className="eve-vision-card">
+          <aside className={`eve-vision-card ${cameraStatus === 'on' ? 'is-live' : ''}`}>
             <div className="eve-vision-preview">
               {cameraStatus === 'on' ? (
-                <video ref={videoRef} autoPlay playsInline muted />
+                <>
+                  <video ref={videoRef} autoPlay playsInline muted />
+                  <div className="pet-video-avatar">
+                    <PetSprite mood={callMood} size={86} />
+                    <span>{voiceStatusLabel[voiceStatus]}</span>
+                  </div>
+                </>
               ) : (
                 <div className="eve-camera-placeholder">
-                  <CuteIcon name="soft-privacy-eye" />
-                  <strong>{cameraStatus === 'requesting' ? '等待摄像头授权' : '本机视觉观察'}</strong>
-                  <span>开启后你能看见自己，EVE 派会根据状态调整解释节奏。画面默认不上传。</span>
+                  <PetSprite mood={callMood} size={82} />
+                  <strong>{cameraStatus === 'requesting' ? '等待摄像头和麦克风授权' : '和小狗 Pi 视频对话'}</strong>
+                  <span>开启后进入同屏对话，正式情绪与音色识别由模型服务判断。</span>
                 </div>
               )}
             </div>
             <div className="eve-vision-head">
-              <strong>视觉参与</strong>
-              <span>{cameraStatus === 'on' ? visualMeta.cue : '点击开启后开始本机预览'}</span>
+              <strong>视频语音对话</strong>
+              <span>{cameraStatus === 'on' ? sensingMeta.cue : '点击开启后开始本机预览与收音'}</span>
             </div>
+            <div className="eve-sensing-status">
+              <div>
+                <strong>{sensingMeta.label}</strong>
+                <span>{sensingSourceLabel[sensingSource]} · {analysisStatus === 'idle' ? '等待' : analysisStatus === 'collecting' ? '采集' : analysisStatus === 'analyzing' ? '分析' : analysisStatus === 'ready' ? '就绪' : '异常'}</span>
+              </div>
+              <em>{sensingConfidence}%</em>
+            </div>
+            <div className="analysis-pipeline" aria-label="自动感知链路">
+              {analysisStepLabels.map((label, index) => {
+                const active = modelPipelineActive && (
+                  analysisStatus === 'ready'
+                    ? true
+                    : analysisStatus === 'analyzing'
+                      ? index < 3
+                      : analysisStatus === 'collecting'
+                        ? index < 2
+                        : false
+                )
+                return <span className={active ? 'active' : ''} key={label}>{label}</span>
+              })}
+            </div>
+            {voiceTranscript && (
+              <div className="voice-transcript">
+                <CuteIcon name="soft-waveform-audio" />
+                <span>{voiceTranscript}</span>
+              </div>
+            )}
             <div className="eve-vision-actions">
               <button className="primary-btn sm" onClick={() => cameraStatus === 'on' ? stopCamera() : void startCamera()}>
                 <CuteIcon name={cameraStatus === 'on' ? 'soft-success-check' : 'soft-privacy-eye'} />
-                {cameraStatus === 'on' ? '关闭摄像头' : cameraStatus === 'requesting' ? '请求中' : '开启摄像头'}
+                {cameraStatus === 'on' ? '结束视频' : cameraStatus === 'requesting' ? '请求中' : '开启视频'}
+              </button>
+              <button className="ghost-btn sm" onClick={startVoiceInput}>
+                <CuteIcon name="soft-microphone-voice" />
+                {voiceStatus === 'listening' ? '停止收音' : '语音输入'}
               </button>
             </div>
             {cameraStatus === 'error' && (
               <div className="inline-hint"><CuteIcon name="soft-warning-triangle" />{cameraError || '摄像头暂不可用'}</div>
             )}
-            <div className="vision-signal-grid" role="group" aria-label="模拟视觉状态">
-              {(Object.keys(visualSignalMeta) as VisualSignal[]).map((signal) => (
-                <button
-                  className={visualSignal === signal ? 'active' : ''}
-                  key={signal}
-                  onClick={() => setVisualSignal(signal)}
-                >
-                  {visualSignalMeta[signal].label}
-                </button>
-              ))}
+            <div className="sensing-disclaimer">
+              正式接入后由视觉模型、流式 ASR、声纹/音色与对话模型自动判断，不再让用户手动选择状态。
             </div>
           </aside>
         </div>
@@ -1021,7 +1301,10 @@ function TodayPage({ goRoom, goGoals }: { goRoom: () => void; goGoals: () => voi
               </div>
               <div className="context-actions">
                 {context.kind === 'goal' ? (
-                  <button className="primary-btn sm" onClick={goGoals}>
+                  <button className="primary-btn sm" onClick={() => {
+                    emitPiCoreSignal('work')
+                    goGoals()
+                  }}>
                     <CuteIcon name="soft-goal-flag" />{context.cta}
                   </button>
                 ) : (

@@ -4,28 +4,26 @@ import { Integrations } from './Integrations'
 import { AgentTasks } from './AgentTasks'
 import { adoptablePets, piModules, petAnimations, type PetMood } from '../data'
 
+type PiCoreEmotion = 'calm' | 'happy' | 'waiting'
+
 /* ============================================================
    PiCorePanel · 右侧生命核面板
    - 以 HappyDog 为可视化身（产品方案：不做成单纯宠物，而是 PiCore 状态体）
-   - 5 种心情对应 PiCore 的学习/待喂/整理/休眠/开心状态
-   - 默认进入养成界面，支持互动（抚摸切换开心）
+   - 状态由用户与 EvoPi 的交互节奏自动驱动
    ============================================================ */
 export function PiCorePanel({
   mood,
-  paused,
-  onTogglePause,
+  emotion,
 }: {
   mood: PetMood
-  paused: boolean
-  onTogglePause: () => void
+  emotion: PiCoreEmotion
 }) {
   const [petName, setPetName] = useState(adoptablePets[0].name)
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState('')
-  const [petting, setPetting] = useState(false)
-  const [engaged, setEngaged] = useState(false)
   const pet = adoptablePets[0]
   const anim = petAnimations.find((a) => a.mood === mood) ?? petAnimations[0]
+  const emotionLabel = emotion === 'happy' ? '开心奔跑' : emotion === 'waiting' ? '等你确认' : anim.label
 
   const rename = () => {
     const n = draft.trim() || pet.name
@@ -34,13 +32,11 @@ export function PiCorePanel({
     setDraft('')
   }
 
-  const petIt = () => {
-    setPetting(true)
-    setTimeout(() => setPetting(false), 2200)
-  }
-
-  const displayMood: PetMood = petting ? 'happy' : paused ? 'sleeping' : engaged ? 'learning' : mood
-  const displayAnim = petAnimations.find((a) => a.mood === displayMood) ?? anim
+  const statusCopy = emotion === 'happy'
+    ? '你在推进任务或把事情交给 Pi，它正开心地跑起来。'
+    : emotion === 'waiting'
+      ? '有任务等你确认。你停太久了，它在提醒你回来动一动。'
+      : anim.desc
 
   return (
     <section className="picore-panel">
@@ -48,31 +44,25 @@ export function PiCorePanel({
         <span className="cute-icon-wrap"><img className="cute-icon" src="/cute-line-icons/soft-sparkle-twinkle.png" alt="" /></span>
         <div>
           <strong>EvoPi 生命核</strong>
-          <span>{`${petName} · Lv.3 · ${displayAnim.label}`}</span>
+          <span>{`${petName} · Lv.3 · ${emotionLabel}`}</span>
         </div>
       </div>
 
       {/* 宠物舞台 */}
       <div
-        className="pet-stage"
-        onClick={petIt}
-        onPointerEnter={() => setEngaged(true)}
-        onPointerLeave={() => setEngaged(false)}
-        onFocus={() => setEngaged(true)}
-        onBlur={() => setEngaged(false)}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter' || e.key === ' ') {
-            e.preventDefault()
-            petIt()
-          }
-        }}
-        role="button"
-        tabIndex={0}
-        aria-label={`互动 PiCore，当前状态：${displayAnim.label}`}
+        className={`pet-stage mood-${emotion}`}
+        aria-label={`PiCore 当前状态：${anim.label}`}
       >
         <div className="pet-floor" />
-        <PetSprite mood={displayMood} size={118} paused={paused && !petting} />
-        <span className="pet-mood-bubble">{displayAnim.desc}</span>
+        {emotion === 'happy' && (
+          <div className="pet-hearts" aria-hidden="true">
+            <span>♥</span>
+            <span>♥</span>
+            <span>♥</span>
+          </div>
+        )}
+        <PetSprite mood={mood} size={118} />
+        <span className="pet-mood-bubble">{statusCopy}</span>
       </div>
 
       {/* 养成 / 命名 */}
@@ -98,17 +88,10 @@ export function PiCorePanel({
         <div className="pet-owned">
           <div className="growth-copy">
             <span className="tag mint">养成中 · {petName}</span>
-            <p>它已经是你的 PiCore 化身，会用状态反馈学习、整理、待确认和休息节奏。</p>
+            <p>它会根据你推进目标、交给 Pi 代理、停留等待等节奏自动变化，不需要手动抚摸或休息。</p>
           </div>
           <div className="auth-aux">
-            <button className="ghost-btn sm" onClick={petIt}>
-              <img className="cute-icon" src="/cute-line-icons/soft-favorite-collection.png" alt="" />
-              抚摸
-            </button>
             <button className="ghost-btn sm" onClick={() => setEditing(true)}>改名</button>
-            <button className="ghost-btn sm" onClick={onTogglePause}>
-              {paused ? '唤醒' : '让它休息'}
-            </button>
           </div>
         </div>
       )}
