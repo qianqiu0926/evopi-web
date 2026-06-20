@@ -65,6 +65,7 @@ import {
   exportSkillToExternalAgent,
   getEvoMapDeveloperEnvironment,
   getWeChatRelayContract,
+  getVolcengineRealtimeConfig,
   getPiClubState,
   getSkill,
   getWeChatSession,
@@ -117,6 +118,7 @@ import {
   type PiRoomPersona,
   type Skill,
   type WeChatRelayContract,
+  type VolcengineRealtimeConfig,
 } from './api'
 import { useActionState, useInlineHint, type ActionStatus } from './hooks/useActionState'
 
@@ -801,6 +803,9 @@ function TodayPage({ goRoom, goGoals }: { goRoom: () => void; goGoals: () => voi
   const [sensingConfidence, setSensingConfidence] = useState(0)
   const [voiceStatus, setVoiceStatus] = useState<VoiceStatus>('idle')
   const [voiceTranscript, setVoiceTranscript] = useState('')
+  const [volcengineConfig, setVolcengineConfig] = useState<VolcengineRealtimeConfig | null>(null)
+  const [volcengineStatus, setVolcengineStatus] = useState<'loading' | 'ready' | 'error'>('loading')
+  const [volcengineMessage, setVolcengineMessage] = useState('')
   const [captureHint, setCaptureHint] = useState<'idle' | 'skill' | 'goal'>('idle')
   const [externalConnections, setExternalConnections] = useState<ExternalAgentConnection[]>([])
   const [developerEnvironment, setDeveloperEnvironment] = useState<DeveloperEnvironmentConnection | null>(null)
@@ -861,6 +866,23 @@ function TodayPage({ goRoom, goGoals }: { goRoom: () => void; goGoals: () => voi
   }, [])
 
   useEffect(() => {
+    let cancelled = false
+    getVolcengineRealtimeConfig()
+      .then((config) => {
+        if (cancelled) return
+        setVolcengineConfig(config)
+        setVolcengineStatus('ready')
+        setVolcengineMessage(config.configured ? '火山 RTC 已接入' : config.nextAction)
+      })
+      .catch((error) => {
+        if (cancelled) return
+        setVolcengineStatus('error')
+        setVolcengineMessage(formatApiError(error))
+      })
+    return () => { cancelled = true }
+  }, [])
+
+  useEffect(() => {
     chatRef.current?.scrollTo({ top: chatRef.current.scrollHeight, behavior: 'smooth' })
   }, [messages, cameraStatus, sensingSignal, voiceStatus])
 
@@ -889,6 +911,11 @@ function TodayPage({ goRoom, goGoals }: { goRoom: () => void; goGoals: () => voi
   const sensingMeta = sensingSignalMeta[sensingSignal]
   const callMood = voiceStatus === 'speaking' ? 'happy' : sensingMeta.mood
   const modelPipelineActive = cameraStatus === 'on' || voiceStatus !== 'idle' || sensingSource !== 'none'
+  const volcengineReady = volcengineStatus === 'ready' && Boolean(volcengineConfig?.configured)
+  const volcengineCardTitle = volcengineReady ? '火山 RTC 已接入' : volcengineStatus === 'loading' ? '火山 RTC 检测中' : '火山 RTC 待配置'
+  const volcengineCardCopy = volcengineReady
+    ? `${volcengineConfig?.appIdPreview ?? 'AppID'} · ${volcengineConfig?.scene ?? 'evopi-workbench'}`
+    : volcengineMessage || '等待后端读取火山引擎配置'
 
   const startCamera = async () => {
     if (!navigator.mediaDevices?.getUserMedia) {
@@ -912,7 +939,7 @@ function TodayPage({ goRoom, goGoals }: { goRoom: () => void; goGoals: () => voi
       setSensingSignal('modelPending')
       setSensingSource('multimodal')
       setSensingConfidence(42)
-      voiceHint.show('视频对话已开启，正式情绪识别等待模型服务接入')
+      voiceHint.show(volcengineReady ? '视频对话已开启，下一步接入火山 RTC 房间 Token' : '视频对话已开启，火山 RTC 配置待补全')
       if (analysisTimerRef.current !== null) window.clearTimeout(analysisTimerRef.current)
       analysisTimerRef.current = window.setTimeout(() => {
         setAnalysisStatus('ready')
@@ -1238,6 +1265,13 @@ function TodayPage({ goRoom, goGoals }: { goRoom: () => void; goGoals: () => voi
               </div>
               <em>{sensingConfidence}%</em>
             </div>
+            <div className={`volcengine-status ${volcengineReady ? 'ready' : volcengineStatus === 'error' ? 'error' : ''}`}>
+              <CuteIcon name={volcengineReady ? 'soft-success-check' : 'soft-warning-triangle'} />
+              <div>
+                <strong>{volcengineCardTitle}</strong>
+                <span>{volcengineCardCopy}</span>
+              </div>
+            </div>
             <div className="analysis-pipeline" aria-label="自动感知链路">
               {analysisStepLabels.map((label, index) => {
                 const active = modelPipelineActive && (
@@ -1272,7 +1306,7 @@ function TodayPage({ goRoom, goGoals }: { goRoom: () => void; goGoals: () => voi
               <div className="inline-hint"><CuteIcon name="soft-warning-triangle" />{cameraError || '摄像头暂不可用'}</div>
             )}
             <div className="sensing-disclaimer">
-              正式接入后由视觉模型、流式 ASR、声纹/音色与对话模型自动判断，不再让用户手动选择状态。
+              {volcengineReady ? 'AppKey 已留在后端环境，前端只读取接入状态。下一步生成临时 Token 后即可接 RTC SDK。' : '补齐火山 RTC 配置后，由视觉模型、流式 ASR、声纹/音色与对话模型自动判断。'}
             </div>
           </aside>
         </div>

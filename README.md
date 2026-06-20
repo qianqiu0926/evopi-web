@@ -31,6 +31,8 @@ The local API runs at `http://127.0.0.1:8787/` and is used by PiRoom, external S
 
 Create `.env.local` from `.env.example` and set `MINIMAX_API_KEY`. For this workspace the MiniMax OpenAI-compatible endpoint is `https://api.minimaxi.com/v1/chat/completions`, model `MiniMax-M3`.
 
+For the workbench video conversation surface, set `VOLCENGINE_RTC_APP_ID` and `VOLCENGINE_RTC_APP_KEY` in `.env.local`. The backend exposes only a redacted readiness check at `/api/volcengine/realtime/config`; do not expose the AppKey to the browser.
+
 Pixel personas can be imported from a local clone:
 
 ```bash

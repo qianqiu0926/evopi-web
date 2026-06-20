@@ -307,6 +307,18 @@ export type WeChatRelayContract = {
   }
 }
 
+export type VolcengineRealtimeConfig = {
+  provider: 'volcengine-rtc'
+  configured: boolean
+  appIdConfigured: boolean
+  appKeyConfigured: boolean
+  appIdPreview: string
+  scene: string
+  missing: string[]
+  nextAction: string
+  notes: string[]
+}
+
 export type ExternalAgentCallResult = {
   kind: ExternalAgentKind
   command: string[]
@@ -737,6 +749,10 @@ export async function runExternalAgentWithReceipt(input: {
     method: 'POST',
     body: JSON.stringify(input),
   })
+}
+
+export async function getVolcengineRealtimeConfig() {
+  return api<VolcengineRealtimeConfig>('/api/volcengine/realtime/config')
 }
 
 export async function exportSkillToOpenClaw(skillId: string, input: { slug?: string; apply?: boolean } = {}) {

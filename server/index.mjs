@@ -17,6 +17,9 @@ const personasManifestPath = path.join(piroomRoot, 'personas.json')
 const minimaxApiKey = process.env.MINIMAX_API_KEY ?? process.env.VITE_MINIMAX_API_KEY ?? ''
 const minimaxBaseUrl = (process.env.MINIMAX_BASE_URL ?? 'https://api.minimaxi.com/v1').replace(/\/+$/, '')
 const minimaxModel = process.env.MINIMAX_MODEL ?? 'MiniMax-M3'
+const volcengineRtcAppId = process.env.VOLCENGINE_RTC_APP_ID ?? process.env.VOLCENGINE_APP_ID ?? ''
+const volcengineRtcAppKey = process.env.VOLCENGINE_RTC_APP_KEY ?? process.env.VOLCENGINE_APP_KEY ?? ''
+const volcengineRtcScene = process.env.VOLCENGINE_RTC_SCENE ?? 'evopi-workbench'
 
 ensureDir(path.dirname(statePath))
 
@@ -53,8 +56,13 @@ async function handle(req, res) {
     return sendJson(res, 200, {
       ok: true,
       minimaxConfigured: Boolean(minimaxApiKey),
+      volcengineRtcConfigured: Boolean(volcengineRtcAppId && volcengineRtcAppKey),
       personas: loadPersonas().length,
     })
+  }
+
+  if (req.method === 'GET' && pathname === '/api/volcengine/realtime/config') {
+    return sendJson(res, 200, volcengineRealtimeConfig())
   }
 
   if (req.method === 'GET' && pathname === '/api/piroom/personas') {
@@ -1627,6 +1635,29 @@ function extractOutput(result) {
   if (typeof result?.json?.reply === 'string') return result.json.reply
   if (typeof result?.stdout === 'string') return result.stdout
   return ''
+}
+
+function volcengineRealtimeConfig() {
+  const missing = []
+  if (!volcengineRtcAppId) missing.push('VOLCENGINE_RTC_APP_ID')
+  if (!volcengineRtcAppKey) missing.push('VOLCENGINE_RTC_APP_KEY')
+  const appIdLooksValid = /^[a-f0-9]{24}$|^[a-f0-9]{32}$/i.test(volcengineRtcAppId)
+  return {
+    provider: 'volcengine-rtc',
+    configured: missing.length === 0,
+    appIdConfigured: Boolean(volcengineRtcAppId),
+    appKeyConfigured: Boolean(volcengineRtcAppKey),
+    appIdPreview: volcengineRtcAppId ? `${volcengineRtcAppId.slice(0, 6)}…${volcengineRtcAppId.slice(-4)}` : '',
+    scene: volcengineRtcScene,
+    missing,
+    nextAction: missing.length === 0
+      ? '服务端已具备生成 RTC 临时 Token 的配置。'
+      : `还需要在 .env.local 补充 ${missing.join('、')}，才能生成 RTC 入房 Token。`,
+    notes: [
+      appIdLooksValid ? '当前值符合火山 RTC AppID 常见格式。' : '当前 AppID 格式未确认，请在火山控制台核对。',
+      '不要把 AppKey 暴露给前端或提交到仓库。',
+    ],
+  }
 }
 
 function slugify(value) {
