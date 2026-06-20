@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent } from 'react'
+import { createPortal } from 'react-dom'
 import {
   journeyMilestones,
   professionBranches,
@@ -124,7 +125,7 @@ export function EvolutionMapCanvas({ onClose }: { onClose: () => void }) {
     return () => window.removeEventListener('keydown', onKey)
   }, [onClose, selected])
 
-  return (
+  const map = (
     <div className="map-overlay" role="dialog" aria-modal="true" aria-label="EvoMAP 进化中枢">
       <div
         className="map-viewport"
@@ -274,6 +275,8 @@ export function EvolutionMapCanvas({ onClose }: { onClose: () => void }) {
       {selected && <RecordPanel milestone={selected} onClose={() => setSelected(null)} />}
     </div>
   )
+
+  return createPortal(map, document.body)
 }
 
 function journeyPath(current: Milestone, next: Milestone): string {

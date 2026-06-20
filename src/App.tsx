@@ -3872,23 +3872,6 @@ function evolutionTransportTitle(autoRefresh: boolean, transport: 'sse' | 'polli
   return transport === 'sse' ? '实时订阅中' : '轮询更新中'
 }
 
-function evolutionTransportNote(autoRefresh: boolean, transport: 'sse' | 'polling' | 'manual'): string {
-  if (!autoRefresh || transport === 'manual') return '手动刷新模式'
-  return transport === 'sse' ? 'SSE 事件流' : '5s 轮询兜底'
-}
-
-function evolutionStageCompletion(events: EvolutionEvent[]) {
-  const stages = evolutionLanes.filter((lane) => lane.key !== 'all')
-  const done = stages.filter((lane) => events.some((event) => evolutionEventLane(event) === lane.key)).length
-  const next = stages.find((lane) => !events.some((event) => evolutionEventLane(event) === lane.key))
-  return {
-    done,
-    total: stages.length,
-    percent: stages.length ? Math.round((done / stages.length) * 100) : 0,
-    label: next ? `下一站 ${next.label}` : '闭环已形成',
-  }
-}
-
 function evolutionDensityBars(events: EvolutionEvent[]) {
   const slotMinutes = 5
   const slotMs = slotMinutes * 60 * 1000
