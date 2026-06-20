@@ -8,7 +8,7 @@ import { adoptablePets, piModules, petAnimations, type PetMood } from '../data'
    PiCorePanel · 右侧生命核面板
    - 以 HappyDog 为可视化身（产品方案：不做成单纯宠物，而是 PiCore 状态体）
    - 5 种心情对应 PiCore 的学习/待喂/整理/休眠/开心状态
-   - 支持认领（命名）、互动（抚摸切换开心）
+   - 默认进入养成界面，支持互动（抚摸切换开心）
    ============================================================ */
 export function PiCorePanel({
   mood,
@@ -19,7 +19,7 @@ export function PiCorePanel({
   paused: boolean
   onTogglePause: () => void
 }) {
-  const [petName, setPetName] = useState<string | null>(null) // null = 未认领
+  const [petName, setPetName] = useState(adoptablePets[0].name)
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState('')
   const [petting, setPetting] = useState(false)
@@ -27,7 +27,7 @@ export function PiCorePanel({
   const pet = adoptablePets[0]
   const anim = petAnimations.find((a) => a.mood === mood) ?? petAnimations[0]
 
-  const claim = () => {
+  const rename = () => {
     const n = draft.trim() || pet.name
     setPetName(n)
     setEditing(false)
@@ -48,7 +48,7 @@ export function PiCorePanel({
         <span className="cute-icon-wrap"><img className="cute-icon" src="/cute-line-icons/soft-sparkle-twinkle.png" alt="" /></span>
         <div>
           <strong>EvoPi 生命核</strong>
-          <span>{petName ? `${petName} · ${displayAnim.label}` : '认领你的 Pi 伙伴'}</span>
+          <span>{`${petName} · Lv.3 · ${displayAnim.label}`}</span>
         </div>
       </div>
 
@@ -75,35 +75,31 @@ export function PiCorePanel({
         <span className="pet-mood-bubble">{displayAnim.desc}</span>
       </div>
 
-      {/* 认领 / 命名 / 改名 */}
-      {!petName && !editing ? (
+      {/* 养成 / 命名 */}
+      {editing ? (
         <div className="adopt-box">
           <p className="adopt-desc">
-            领养 <strong>{pet.name}</strong> 作为你的 PiCore 化身。它不是普通宠物，而是用状态反映你的学习与协作进度。
+            现在已进入 PiCore 养成。你可以给它换个称呼，不影响它继续学习你的工作节奏。
           </p>
-          <button className="primary-btn sm" onClick={() => setEditing(true)}>
-            <img className="cute-icon" src="/cute-line-icons/soft-heart-favorite.png" alt="" />
-            认领这只 Pi
-          </button>
-        </div>
-      ) : editing ? (
-        <div className="adopt-box">
           <input
             className="text-input"
-            placeholder={petName ? `给 ${petName} 起个新名字` : `给 ${pet.name} 起个名字（回车确认）`}
+            placeholder={`给 ${petName} 起个新名字`}
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
             autoFocus
-            onKeyDown={(e) => { if (e.key === 'Enter') claim() }}
+            onKeyDown={(e) => { if (e.key === 'Enter') rename() }}
           />
           <div className="auth-aux">
-            <button className="primary-btn sm" onClick={claim}>确定</button>
+            <button className="primary-btn sm" onClick={rename}>确定</button>
             <button className="ghost-btn sm" onClick={() => setEditing(false)}>取消</button>
           </div>
         </div>
       ) : (
         <div className="pet-owned">
-          <span className="tag">已认领 · {petName}</span>
+          <div className="growth-copy">
+            <span className="tag mint">养成中 · {petName}</span>
+            <p>它已经是你的 PiCore 化身，会用状态反馈学习、整理、待确认和休息节奏。</p>
+          </div>
           <div className="auth-aux">
             <button className="ghost-btn sm" onClick={petIt}>
               <img className="cute-icon" src="/cute-line-icons/soft-favorite-collection.png" alt="" />
@@ -118,26 +114,22 @@ export function PiCorePanel({
       )}
 
       {/* 三个 Pi 模块（产品方案：最多 3 个） */}
-      {petName && (
-        <div className="pi-modules">
-          {piModules.map((m) => (
-            <div className="state-row pi-module" key={m.name}>
-              <img className="cute-icon" src={`/cute-line-icons/${m.icon}.png`} alt="" />
-              <div>
-                <span>{m.name}</span>
-                <strong>{m.value}</strong>
-              </div>
+      <div className="pi-modules">
+        {piModules.map((m) => (
+          <div className="state-row pi-module" key={m.name}>
+            <img className="cute-icon" src={`/cute-line-icons/${m.icon}.png`} alt="" />
+            <div>
+              <span>{m.name}</span>
+              <strong>{m.value}</strong>
             </div>
-          ))}
-        </div>
-      )}
+          </div>
+        ))}
+      </div>
 
       {/* 系统外接：微信/飞书/邮件 转接 + 快捷键回 + 开代理 */}
-      {petName && <AgentTasks />}
+      <AgentTasks />
 
-      {petName && <Integrations />}
-
-      {editing && !petName && null}
+      <Integrations />
     </section>
   )
 }

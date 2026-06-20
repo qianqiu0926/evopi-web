@@ -158,6 +158,8 @@ export const installedSkills = [
   { name: '会议纪要', icon: 'soft-document-page' as const, trigger: '收到录音或会议文本', scope: '日历、已授权文件', status: '已启用' },
   { name: '思维导图', icon: 'soft-sparkle-edit' as const, trigger: '要求梳理结构时', scope: '当前目标与选中记忆', status: '已启用' },
   { name: '教案生成', icon: 'soft-book-open' as const, trigger: '目标舱为课程准备时', scope: '教材、历史教案', status: '已启用' },
+  { name: '公众号自动发布', icon: 'soft-send-plane' as const, trigger: '需要写公众号或推送草稿箱时', scope: '公众号草稿箱、文章素材、授权图片', status: '已启用' },
+  { name: '自动做 PPT', icon: 'soft-image-landscape' as const, trigger: '需要生成演示文稿时', scope: '当前资料、图片生成、导出文件', status: '已启用' },
   { name: '资料研究', icon: 'soft-notebook-lines' as const, trigger: '需要追踪公开资料时', scope: '白名单来源', status: '试用中' },
 ]
 
@@ -757,3 +759,234 @@ export const agentFreqOptions: Array<{ value: AgentTaskFreq; label: string; hint
   { value: 'weekly', label: '每周', hint: '低频周报素材' },
 ]
 
+/* ============================================================
+   进化旅程地图（全屏可探索画布）
+   - 以神经网络中枢 PiCore 为核心，向外辐射成长轨迹
+   - 主旅程：起点 → 里程碑（放入资料/完成目标/解锁权限/升级生命核）
+   - 个性化分支：随用户职业变化（管理者/老师/创业者…）
+   - 里程碑点开可看交互记录（日志/截图），画布本身保持干净
+   ============================================================ */
+export type MilestoneKind =
+  | 'start' // 起点：首次进入/导入资料
+  | 'data' // 放入资料
+  | 'goal' // 完成目标
+  | 'permission' // 解锁权限
+  | 'core' // 生命核升级
+  | 'skill' // 固化技能
+  | 'current' // 当前所在
+
+export type JourneyRecord = {
+  type: 'log' | 'screenshot' | 'dialogue'
+  title: string
+  detail: string
+  time: string
+}
+
+export type Milestone = {
+  id: string
+  kind: MilestoneKind
+  title: string
+  date: string
+  // 画布坐标（相对坐标，画布会居中缩放）
+  x: number
+  y: number
+  desc?: string
+  // 生命核等级（达到此里程碑时的 PiCore 等级）
+  coreLevel?: number
+  // 是否已达成（未达成=未来节点，灰色虚线）
+  achieved: boolean
+  // 点开看的交互记录
+  records?: JourneyRecord[]
+}
+
+// 主旅程：用户从进入到现在 + 未来的关键节点
+export const journeyMilestones: Milestone[] = [
+  {
+    id: 'm-start',
+    kind: 'start',
+    title: '起点：遇见 EvoPi',
+    date: '6月 1 日',
+    x: 0,
+    y: 0,
+    desc: '你完成了预配置，PiCore 初始化完成，养成从这里开始。',
+    coreLevel: 1,
+    achieved: true,
+    records: [
+      { type: 'log', title: '完成预配置问卷', detail: '算法厌恶：偏克制；信息过载：强化降噪；信任：最小范围。推导介入深度 L1。', time: '6/1 14:02' },
+      { type: 'screenshot', title: 'PiCore 养成开始', detail: '为生命核命名「小奶狗」，进入持续养成状态。', time: '6/1 14:05' },
+    ],
+  },
+  {
+    id: 'm-data-1',
+    kind: 'data',
+    title: '放入第一批资料',
+    date: '6月 3 日',
+    x: 240,
+    y: -80,
+    desc: '导入 3 份述职材料和 1 份会议录音，Pi 开始理解你的工作。',
+    coreLevel: 1,
+    achieved: true,
+    records: [
+      { type: 'log', title: '导入述职材料 ×3', detail: '产品评审、季度汇报、能力清单。自动归类到「职业成长」。', time: '6/3 09:30' },
+      { type: 'log', title: '会议录音转写', detail: '14 分钟录音 → 3 条结论 + 5 条待办，等你确认。', time: '6/3 11:20' },
+    ],
+  },
+  {
+    id: 'm-core-2',
+    kind: 'core',
+    title: '生命核升级 Lv.2',
+    date: '6月 5 日',
+    x: 460,
+    y: 40,
+    desc: 'Pi 从你的反馈里归纳出第一条行为基因，生命核成长。',
+    coreLevel: 2,
+    achieved: true,
+    records: [
+      { type: 'log', title: '行为基因：gene_pitch_concise', detail: '你两次反馈「先给结论」，Pi 蒸馏成行为基因并验证通过。', time: '6/5 20:14' },
+      { type: 'dialogue', title: '进化对话', detail: 'Pi：「我学会了更简洁地写方案，要不要在汇报场景启用？」你：启用。', time: '6/5 20:16' },
+    ],
+  },
+  {
+    id: 'm-perm-1',
+    kind: 'permission',
+    title: '解锁：会后待办追踪',
+    date: '6月 8 日',
+    x: 700,
+    y: -60,
+    desc: '你授权 Pi 在会议后自动整理待办，介入深度升到 L2。',
+    coreLevel: 2,
+    achieved: true,
+    records: [
+      { type: 'log', title: '权限升级记录', detail: '开启会后待办追踪 Gene，写入需确认，低风险可自动执行。', time: '6/8 10:00' },
+    ],
+  },
+  {
+    id: 'm-goal-1',
+    kind: 'goal',
+    title: '里程碑：述职材料完成',
+    date: '6月 12 日',
+    x: 920,
+    y: 60,
+    desc: '「职业成长」目标推进到 68%，季度成果素材补齐。',
+    coreLevel: 3,
+    achieved: true,
+    records: [
+      { type: 'screenshot', title: '述职草稿初版', detail: 'Pi 补一版生成，3 条亮点 + 数据支撑，你采纳 2 条。', time: '6/12 21:30' },
+      { type: 'log', title: '采纳记录', detail: '采纳形成经验胶囊 capsule_demo_story_0619，置信度 0.82。', time: '6/12 21:35' },
+    ],
+  },
+  {
+    id: 'm-skill-1',
+    kind: 'skill',
+    title: '固化技能：会后待办追踪',
+    date: '6月 15 日',
+    x: 1160,
+    y: -40,
+    desc: '从一次成功执行固化为可复用 Skill，写入本地技能库。',
+    coreLevel: 3,
+    achieved: true,
+    records: [
+      { type: 'log', title: 'Skill 确认', detail: '你在工作台确认上下文 → 整合成 Skill「会后待办追踪」。', time: '6/15 09:00' },
+    ],
+  },
+  {
+    id: 'm-current',
+    kind: 'current',
+    title: '现在：Pi 正在学什么',
+    date: '今天',
+    x: 1400,
+    y: 80,
+    desc: 'Pi 在研究 langgraph、关注 ReAct 论文、整理你的用户访谈。',
+    coreLevel: 3,
+    achieved: true,
+    records: [
+      { type: 'log', title: 'Agent 最近学习', detail: '阅读 langchain-ai/langgraph；关注 7 篇 ReAct 论文；配置邮件摘要 Skill。', time: '今天' },
+    ],
+  },
+  // 未来节点（未达成，引导成长方向）
+  {
+    id: 'm-future-1',
+    kind: 'core',
+    title: '未来：生命核 Lv.4',
+    date: '待解锁',
+    x: 1640,
+    y: -20,
+    desc: '归纳出第 5 条行为基因，可主动建议升级权限。',
+    achieved: false,
+  },
+  {
+    id: 'm-future-2',
+    kind: 'goal',
+    title: '未来：完成 10 位用户访谈',
+    date: '待解锁',
+    x: 1860,
+    y: 60,
+    desc: '「创业计划」目标里程碑，Pi 将归纳访谈洞察。',
+    achieved: false,
+  },
+]
+
+/* —— 个性化分支：随用户职业变化 —— */
+export type Profession = 'manager' | 'teacher' | 'founder' | 'general'
+
+export type ProfessionBranch = {
+  id: Profession
+  label: string
+  icon: string
+  desc: string
+  // 该职业下的进化方向（节点标题）
+  nodes: Array<{ title: string; hint: string }>
+  // 在画布上的延伸方向
+  angle: number // 弧度
+}
+
+export const professionBranches: ProfessionBranch[] = [
+  {
+    id: 'manager',
+    label: '管理者',
+    icon: 'soft-role-users',
+    desc: '团队管理任务与决策思维',
+    angle: -1.1,
+    nodes: [
+      { title: '团队周报自动归纳', hint: '从多条日报提炼本周关键' },
+      { title: '1on1 记忆图谱', hint: '记住每个下属的成长诉求' },
+      { title: '决策复盘基因', hint: '沉淀你的决策偏好与盲点' },
+    ],
+  },
+  {
+    id: 'teacher',
+    label: '老师',
+    icon: 'soft-book-open',
+    desc: '教案生成与学情追踪',
+    angle: -0.3,
+    nodes: [
+      { title: '分层教案生成', hint: '按学生水平分基础/进阶/挑战' },
+      { title: '学情记忆库', hint: '记住每个学生的薄弱点' },
+      { title: '课堂反馈基因', hint: '互动环节最受欢迎' },
+    ],
+  },
+  {
+    id: 'founder',
+    label: '创业者',
+    icon: 'soft-idea-bulb',
+    desc: '用户洞察与商业模式',
+    angle: 0.5,
+    nodes: [
+      { title: '访谈洞察归纳', hint: '从 10 位访谈提炼痛点' },
+      { title: '商业分析框架', hint: '问题→方案→市场→模式' },
+      { title: '竞品观察基因', hint: '追踪对标与定价区间' },
+    ],
+  },
+  {
+    id: 'general',
+    label: '通用成长',
+    icon: 'soft-sparkle-edit',
+    desc: '写作、汇报、资料整理等通用能力',
+    angle: 1.2,
+    nodes: [
+      { title: '简洁写作基因', hint: '先结论后步骤' },
+      { title: '资料自动归档', hint: '按主题入目标舱' },
+      { title: '会议待办追踪', hint: '会后不遗漏' },
+    ],
+  },
+]

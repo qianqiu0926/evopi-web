@@ -32,6 +32,7 @@ import { PiCorePanel } from './components/PiCorePanel'
 import { InteractiveBg } from './components/InteractiveBg'
 import { AuthModal } from './components/AuthModal'
 import { EvolutionMindMap } from './components/EvolutionMindMap'
+import { EvolutionMapCanvas } from './components/EvolutionMapCanvas'
 import { Onboarding } from './components/Onboarding'
 import {
   ApiError,
@@ -40,6 +41,7 @@ import {
   bootstrapExternalAgents,
   callExternalAgent,
   confirmWeChatSession,
+  createAppleReminder,
   createEvoMapDraft,
   createReceiptRun,
   createSkill,
@@ -359,6 +361,22 @@ function AppShell({
   const inRoomChat = page === 'room' && activePerson
   const headerHint = useInlineHint(2400)
 
+  const createPiReminder = async () => {
+    try {
+      const result = await createAppleReminder({
+        topic: 'Pi 工作进度',
+        body: page === 'today'
+          ? '我正在整理今日工作台的待确认内容，处理完会回来让你点头。'
+          : `我正在处理${pageMeta[page]?.title ?? '当前页面'}里的任务进度，完成后会回来给你确认。`,
+        list: 'EvoPi',
+        dueInMinutes: 10,
+      })
+      headerHint.show(result.ok ? `${result.mobileMessage} 已写入提醒事项` : `${result.mobileMessage} 已先记在本地`)
+    } catch (error) {
+      headerHint.show(`提醒事项写入失败：${formatApiError(error)}`)
+    }
+  }
+
 
   const selectPage = (key: string) => {
     setPage(key as AppPage)
@@ -460,7 +478,7 @@ function AppShell({
             </div>
             <div className="header-actions">
               <button className="round-action" aria-label="搜索" onClick={() => headerHint.show('全局搜索准备中')}><CuteIcon name="soft-search-spark" /></button>
-              <button className="soft-button" onClick={() => headerHint.show('日程与提醒即将上线')}><CuteIcon name="soft-calendar-reminder" />提醒事项</button>
+              <button className="soft-button" onClick={() => void createPiReminder()}><CuteIcon name="soft-calendar-reminder" />提醒事项</button>
               {headerHint.hint && (
                 <div className="inline-hint header-hint"><CuteIcon name="soft-search-spark" />{headerHint.hint}</div>
               )}
@@ -2798,6 +2816,7 @@ function EvolutionPage() {
   const [expandedEventIds, setExpandedEventIds] = useState<Set<string>>(() => new Set())
   const [freshEventIds, setFreshEventIds] = useState<string[]>([])
   const [laneFilter, setLaneFilter] = useState<EvolutionLane>('all')
+  const [mapOpen, setMapOpen] = useState(false)
 
   useEffect(() => {
     let cancelled = false
@@ -2925,6 +2944,7 @@ function EvolutionPage() {
 
   return (
     <div className="evo-page">
+      {mapOpen && <EvolutionMapCanvas onClose={() => setMapOpen(false)} />}
       <section className="evo-hero">
         <div className="evo-hero-top">
           <div className="evo-hero-copy">
@@ -3087,9 +3107,27 @@ function EvolutionPage() {
             <div className="evo-map-panel">
               <div className="skill-section-title">
                 <CuteIcon name="soft-sparkle-twinkle" />
-                进化分支图
+                进化中枢
               </div>
-              <EvolutionMindMap events={events} />
+              {/* 进化中枢入口：点击进入全屏进化旅程地图 */}
+              <button className="evo-hub-entry" onClick={() => setMapOpen(true)}>
+                <span className="evo-hub-core" aria-hidden="true">
+                  <span className="evo-hub-ring" />
+                  <CuteIcon name="soft-sparkle-twinkle" />
+                </span>
+                <div className="evo-hub-text">
+                  <strong>打开进化旅程地图</strong>
+                  <span>基于神经网络中枢，回顾你从起点到现在走过的每一步，点里程碑可看交互记录。</span>
+                </div>
+                <span className="evo-hub-cta">
+                  展开 <CuteIcon name="soft-arrow-right" />
+                </span>
+              </button>
+              {/* 保留旧思维导图作为缩略预览（折叠态） */}
+              <details className="evo-map-legacy">
+                <summary>查看分支速览</summary>
+                <EvolutionMindMap events={events} />
+              </details>
             </div>
             <aside className="evo-current-panel">
               <div className="skill-section-title">
@@ -3241,6 +3279,9 @@ function EvolutionPage() {
           </div>
         </div>
       )}
+
+      {/* 全屏进化旅程地图：点击中枢入口打开 */}
+      {mapOpen && <EvolutionMapCanvas onClose={() => setMapOpen(false)} />}
     </div>
   )
 }

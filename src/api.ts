@@ -127,7 +127,7 @@ export type ExternalAgentSkill = {
   description?: string
   version?: string
   tags: string[]
-  source: 'workspace' | 'global' | 'bundled' | 'managed' | 'hermes' | 'piroom' | 'unknown'
+  source: 'workspace' | 'global' | 'bundled' | 'managed' | 'hermes' | 'piroom' | 'productivity' | 'unknown'
   syncedSkillId?: string
   importedAt: string
   connectionId?: string
@@ -804,5 +804,31 @@ export async function disconnectWeChat() {
   return api<{ ok: boolean; connector: MessagingConnector }>('/api/connectors/wechat/disconnect', {
     method: 'POST',
     body: JSON.stringify({}),
+  })
+}
+
+export type AppleReminderResponse = {
+  ok: boolean
+  reminder: {
+    id: string
+    title: string
+    notes: string
+    list: string
+    dueAt?: string
+    createdAt: string
+    localOnly?: boolean
+  }
+  mobileMessage: string
+}
+
+export async function createAppleReminder(input: {
+  topic: string
+  body: string
+  list?: string
+  dueInMinutes?: number
+}) {
+  return api<AppleReminderResponse>('/api/reminders/apple', {
+    method: 'POST',
+    body: JSON.stringify(input),
   })
 }

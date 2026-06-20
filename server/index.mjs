@@ -2,6 +2,7 @@ import fs from 'node:fs'
 import http from 'node:http'
 import path from 'node:path'
 import crypto from 'node:crypto'
+import { execFile } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
@@ -11,6 +12,7 @@ loadEnvFile(path.join(repoRoot, '.env'))
 
 const statePath = path.join(repoRoot, 'data', 'backend-state.json')
 const piroomRoot = path.join(repoRoot, 'skills', 'piroom')
+const productivityRoot = path.join(repoRoot, 'skills', 'productivity')
 const personasManifestPath = path.join(piroomRoot, 'personas.json')
 const minimaxApiKey = process.env.MINIMAX_API_KEY ?? process.env.VITE_MINIMAX_API_KEY ?? ''
 const minimaxBaseUrl = (process.env.MINIMAX_BASE_URL ?? 'https://api.minimaxi.com/v1').replace(/\/+$/, '')
@@ -61,6 +63,12 @@ async function handle(req, res) {
 
   if (req.method === 'GET' && pathname === '/api/external-agents/skills') {
     return sendJson(res, 200, { skills: externalSkills() })
+  }
+
+  if (req.method === 'POST' && pathname === '/api/reminders/apple') {
+    const input = await readJson(req)
+    const result = await createAppleReminder(input)
+    return sendJson(res, 200, result)
   }
 
   if (req.method === 'GET' && pathname === '/api/external-agents/connections') {
@@ -518,7 +526,7 @@ function piRoomPersonas() {
 }
 
 function externalSkills() {
-  return loadPersonas()
+  const personaSkills = loadPersonas()
     .filter((persona) => persona.id !== 'joseph-stalin-hidden')
     .map((persona) => ({
       id: `pi:${persona.id}`,
@@ -534,10 +542,13 @@ function externalSkills() {
       connectionId: 'piroom-minimax',
       connectionStatus: 'imported',
     }))
+  return [...productivitySkills(), ...personaSkills]
 }
 
 function externalConnections() {
   const skills = externalSkills()
+  const personaSkills = skills.filter((skill) => skill.source === 'piroom')
+  const productivity = skills.filter((skill) => skill.source === 'productivity')
   return [
     {
       id: 'piroom-minimax',
@@ -554,7 +565,23 @@ function externalConnections() {
         model: minimaxModel,
         keyConfigured: Boolean(minimaxApiKey),
       },
-      skills,
+      skills: personaSkills,
+    },
+    {
+      id: 'productivity-skills',
+      kind: 'pi',
+      status: 'imported',
+      homePath: repoRoot,
+      configPath: path.join(repoRoot, 'skills', 'productivity'),
+      workspacePath: repoRoot,
+      skillsRootPaths: [productivityRoot],
+      detectedVersion: 'workspace',
+      dashboardUrl: 'https://github.com/qianqiu0926/evopi-web',
+      configSummary: {
+        provider: 'local-skill',
+        count: productivity.length,
+      },
+      skills: productivity,
     },
     emptyExternalConnection('openclaw'),
     emptyExternalConnection('hermes'),
@@ -783,6 +810,91 @@ function loadPersonas() {
   })
 }
 
+function productivitySkills() {
+  if (!fs.existsSync(productivityRoot)) return []
+  return fs.readdirSync(productivityRoot, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => readProductivitySkill(entry.name))
+    .filter(Boolean)
+}
+
+function readProductivitySkill(slug) {
+  const skillPath = path.join(productivityRoot, slug, 'SKILL.md')
+  if (!fs.existsSync(skillPath)) return null
+  const content = fs.readFileSync(skillPath, 'utf8')
+  const frontmatter = parseFrontmatter(content)
+  const fallback = productivityDefaults(slug)
+  return {
+    id: `productivity:${slug}`,
+    kind: 'pi',
+    name: frontmatter.name ?? fallback.name,
+    path: skillPath,
+    title: fallback.title,
+    description: frontmatter.description ?? fallback.description,
+    version: 'workspace',
+    tags: fallback.tags,
+    source: 'productivity',
+    importedAt: skillMtime(skillPath),
+    connectionId: 'productivity-skills',
+    connectionStatus: 'imported',
+  }
+}
+
+function productivityDefaults(slug) {
+  const defaults = {
+    wewrite: {
+      name: 'wewrite',
+      title: '公众号自动发布',
+      description: '从热点选题、文章写作、微信排版到推送公众号草稿箱的全流程 Skill。',
+      tags: ['wechat', 'publishing', 'writing'],
+    },
+    'codex-ppt': {
+      name: 'codex-ppt',
+      title: '自动做 PPT',
+      description: '从主题或资料生成 16:9 演示文稿，支持图片型 PDF 和可编辑 PPTX 工作流。',
+      tags: ['ppt', 'slides', 'deck'],
+    },
+  }
+  return defaults[slug] ?? {
+    name: slug,
+    title: slug,
+    description: 'Workspace productivity skill.',
+    tags: ['workspace'],
+  }
+}
+
+function parseFrontmatter(content) {
+  if (!content.startsWith('---')) return {}
+  const end = content.indexOf('\n---', 3)
+  if (end < 0) return {}
+  const yaml = content.slice(3, end).trim()
+  const output = {}
+  let currentKey = ''
+  for (const line of yaml.split(/\r?\n/)) {
+    const trimmed = line.trimEnd()
+    const match = trimmed.match(/^([a-zA-Z0-9_-]+):\s*(.*)$/)
+    if (match) {
+      currentKey = match[1]
+      const value = match[2].trim()
+      if (value === '|') output[currentKey] = ''
+      else output[currentKey] = value.replace(/^['"]|['"]$/g, '')
+      continue
+    }
+    if (currentKey && typeof output[currentKey] === 'string' && /^\s+/.test(line)) {
+      output[currentKey] = `${output[currentKey]}\n${trimmed.trim()}`
+    }
+  }
+  return output
+}
+
+function skillMtime(file) {
+  try {
+    return fs.statSync(file).mtime.toISOString()
+  } catch {
+    return new Date(0).toISOString()
+  }
+}
+
 function findPersona(agent) {
   if (!agent) return null
   const normalized = String(agent).toLowerCase()
@@ -808,6 +920,107 @@ function readState() {
 function writeState(state) {
   ensureDir(path.dirname(statePath))
   fs.writeFileSync(statePath, `${JSON.stringify(state, null, 2)}\n`, 'utf8')
+}
+
+async function createAppleReminder(input) {
+  const topic = sanitizeReminderPart(input.topic || 'Pi 正在工作')
+  const body = sanitizeReminderPart(input.body || '我正在整理当前任务进度，完成后会回来给你确认。')
+  const mobileMessage = formatMobileMessage(topic, body)
+  const dueAt = input.dueInMinutes
+    ? new Date(Date.now() + Math.max(1, Number(input.dueInMinutes)) * 60_000).toISOString()
+    : undefined
+  const reminder = {
+    id: newId('reminder'),
+    title: mobileMessage,
+    notes: mobileMessage,
+    list: sanitizeReminderPart(input.list || 'EvoPi'),
+    dueAt,
+    createdAt: new Date().toISOString(),
+  }
+
+  try {
+    await addMacReminder(reminder)
+  } catch (error) {
+    reminder.localOnly = true
+    reminder.error = error instanceof Error ? error.message : 'Apple Reminders unavailable'
+  }
+
+  const state = readState()
+  state.reminders = [...(state.reminders ?? []), reminder].slice(-80)
+  writeState(state)
+  addEvolutionEvent({
+    type: 'apple_reminder.created',
+    subjectId: reminder.id,
+    summary: reminder.localOnly ? `本地记录提醒：${mobileMessage}` : `已写入 Apple 提醒事项：${mobileMessage}`,
+    evidence: { list: reminder.list, dueAt, localOnly: reminder.localOnly ?? false },
+  })
+  return { ok: !reminder.localOnly, reminder, mobileMessage }
+}
+
+function addMacReminder(reminder) {
+  const script = `
+on sanitizeDate(isoText)
+  if isoText is "" then return missing value
+  set y to text 1 thru 4 of isoText as integer
+  set m to text 6 thru 7 of isoText as integer
+  set d to text 9 thru 10 of isoText as integer
+  set hh to text 12 thru 13 of isoText as integer
+  set mm to text 15 thru 16 of isoText as integer
+  set dueDate to current date
+  set year of dueDate to y
+  set month of dueDate to m
+  set day of dueDate to d
+  set hours of dueDate to hh
+  set minutes of dueDate to mm
+  set seconds of dueDate to 0
+  return dueDate
+end sanitizeDate
+
+set reminderTitle to ${osascriptString(reminder.title)}
+set reminderBody to ${osascriptString(reminder.notes)}
+set reminderListName to ${osascriptString(reminder.list)}
+set reminderDueIso to ${osascriptString(reminder.dueAt || '')}
+
+tell application "Reminders"
+  if not (exists list reminderListName) then
+    make new list with properties {name:reminderListName}
+  end if
+  set targetList to list reminderListName
+  if reminderDueIso is "" then
+    make new reminder at end of reminders of targetList with properties {name:reminderTitle, body:reminderBody}
+  else
+    make new reminder at end of reminders of targetList with properties {name:reminderTitle, body:reminderBody, due date:my sanitizeDate(reminderDueIso)}
+  end if
+end tell
+`
+  return new Promise((resolve, reject) => {
+    execFile('osascript', ['-e', script], { timeout: 45_000 }, (error, stdout, stderr) => {
+      if (error) {
+        reject(new Error(stderr.trim() || error.message))
+      } else {
+        resolve(stdout)
+      }
+    })
+  })
+}
+
+function sanitizeReminderPart(value) {
+  return String(value)
+    .replace(/\*/g, '')
+    .replace(/<think>[\s\S]*?<\/think>/gi, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 360)
+}
+
+function formatMobileMessage(topic, body) {
+  const cleanTopic = sanitizeReminderPart(topic).replace(/^【|】$/g, '') || 'Pi 正在工作'
+  const cleanBody = sanitizeReminderPart(body) || '我正在处理任务，完成后回来给你确认。'
+  return `【${cleanTopic}】${cleanBody}`
+}
+
+function osascriptString(value) {
+  return JSON.stringify(String(value)).replace(/\u2028|\u2029/g, '')
 }
 
 function addEvolutionEvent(input) {
