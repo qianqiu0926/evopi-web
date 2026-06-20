@@ -821,6 +821,62 @@ export type AppleReminderResponse = {
   mobileMessage: string
 }
 
+export type PiClubCommunity = {
+  id: string
+  name: string
+  desc: string
+  type: 'research' | 'founder' | 'org'
+  members: number
+  piAgents: number
+  joined: boolean
+  owner: string
+}
+
+export type PiClubPost = {
+  id: string
+  author: string
+  avatar: string
+  community: string
+  title: string
+  text: string
+  source: string
+  media?: string
+  product?: string
+  time: string
+  likes: number
+  replies: number
+}
+
+export type PiClubPhotoDrop = {
+  id: string
+  title: string
+  source: 'apple-photos' | 'airdrop' | 'upload'
+  count: number
+  status: 'received' | 'drafted' | 'published'
+  useCase: 'moments' | 'video' | 'research'
+  createdAt: string
+  draftText: string
+}
+
+export type PiClubProduct = {
+  id: string
+  name: string
+  desc: string
+  status: 'draft' | 'building' | 'deployed'
+  url: string
+  community?: string
+  createdAt: string
+  updatedAt: string
+  stack: string[]
+}
+
+export type PiClubState = {
+  communities: PiClubCommunity[]
+  posts: PiClubPost[]
+  photoDrops: PiClubPhotoDrop[]
+  products: PiClubProduct[]
+}
+
 export async function createAppleReminder(input: {
   topic: string
   body: string
@@ -828,6 +884,54 @@ export async function createAppleReminder(input: {
   dueInMinutes?: number
 }) {
   return api<AppleReminderResponse>('/api/reminders/apple', {
+    method: 'POST',
+    body: JSON.stringify(input),
+  })
+}
+
+export async function getPiClubState() {
+  return api<PiClubState>('/api/piclub')
+}
+
+export async function createPiClubPost(input: {
+  title: string
+  text: string
+  community?: string
+  source?: string
+  media?: string
+  product?: string
+}) {
+  return api<{ post: PiClubPost; state: PiClubState }>('/api/piclub/posts', {
+    method: 'POST',
+    body: JSON.stringify(input),
+  })
+}
+
+export async function joinPiClubCommunity(communityId: string) {
+  return api<{ community: PiClubCommunity; state: PiClubState }>(`/api/piclub/communities/${encodeURIComponent(communityId)}/join`, {
+    method: 'POST',
+    body: JSON.stringify({}),
+  })
+}
+
+export async function createPhotoDrop(input: {
+  title: string
+  count: number
+  source?: PiClubPhotoDrop['source']
+  useCase?: PiClubPhotoDrop['useCase']
+}) {
+  return api<{ drop: PiClubPhotoDrop; state: PiClubState }>('/api/photos/apple/drop', {
+    method: 'POST',
+    body: JSON.stringify(input),
+  })
+}
+
+export async function createVibeProduct(input: {
+  name: string
+  brief: string
+  community?: string
+}) {
+  return api<{ product: PiClubProduct; post: PiClubPost; state: PiClubState }>('/api/vibecoding/products', {
     method: 'POST',
     body: JSON.stringify(input),
   })

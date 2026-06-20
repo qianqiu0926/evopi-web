@@ -1709,6 +1709,205 @@ body[data-theme="glass"] .ws-workspace {
 }
 
 /* ============================================================
+   PiClub
+   ============================================================ */
+.piclub-page {
+  display: grid;
+  gap: 16px;
+}
+
+.piclub-hero,
+.piclub-grid,
+.piclub-grid.wide {
+  display: grid;
+  gap: 16px;
+}
+
+.piclub-hero {
+  grid-template-columns: minmax(0, 1.45fr) minmax(320px, 0.8fr);
+  align-items: stretch;
+}
+
+.piclub-hero-copy,
+.piclub-camera-card,
+.piclub-panel,
+.piclub-feed {
+  border: var(--border-w) solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  box-shadow: var(--shadow-card);
+}
+
+.piclub-hero-copy {
+  display: grid;
+  align-content: center;
+  gap: 12px;
+  padding: 22px;
+  background:
+    radial-gradient(circle at 12% 20%, rgba(218, 246, 232, 0.78), transparent 26%),
+    linear-gradient(135deg, rgba(236, 247, 255, 0.82), rgba(255, 244, 220, 0.7));
+}
+
+.piclub-hero-copy h2 {
+  max-width: 760px;
+  margin: 0;
+  font-size: 28px;
+  line-height: 1.18;
+}
+
+.piclub-hero-copy p {
+  max-width: 720px;
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.6;
+}
+
+.piclub-hero-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.piclub-camera-card {
+  display: grid;
+  gap: 11px;
+  padding: 18px;
+  background: var(--cute-pink);
+}
+
+.piclub-camera-card > span,
+.club-community-card p,
+.club-community-card span,
+.club-product-card p,
+.club-product-card span,
+.club-post-card p,
+.club-post-head span {
+  color: var(--muted);
+  line-height: 1.5;
+  font-size: 13px;
+}
+
+.piclub-camera-orbit {
+  display: grid;
+  place-items: center;
+  width: 64px;
+  height: 64px;
+  border: var(--border-w) solid var(--line);
+  border-radius: 18px;
+  background: var(--paper);
+}
+
+.piclub-camera-orbit .cute-icon {
+  width: 40px;
+  height: 40px;
+}
+
+.piclub-camera-form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 86px;
+  gap: 8px;
+}
+
+.piclub-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.piclub-panel,
+.piclub-feed {
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+}
+
+.piclub-post-composer textarea,
+.piclub-vibe textarea,
+.piclub-post-composer select {
+  width: 100%;
+  border: var(--border-w) solid var(--line);
+  border-radius: var(--r-sm);
+  padding: 10px 12px;
+  background: var(--paper);
+  color: var(--text);
+  font: inherit;
+  resize: vertical;
+}
+
+.club-community-list,
+.club-product-list,
+.club-feed-list {
+  display: grid;
+  gap: 10px;
+}
+
+.club-community-card,
+.club-product-card,
+.club-post-card {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  border: 1.5px dashed var(--line-soft);
+  border-radius: var(--r-md);
+  background: var(--paper);
+}
+
+.club-community-card {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+}
+
+.club-community-card h3,
+.club-product-card h3,
+.club-post-card h3 {
+  margin: 6px 0 4px;
+  font-size: 16px;
+}
+
+.club-product-card {
+  grid-template-columns: 42px minmax(0, 1fr) auto;
+  align-items: start;
+}
+
+.club-product-card > .cute-icon {
+  width: 36px;
+  height: 36px;
+}
+
+.club-product-tags,
+.club-post-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  margin-top: 8px;
+}
+
+.club-post-card {
+  grid-template-columns: 44px minmax(0, 1fr);
+}
+
+.club-post-avatar {
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  border: var(--border-w) solid var(--line);
+  border-radius: 14px;
+  background: var(--cute-mint);
+}
+
+.club-post-avatar .cute-icon {
+  width: 28px;
+  height: 28px;
+}
+
+.club-post-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: baseline;
+}
+
+/* ============================================================
    记忆库
    ============================================================ */
 .library-page {
@@ -1757,6 +1956,16 @@ body[data-theme="glass"] .ws-workspace {
 .privacy-page {
   display: grid;
   gap: 12px;
+}
+
+.memory-product-section {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  border: var(--border-w) solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  box-shadow: var(--shadow-card);
 }
 
 .memory-item,
@@ -7081,6 +7290,12 @@ body[data-theme="glass"] .onboard-card {
   .wechat-contract-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+
+  .piclub-hero,
+  .piclub-grid,
+  .piclub-grid.wide {
+    grid-template-columns: 1fr;
+  }
 }
 
 @media (max-width: 720px) {
@@ -7141,6 +7356,16 @@ body[data-theme="glass"] .onboard-card {
 
   .wechat-contract-head,
 .wechat-contract-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .club-community-card,
+  .club-product-card,
+  .club-post-card {
+    grid-template-columns: 1fr;
+  }
+
+  .piclub-camera-form {
     grid-template-columns: 1fr;
   }
 }
@@ -7868,6 +8093,7 @@ body[data-theme="glass"] .map-core-body {
   background: var(--node-color, var(--cute-mint));
   box-shadow: 0 0 0 3px var(--bg), 0 0 12px var(--node-ring, transparent);
   flex: 0 0 auto;
+  pointer-events: none;
 }
 
 .map-node-pulse {
@@ -7876,6 +8102,7 @@ body[data-theme="glass"] .map-core-body {
   border: 2px solid var(--node-ring, var(--cute-blue));
   border-radius: 50%;
   animation: pulseRing 2s ease-out infinite;
+  pointer-events: none;
 }
 
 .map-node.future .map-node-dot {

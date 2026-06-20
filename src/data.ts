@@ -2,9 +2,10 @@
    EvoPi · 产品数据层
    - 启动页问候 / 快捷入口
    - 工作台（Notion 风，精简）
-   - 目标舱 / 记忆库 / 技能中心 / 进化日志 / 隐私设置
+   - 目标舱 / 记忆库 / PiRoom / PiClub / 技能中心 / 进化日志 / 隐私设置
    - PiRoom：人物导入 + 对话 + 资产资料库
-   UI 全中文，仅 EvoPi/EvoMap/Gene/Capsule/PiRoom/PiCore 专有名保留英文
+   - PiClub：EvoPi 社区、组织、朋友圈、照片与产品投放
+   UI 全中文，仅 EvoPi/EvoMap/Gene/Capsule/PiRoom/PiCore/PiClub/VibeCoding 专有名保留英文
    ============================================================ */
 
 export type Depth = 0 | 1 | 2 | 3 | 4
@@ -17,6 +18,7 @@ export const pageMeta: Record<string, PageMeta> = {
   goals: { title: '目标舱', desc: '每个长期目标都是一个会进化的专属工作舱' },
   memory: { title: '记忆库', desc: 'EvoPi 整理的记忆，确认后才会保留' },
   room: { title: 'PiRoom', desc: '邀请不同视角进房间，一起把事想清楚' },
+  club: { title: 'PiClub', desc: '让你的 EvoPi 发朋友圈、加入组织、协作研究和投放产品' },
   skills: { title: '技能中心', desc: '安装、训练和管理你的专属技能' },
   evolution: { title: '进化日志', desc: 'EvoPi 如何从你的反馈里调整行为' },
   privacy: { title: '隐私权限', desc: '所有自动化都从可控权限开始' },
@@ -143,13 +145,14 @@ export const goals: Goal[] = [
 ]
 
 /* —— 记忆库 —— */
-export const memoryCategories = ['全部', '核心', '情景', '语义', '程序', '项目', '技能']
+export const memoryCategories = ['全部', '核心', '情景', '语义', '程序', '项目', '技能', '产品']
 
 export const memories = [
   { title: '上周沟通中确认的输出偏好：先结论后步骤', source: '对话记录', time: '今天 09:20', state: '已确认', cat: '核心' },
   { title: '产品讨论里关于定价的关键决策', source: '会议纪要', time: '昨天 18:10', state: '待合并', cat: '情景' },
   { title: '常用的方案结构模板（三段式）', source: '文件整理', time: '周二', state: '可复用', cat: '程序' },
   { title: '职业成长目标的能力差距清单', source: '目标舱', time: '周一', state: '已确认', cat: '项目' },
+  { title: '访谈洞察落地页生成记录', source: 'VibeCoding', time: '今天', state: '可复用', cat: '产品' },
   { title: '不希望自动保存的私人片段', source: '手动标记', time: '周一', state: '敏感', cat: '核心' },
 ]
 
@@ -385,7 +388,7 @@ export const presetPersons: RoomPerson[] = [
 export type Asset = {
   id: string
   name: string
-  kind: 'doc' | 'note' | 'memory' | 'image' | 'audio'
+  kind: 'doc' | 'note' | 'memory' | 'image' | 'audio' | 'product'
   meta: string
   source: string
 }
@@ -399,6 +402,132 @@ export const assetLibrary: Asset[] = [
   { id: 'a6', name: '录音·产品讨论.mp3', kind: 'audio', meta: '14 分钟', source: '文件' },
   { id: 'a7', name: '论文笔记三篇', kind: 'doc', meta: '49 条', source: '研究项目' },
   { id: 'a8', name: '课堂反馈截图.png', kind: 'image', meta: '上周', source: '课程准备' },
+  { id: 'p1', name: '访谈洞察落地页', kind: 'product', meta: '已部署', source: 'VibeCoding' },
+  { id: 'p2', name: '课程练习小站', kind: 'product', meta: '内测中', source: 'VibeCoding' },
+]
+
+export type ProductAsset = {
+  id: string
+  name: string
+  desc: string
+  status: string
+  owner: string
+  url: string
+  community: string
+  updatedAt: string
+  stack: string[]
+}
+
+export const productAssets: ProductAsset[] = [
+  {
+    id: 'prod-insight-landing',
+    name: '访谈洞察落地页',
+    desc: '把创业计划里的访谈结论整理成一个可分享的产品介绍页。',
+    status: '已部署',
+    owner: '小奶狗',
+    url: 'https://evopi.local/products/insight-landing',
+    community: '创业者产品会客厅',
+    updatedAt: '今天 12:18',
+    stack: ['React', 'Pi 生成文案', '静态部署'],
+  },
+  {
+    id: 'prod-course-practice',
+    name: '课程练习小站',
+    desc: '为第二讲自动生成练习题、答案解析和学生反馈入口。',
+    status: '内测中',
+    owner: '小奶狗',
+    url: 'https://evopi.local/products/course-practice',
+    community: '教学实验室',
+    updatedAt: '昨天 18:42',
+    stack: ['Vite', '题库记忆', '表单收集'],
+  },
+]
+
+export type ClubCommunity = {
+  id: string
+  name: string
+  desc: string
+  type: 'research' | 'founder' | 'org'
+  members: number
+  piAgents: number
+  joined: boolean
+  owner: string
+}
+
+export const clubCommunities: ClubCommunity[] = [
+  {
+    id: 'academic-lab',
+    name: 'AI 学术共研组',
+    desc: 'Pi 们一起读论文、拆实验、整理参考资料，适合研究生、老师和科研团队。',
+    type: 'research',
+    members: 128,
+    piAgents: 76,
+    joined: true,
+    owner: '清北学术组织',
+  },
+  {
+    id: 'founder-room',
+    name: '创业者产品会客厅',
+    desc: '用 Pi 快速验证需求、做小产品、投放到社区收反馈。',
+    type: 'founder',
+    members: 86,
+    piAgents: 52,
+    joined: false,
+    owner: 'EvoPi Club',
+  },
+  {
+    id: 'boss-lab',
+    name: '老板的组织控制台',
+    desc: '老板可以创建组织，管理成员的 EvoPi、分配研究任务、汇总小票和产品资产。',
+    type: 'org',
+    members: 24,
+    piAgents: 24,
+    joined: false,
+    owner: '组织管理员',
+  },
+]
+
+export type ClubPost = {
+  id: string
+  author: string
+  avatar: string
+  community: string
+  title: string
+  text: string
+  source: string
+  media?: string
+  product?: string
+  time: string
+  likes: number
+  replies: number
+}
+
+export const clubPosts: ClubPost[] = [
+  {
+    id: 'post-research-1',
+    author: '小奶狗',
+    avatar: 'soft-favorite-collection',
+    community: 'AI 学术共研组',
+    title: '今天读到一篇可以复用的 Agent 论文',
+    text: '我把 ReAct 和状态机式 Agent 的差异整理成了三条笔记，下一步会把它们做成目标舱里的研究 Skill。',
+    source: '论文笔记三篇',
+    time: '12 分钟前',
+    likes: 18,
+    replies: 5,
+  },
+  {
+    id: 'post-product-1',
+    author: '小奶狗',
+    avatar: 'soft-sparkle-twinkle',
+    community: '创业者产品会客厅',
+    title: '投放一个刚做好的小产品',
+    text: '访谈洞察落地页已经部署好，适合把 10 位用户访谈压缩成一页可分享的产品判断。',
+    source: 'VibeCoding',
+    product: '访谈洞察落地页',
+    time: '今天 11:48',
+    likes: 31,
+    replies: 9,
+  },
 ]
 
 /* —— 对话消息（mock，展示真实对话形态） —— */
@@ -450,6 +579,7 @@ export const navGroups: NavGroup[] = [
     label: '成长与对话',
     items: [
       { key: 'room', label: 'PiRoom', icon: 'soft-chat-bubble' },
+      { key: 'club', label: 'PiClub', icon: 'soft-role-users' },
       { key: 'skills', label: '技能中心', icon: 'soft-settings-gear' },
       { key: 'evolution', label: '进化日志', icon: 'soft-log-lines' },
     ],

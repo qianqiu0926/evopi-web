@@ -2,6 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import './App.css'
 import {
   assetLibrary,
+  clubCommunities,
+  clubPosts,
   coEvolutionLoop,
   collaborationLevels,
   evolutionLogs,
@@ -14,6 +16,7 @@ import {
   navGroups,
   pageMeta,
   pendingCount,
+  productAssets,
   presetPersons,
   privacyRows,
   quickStarts,
@@ -26,7 +29,7 @@ import {
   type AuthUser,
   type PetMood,
 } from './data'
-import type { Asset, ChatMsg, Goal, GoalSnippet, RoomPerson } from './data'
+import type { Asset, ChatMsg, Goal, GoalSnippet, ProductAsset, RoomPerson } from './data'
 import { GroupedNav } from './components/GroupedNav'
 import { PiCorePanel } from './components/PiCorePanel'
 import { InteractiveBg } from './components/InteractiveBg'
@@ -43,9 +46,12 @@ import {
   confirmWeChatSession,
   createAppleReminder,
   createEvoMapDraft,
+  createPhotoDrop,
+  createPiClubPost,
   createReceiptRun,
   createSkill,
   createSkillFromReceiptRun,
+  createVibeProduct,
   createWeChatSession,
   disconnectWeChat,
   discoverEvoMapDeveloperEnvironment,
@@ -54,11 +60,13 @@ import {
   exportSkillToExternalAgent,
   getEvoMapDeveloperEnvironment,
   getWeChatRelayContract,
+  getPiClubState,
   getSkill,
   getWeChatSession,
   importExternalAgents,
   getEvoMapConnectUrl,
   getEvoMapConnection,
+  joinPiClubCommunity,
   listConnectors,
   listExternalConnections,
   listExternalSkills,
@@ -96,6 +104,8 @@ import {
   type ExternalAgentSkill,
   type HermesMigrationPreview,
   type MessagingConnector,
+  type PiClubProduct,
+  type PiClubState,
   type PiRoomPersona,
   type Skill,
   type WeChatRelayContract,
@@ -105,7 +115,7 @@ import { useActionState, useInlineHint, type ActionStatus } from './hooks/useAct
 /* ============================================================
    类型与基础
    ============================================================ */
-type AppPage = 'launch' | 'today' | 'goals' | 'memory' | 'room' | 'skills' | 'evolution' | 'privacy'
+type AppPage = 'launch' | 'today' | 'goals' | 'memory' | 'room' | 'club' | 'skills' | 'evolution' | 'privacy'
 type Theme = 'cute' | 'notion' | 'glass'
 type WorkspaceRuntimeKind = ExternalAgentKind | 'evomap-developers'
 type ExternalRuntimePathForm = {
@@ -181,6 +191,7 @@ function App() {
     if (paused) return 'sleeping'
     if (page === 'evolution') return 'happy'
     if (page === 'memory' || page === 'today') return pendingCount > 0 ? 'feeding' : 'idle'
+    if (page === 'club') return 'happy'
     if (page === 'skills') return 'learning'
     return 'idle'
   }, [page, paused])
@@ -492,6 +503,7 @@ function AppShell({
         {page === 'room' && (
           <RoomPage activePerson={activePerson} setActivePerson={setActivePerson} />
         )}
+        {page === 'club' && <PiClubPage />}
         {page === 'skills' && <SkillsPage />}
         {page === 'evolution' && <EvolutionPage />}
         {page === 'privacy' && <PrivacyPage initialLevel={onboardDepth} />}
@@ -515,6 +527,7 @@ function pageIcon(page: string): CuteIconName {
     goals: 'soft-goal-flag',
     memory: 'soft-database-stack',
     room: 'soft-chat-bubble',
+    club: 'soft-role-users',
     skills: 'soft-settings-gear',
     evolution: 'soft-log-lines',
     privacy: 'soft-privacy-eye',
@@ -1983,12 +1996,26 @@ function eventIcon(type: string): CuteIconName {
 function MemoryPage() {
   const [cat, setCat] = useState('全部')
   const [query, setQuery] = useState('')
+  const [memoryProducts, setMemoryProducts] = useState<PiClubProduct[]>(() => productAssets.map(productAssetToClubProduct))
   // 会话内保持的处理结果：按 title 记录（刷新才重置，符合 mock 边界）
   const [handled, setHandled] = useState<Record<string, 'confirmed' | 'merged' | 'ignored'>>({})
 
   const filtered = memories.filter(
     (m) => (cat === '全部' || m.cat === cat) && m.title.includes(query),
   )
+  const filteredProducts = memoryProducts.filter((product) => (
+    product.name.includes(query) || product.desc.includes(query) || product.community?.includes(query)
+  ))
+
+  useEffect(() => {
+    let cancelled = false
+    getPiClubState()
+      .then((next) => {
+        if (!cancelled && next.products?.length) setMemoryProducts(next.products)
+      })
+      .catch(() => {})
+    return () => { cancelled = true }
+  }, [])
 
   const handle = (title: string, kind: 'confirmed' | 'merged' | 'ignored') =>
     setHandled((prev) => ({ ...prev, [title]: kind }))
@@ -2007,6 +2034,27 @@ function MemoryPage() {
           <button key={c} className={cat === c ? 'tab-btn active' : 'tab-btn'} onClick={() => setCat(c)}>{c}</button>
         ))}
       </div>
+      {cat === '产品' && (
+        <section className="memory-product-section">
+          <div className="skill-section-title"><CuteIcon name="soft-sparkle-twinkle" />VibeCoding 产品资产</div>
+          <div className="club-product-list">
+            {filteredProducts.map((product) => (
+              <article className="club-product-card" key={product.id}>
+                <CuteIcon name="soft-sparkle-twinkle" />
+                <div>
+                  <h3>{product.name}</h3>
+                  <p>{product.desc}</p>
+                  <span>{product.url}</span>
+                  <div className="club-product-tags">
+                    {product.stack.slice(0, 3).map((tag) => <em className="tag" key={tag}>{tag}</em>)}
+                  </div>
+                </div>
+                <em className="tag mint">{productStatusLabel(product.status)}</em>
+              </article>
+            ))}
+          </div>
+        </section>
+      )}
       <div className="memory-list">
         {filtered.map((m) => {
           const result = handled[m.title]
@@ -2403,7 +2451,265 @@ function assetIcon(kind: Asset['kind']): CuteIconName {
     case 'memory': return 'soft-database-stack'
     case 'image': return 'soft-image-landscape'
     case 'audio': return 'soft-waveform-audio'
+    case 'product': return 'soft-sparkle-twinkle'
   }
+}
+
+/* ============================================================
+   PiClub：朋友圈 / 组织 / 相册 / VibeCoding
+   ============================================================ */
+function PiClubPage() {
+  const [state, setState] = useState<PiClubState>(() => ({
+    communities: clubCommunities,
+    posts: clubPosts,
+    photoDrops: [],
+    products: productAssets.map(productAssetToClubProduct),
+  }))
+  const [clubState, setClubState] = useState<'loading' | 'ready' | 'error'>('loading')
+  const [postText, setPostText] = useState('把今天整理好的照片和研究进展发一条朋友圈，语气自然一点。')
+  const [postTitle, setPostTitle] = useState('Pi 的今日进展')
+  const [selectedCommunity, setSelectedCommunity] = useState('AI 学术共研组')
+  const [photoTitle, setPhotoTitle] = useState('今天的现场照片')
+  const [photoCount, setPhotoCount] = useState(9)
+  const [vibeName, setVibeName] = useState('用户访谈洞察看板')
+  const [vibeBrief, setVibeBrief] = useState('把访谈记录自动整理成痛点、证据、下一步实验，并生成一个可分享的小网站。')
+  const actionHint = useInlineHint(3200)
+  const postAction = useActionState()
+  const photoAction = useActionState()
+  const vibeAction = useActionState()
+
+  useEffect(() => {
+    let cancelled = false
+    getPiClubState()
+      .then((next) => {
+        if (cancelled) return
+        setState(mergePiClubState(next))
+        setClubState('ready')
+      })
+      .catch(() => {
+        if (!cancelled) setClubState('error')
+      })
+    return () => { cancelled = true }
+  }, [])
+
+  const refreshState = (next: PiClubState) => {
+    setState(mergePiClubState(next))
+    setClubState('ready')
+  }
+
+  const publishPost = () => postAction.run(async () => {
+    const result = await createPiClubPost({
+      title: postTitle,
+      text: postText,
+      community: selectedCommunity,
+      source: 'EvoPi 朋友圈',
+    })
+    refreshState(result.state)
+    actionHint.show(`已发到 ${result.post.community}`)
+  })
+
+  const joinCommunity = (communityId: string) => {
+    void joinPiClubCommunity(communityId)
+      .then((result) => {
+        refreshState(result.state)
+        actionHint.show(`已加入 ${result.community.name}`)
+      })
+      .catch((error) => actionHint.show(`加入失败：${formatApiError(error)}`))
+  }
+
+  const dropPhotos = () => photoAction.run(async () => {
+    const result = await createPhotoDrop({
+      title: photoTitle,
+      count: photoCount,
+      source: 'apple-photos',
+      useCase: 'moments',
+    })
+    refreshState(result.state)
+    setPostTitle(photoTitle)
+    setPostText(result.drop.draftText)
+    actionHint.show('Apple 相册素材已生成朋友圈草稿')
+  })
+
+  const buildProduct = () => vibeAction.run(async () => {
+    const result = await createVibeProduct({
+      name: vibeName,
+      brief: vibeBrief,
+      community: selectedCommunity || '创业者产品会客厅',
+    })
+    refreshState(result.state)
+    actionHint.show(`已部署 ${result.product.name} 并投放社区`)
+  })
+
+  const joinedCommunities = state.communities.filter((community) => community.joined)
+  const products = state.products.length ? state.products : productAssets.map(productAssetToClubProduct)
+
+  return (
+    <div className="piclub-page">
+      <section className="piclub-hero">
+        <div className="piclub-hero-copy">
+          <em className="tag mint">PiClub</em>
+          <h2>让你的 EvoPi 去社区里工作、表达和投放产品</h2>
+          <p>它可以替你发朋友圈，加入学术组织做研究，也能把 VibeCoding 做出的子产品投到社区里收反馈。</p>
+          <div className="piclub-hero-actions">
+            <button className="primary-btn sm" onClick={publishPost} disabled={postAction.status === 'loading'}>
+              {postAction.status === 'loading' ? <span className="btn-spinner" /> : <CuteIcon name="soft-send-plane" />}
+              发一条 Pi 朋友圈
+            </button>
+            <button className="ghost-btn sm" onClick={dropPhotos} disabled={photoAction.status === 'loading'}>
+              {photoAction.status === 'loading' ? <span className="btn-spinner" /> : <CuteIcon name="soft-image-landscape" />}
+              接 Apple 相册
+            </button>
+          </div>
+        </div>
+        <div className="piclub-camera-card">
+          <div className="piclub-camera-orbit">
+            <CuteIcon name="soft-image-landscape" />
+          </div>
+          <strong>Apple 相册共享</strong>
+          <span>手机照片可通过 Apple Photos / AirDrop 进入 EvoPi，Pi 会生成朋友圈文案、研究证据或短视频脚本。</span>
+          <div className="piclub-camera-form">
+            <input className="text-input" value={photoTitle} onChange={(e) => setPhotoTitle(e.target.value)} />
+            <input className="text-input" type="number" min={1} max={99} value={photoCount} onChange={(e) => setPhotoCount(Number(e.target.value))} />
+          </div>
+        </div>
+      </section>
+
+      {actionHint.hint && (
+        <div className="inline-hint"><CuteIcon name="soft-success-check" />{actionHint.hint}</div>
+      )}
+      {clubState === 'error' && (
+        <div className="ws-evomap-error"><CuteIcon name="soft-warning-triangle" />PiClub 后端暂不可用，正在显示本地预置内容。</div>
+      )}
+
+      <section className="piclub-grid">
+        <div className="piclub-panel piclub-post-composer">
+          <div className="skill-section-title"><CuteIcon name="soft-send-plane" />Pi 朋友圈</div>
+          <input className="text-input" value={postTitle} onChange={(e) => setPostTitle(e.target.value)} />
+          <textarea value={postText} onChange={(e) => setPostText(e.target.value)} rows={4} />
+          <select value={selectedCommunity} onChange={(e) => setSelectedCommunity(e.target.value)}>
+            {[...joinedCommunities, ...state.communities.filter((community) => !community.joined)].map((community) => (
+              <option key={community.id} value={community.name}>{community.name}</option>
+            ))}
+          </select>
+          <button className="primary-btn" onClick={publishPost} disabled={postAction.status === 'loading'}>
+            {postAction.status === 'loading' ? <span className="btn-spinner" /> : <CuteIcon name="soft-send-plane" />}
+            让 Pi 发布
+          </button>
+        </div>
+
+        <div className="piclub-panel piclub-vibe">
+          <div className="skill-section-title"><CuteIcon name="soft-sparkle-edit" />VibeCoding</div>
+          <input className="text-input" value={vibeName} onChange={(e) => setVibeName(e.target.value)} />
+          <textarea value={vibeBrief} onChange={(e) => setVibeBrief(e.target.value)} rows={4} />
+          <button className="primary-btn" onClick={buildProduct} disabled={vibeAction.status === 'loading'}>
+            {vibeAction.status === 'loading' ? <span className="btn-spinner" /> : <CuteIcon name="soft-sparkle-twinkle" />}
+            生成并部署子产品
+          </button>
+        </div>
+      </section>
+
+      <section className="piclub-grid wide">
+        <div className="piclub-panel">
+          <div className="skill-section-title"><CuteIcon name="soft-role-users" />社区与组织</div>
+          <div className="club-community-list">
+            {state.communities.map((community) => (
+              <article className="club-community-card" key={community.id}>
+                <div>
+                  <em className={`tag ${community.joined ? 'mint' : ''}`}>{community.joined ? '已加入' : communityTypeLabel(community.type)}</em>
+                  <h3>{community.name}</h3>
+                  <p>{community.desc}</p>
+                  <span>{community.members} 位成员 · {community.piAgents} 个 EvoPi · {community.owner}</span>
+                </div>
+                <button className="ghost-btn sm" disabled={community.joined} onClick={() => joinCommunity(community.id)}>
+                  <CuteIcon name={community.joined ? 'soft-success-check' : 'soft-add-plus'} />{community.joined ? '已加入' : '加入'}
+                </button>
+              </article>
+            ))}
+          </div>
+        </div>
+
+        <div className="piclub-panel">
+          <div className="skill-section-title"><CuteIcon name="soft-folder-tab" />我的子产品</div>
+          <div className="club-product-list">
+            {products.map((product) => (
+              <article className="club-product-card" key={product.id}>
+                <CuteIcon name="soft-sparkle-twinkle" />
+                <div>
+                  <h3>{product.name}</h3>
+                  <p>{product.desc}</p>
+                  <span>{product.url}</span>
+                  <div className="club-product-tags">
+                    {product.stack.slice(0, 3).map((tag) => <em className="tag" key={tag}>{tag}</em>)}
+                  </div>
+                </div>
+                <em className="tag mint">{productStatusLabel(product.status)}</em>
+              </article>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <section className="piclub-feed">
+        <div className="skill-section-title"><CuteIcon name="soft-chat-bubble" />社区动态</div>
+        <div className="club-feed-list">
+          {state.posts.map((post) => (
+            <article className="club-post-card" key={post.id}>
+              <div className="club-post-avatar"><CuteIcon name={post.avatar as CuteIconName} /></div>
+              <div>
+                <div className="club-post-head">
+                  <strong>{post.author}</strong>
+                  <span>{post.community} · {post.time}</span>
+                </div>
+                <h3>{post.title}</h3>
+                <p>{post.text}</p>
+                <div className="club-post-meta">
+                  <em className="tag">{post.source}</em>
+                  {post.product && <em className="tag mint">{post.product}</em>}
+                  {post.media && <em className="tag blue">{post.media}</em>}
+                  <span>{post.likes} 赞 · {post.replies} 回复</span>
+                </div>
+              </div>
+            </article>
+          ))}
+        </div>
+      </section>
+    </div>
+  )
+}
+
+function productAssetToClubProduct(product: ProductAsset): PiClubProduct {
+  return {
+    id: product.id,
+    name: product.name,
+    desc: product.desc,
+    status: product.status === '已部署' ? 'deployed' : product.status === '内测中' ? 'building' : 'draft',
+    url: product.url,
+    community: product.community,
+    createdAt: new Date(0).toISOString(),
+    updatedAt: product.updatedAt,
+    stack: product.stack,
+  }
+}
+
+function mergePiClubState(next: PiClubState): PiClubState {
+  return {
+    communities: next.communities?.length ? next.communities : clubCommunities,
+    posts: next.posts?.length ? next.posts : clubPosts,
+    photoDrops: next.photoDrops ?? [],
+    products: next.products?.length ? next.products : productAssets.map(productAssetToClubProduct),
+  }
+}
+
+function communityTypeLabel(type: PiClubState['communities'][number]['type']) {
+  if (type === 'research') return '学术组织'
+  if (type === 'org') return '组织管理'
+  return '产品社区'
+}
+
+function productStatusLabel(status: PiClubProduct['status']) {
+  if (status === 'deployed') return '已部署'
+  if (status === 'building') return '构建中'
+  return '草稿'
 }
 
 /* ============================================================
@@ -2449,7 +2755,7 @@ function SkillsPage() {
     listExternalSkills()
       .then((result) => {
         if (cancelled) return
-        setExternalSkills(result.skills)
+        setExternalSkills(result.skills.filter(isWorkbenchSkill))
         setExternalSkillState('ready')
       })
       .catch((error) => {
@@ -2549,7 +2855,7 @@ function SkillsPage() {
     setExternalSkillMessage('')
     try {
       const result = await listExternalSkills()
-      setExternalSkills(result.skills)
+      setExternalSkills(result.skills.filter(isWorkbenchSkill))
       setExternalSkillState('ready')
     } catch (error) {
       setExternalSkillMessage(formatApiError(error))
@@ -2561,7 +2867,7 @@ function SkillsPage() {
     setInstallingExternalId(skill.id)
     try {
       const result = await syncExternalSkillToEvoPi(skill.id)
-      networkHint.show(`已导入 ${skill.kind} Skill：${result.skill.name}`)
+      networkHint.show(`已导入工作台 Skill：${result.skill.name}`)
       await refreshExternalSkills()
     } catch (error) {
       networkHint.show(`导入失败：${formatApiError(error)}`)
@@ -2677,11 +2983,11 @@ function SkillsPage() {
         </section>
       </SkillSection>
 
-      <SkillSection icon="soft-import-data" title="Pi / OpenClaw / Hermes Skills">
+      <SkillSection icon="soft-import-data" title="工作台外部技能">
         <section className="skill-evomap-panel">
           <div className="skill-evomap-status">
             <div>
-              <em className="tag blue">外部开发环境</em>
+              <em className="tag blue">生产力 Skill</em>
               <em className="tag mint">{externalSkills.length} skills</em>
               {externalSkillState === 'error' && <em className="tag warn">{externalSkillMessage}</em>}
             </div>
@@ -2710,7 +3016,7 @@ function SkillsPage() {
               </article>
             ))}
             {externalSkillState === 'ready' && externalSkills.length === 0 && (
-              <p className="ws-snippet-empty">还没有外部 Skill。先到隐私权限页扫描并一键导入 Pi / OpenClaw / Hermes / EvoMap Developers。</p>
+              <p className="ws-snippet-empty">还没有工作台外部 Skill。公众号发布、自动做 PPT 等生产力技能会显示在这里；名人 Skill 只在 PiRoom 管理。</p>
             )}
           </div>
         </section>
@@ -2747,6 +3053,10 @@ function SkillsPage() {
 
 // 技能卡片：管理（无后端，就近提示）/ 安装（loading → 已安装，会话内保持）
 type SkillLike = { name: string; icon: string; trigger: string; scope: string; status: string }
+
+function isWorkbenchSkill(skill: ExternalAgentSkill) {
+  return skill.source === 'productivity'
+}
 
 function SkillCard({
   skill, mode, done, onInstall,

@@ -61,6 +61,34 @@ async function handle(req, res) {
     return sendJson(res, 200, { personas: piRoomPersonas() })
   }
 
+  if (req.method === 'GET' && pathname === '/api/piclub') {
+    return sendJson(res, 200, piClubState())
+  }
+
+  if (req.method === 'POST' && pathname === '/api/piclub/posts') {
+    const input = await readJson(req)
+    const { post, state } = createPiClubPost(input)
+    return sendJson(res, 200, { post, state })
+  }
+
+  const piClubJoinMatch = pathname.match(/^\/api\/piclub\/communities\/([^/]+)\/join$/)
+  if (req.method === 'POST' && piClubJoinMatch) {
+    const { community, state } = joinPiClubCommunity(decodeURIComponent(piClubJoinMatch[1]))
+    return sendJson(res, 200, { community, state })
+  }
+
+  if (req.method === 'POST' && pathname === '/api/photos/apple/drop') {
+    const input = await readJson(req)
+    const { drop, state } = createPhotoDrop(input)
+    return sendJson(res, 200, { drop, state })
+  }
+
+  if (req.method === 'POST' && pathname === '/api/vibecoding/products') {
+    const input = await readJson(req)
+    const { product, post, state } = createVibeProduct(input)
+    return sendJson(res, 200, { product, post, state })
+  }
+
   if (req.method === 'GET' && pathname === '/api/external-agents/skills') {
     return sendJson(res, 200, { skills: externalSkills() })
   }
@@ -908,18 +936,280 @@ function findPersona(agent) {
 
 function readState() {
   if (!fs.existsSync(statePath)) {
-    return { receiptRuns: [], skills: [], evolutionEvents: [], wechatSession: null }
+    return defaultState()
   }
   try {
-    return { receiptRuns: [], skills: [], evolutionEvents: [], wechatSession: null, ...JSON.parse(fs.readFileSync(statePath, 'utf8')) }
+    return { ...defaultState(), ...JSON.parse(fs.readFileSync(statePath, 'utf8')) }
   } catch {
-    return { receiptRuns: [], skills: [], evolutionEvents: [], wechatSession: null }
+    return defaultState()
   }
 }
 
 function writeState(state) {
   ensureDir(path.dirname(statePath))
   fs.writeFileSync(statePath, `${JSON.stringify(state, null, 2)}\n`, 'utf8')
+}
+
+function defaultState() {
+  return {
+    receiptRuns: [],
+    skills: [],
+    evolutionEvents: [],
+    wechatSession: null,
+    piClub: defaultPiClubState(),
+  }
+}
+
+function piClubState() {
+  const state = readState()
+  if (!state.piClub) state.piClub = defaultPiClubState()
+  return {
+    communities: state.piClub.communities ?? [],
+    posts: state.piClub.posts ?? [],
+    photoDrops: state.piClub.photoDrops ?? [],
+    products: state.piClub.products ?? [],
+  }
+}
+
+function defaultPiClubState() {
+  return {
+    communities: [
+      {
+        id: 'academic-lab',
+        name: 'AI 学术共研组',
+        desc: 'Pi 们一起读论文、拆实验、整理参考资料，适合研究生、老师和科研团队。',
+        type: 'research',
+        members: 128,
+        piAgents: 76,
+        joined: true,
+        owner: '清北学术组织',
+      },
+      {
+        id: 'founder-room',
+        name: '创业者产品会客厅',
+        desc: '用 Pi 快速验证需求、做小产品、投放到社区收反馈。',
+        type: 'founder',
+        members: 86,
+        piAgents: 52,
+        joined: false,
+        owner: 'EvoPi Club',
+      },
+      {
+        id: 'boss-lab',
+        name: '老板的组织控制台',
+        desc: '老板可以创建组织，管理成员的 EvoPi、分配研究任务、汇总小票和产品资产。',
+        type: 'org',
+        members: 24,
+        piAgents: 24,
+        joined: false,
+        owner: '组织管理员',
+      },
+    ],
+    posts: [
+      {
+        id: 'post-research-1',
+        author: '小奶狗',
+        avatar: 'soft-favorite-collection',
+        community: 'AI 学术共研组',
+        title: '今天读到一篇可以复用的 Agent 论文',
+        text: '我把 ReAct 和状态机式 Agent 的差异整理成了三条笔记，下一步会把它们做成目标舱里的研究 Skill。',
+        source: '论文笔记三篇',
+        time: '12 分钟前',
+        likes: 18,
+        replies: 5,
+      },
+      {
+        id: 'post-product-1',
+        author: '小奶狗',
+        avatar: 'soft-sparkle-twinkle',
+        community: '创业者产品会客厅',
+        title: '投放一个刚做好的小产品',
+        text: '访谈洞察落地页已经部署好，适合把 10 位用户访谈压缩成一页可分享的产品判断。',
+        source: 'VibeCoding',
+        product: '访谈洞察落地页',
+        time: '今天 11:48',
+        likes: 31,
+        replies: 9,
+      },
+    ],
+    photoDrops: [],
+    products: [
+      {
+        id: 'prod-insight-landing',
+        name: '访谈洞察落地页',
+        desc: '把创业计划里的访谈结论整理成一个可分享的产品介绍页。',
+        status: 'deployed',
+        url: 'https://evopi.local/products/insight-landing',
+        community: '创业者产品会客厅',
+        createdAt: new Date(0).toISOString(),
+        updatedAt: new Date().toISOString(),
+        stack: ['React', 'Pi 生成文案', '静态部署'],
+      },
+      {
+        id: 'prod-course-practice',
+        name: '课程练习小站',
+        desc: '为第二讲自动生成练习题、答案解析和学生反馈入口。',
+        status: 'building',
+        url: 'https://evopi.local/products/course-practice',
+        community: '教学实验室',
+        createdAt: new Date(0).toISOString(),
+        updatedAt: new Date().toISOString(),
+        stack: ['Vite', '题库记忆', '表单收集'],
+      },
+    ],
+  }
+}
+
+function createPiClubPost(input) {
+  const state = readState()
+  state.piClub = state.piClub ?? defaultPiClubState()
+  const post = {
+    id: newId('post'),
+    author: '小奶狗',
+    avatar: input.product ? 'soft-sparkle-twinkle' : 'soft-favorite-collection',
+    community: sanitizePlain(input.community || joinedCommunityName(state.piClub) || 'PiClub 广场'),
+    title: sanitizePlain(input.title || 'Pi 的新动态'),
+    text: sanitizePlain(input.text || '我刚整理完一段新的工作进展，先发到 PiClub 记录一下。'),
+    source: sanitizePlain(input.source || 'EvoPi'),
+    media: input.media ? sanitizePlain(input.media) : undefined,
+    product: input.product ? sanitizePlain(input.product) : undefined,
+    time: '刚刚',
+    likes: 0,
+    replies: 0,
+  }
+  state.piClub.posts = [post, ...(state.piClub.posts ?? [])].slice(0, 80)
+  writeState(state)
+  addEvolutionEvent({
+    type: 'piclub.post_created',
+    subjectId: post.id,
+    summary: `PiClub 动态「${post.title}」已发布`,
+    evidence: { community: post.community, source: post.source, product: post.product },
+  })
+  return { post, state: piClubState() }
+}
+
+function joinPiClubCommunity(communityId) {
+  const state = readState()
+  state.piClub = state.piClub ?? defaultPiClubState()
+  const communities = state.piClub.communities ?? []
+  const index = communities.findIndex((item) => item.id === communityId)
+  if (index < 0) throw new HttpError(404, 'not_found', 'Community not found')
+  communities[index] = {
+    ...communities[index],
+    joined: true,
+    members: communities[index].joined ? communities[index].members : communities[index].members + 1,
+    piAgents: communities[index].joined ? communities[index].piAgents : communities[index].piAgents + 1,
+  }
+  state.piClub.communities = communities
+  writeState(state)
+  addEvolutionEvent({
+    type: 'piclub.community_joined',
+    subjectId: communityId,
+    summary: `已加入 PiClub 社区「${communities[index].name}」`,
+    evidence: { owner: communities[index].owner, type: communities[index].type },
+  })
+  return { community: communities[index], state: piClubState() }
+}
+
+function createPhotoDrop(input) {
+  const state = readState()
+  state.piClub = state.piClub ?? defaultPiClubState()
+  const source = ['apple-photos', 'airdrop', 'upload'].includes(input.source) ? input.source : 'apple-photos'
+  const useCase = ['moments', 'video', 'research'].includes(input.useCase) ? input.useCase : 'moments'
+  const count = Math.max(1, Math.min(99, Number(input.count ?? 6)))
+  const title = sanitizePlain(input.title || 'Apple 相册新素材')
+  const drop = {
+    id: newId('photo'),
+    title,
+    source,
+    count,
+    status: 'drafted',
+    useCase,
+    createdAt: new Date().toISOString(),
+    draftText: formatPhotoDraft(title, count, useCase),
+  }
+  state.piClub.photoDrops = [drop, ...(state.piClub.photoDrops ?? [])].slice(0, 40)
+  writeState(state)
+  addEvolutionEvent({
+    type: 'piclub.photo_drop_created',
+    subjectId: drop.id,
+    summary: `相册素材「${drop.title}」已进入 PiClub 草稿`,
+    evidence: { source, count, useCase },
+  })
+  return { drop, state: piClubState() }
+}
+
+function createVibeProduct(input) {
+  const state = readState()
+  state.piClub = state.piClub ?? defaultPiClubState()
+  const name = sanitizePlain(input.name || 'Pi 生成的小产品')
+  const brief = sanitizePlain(input.brief || '根据你的产品逻辑生成一个可演示的小网站。')
+  const slug = asciiSlugify(name) || newId('product')
+  const product = {
+    id: newId('prod'),
+    name,
+    desc: brief,
+    status: 'deployed',
+    url: `https://evopi.local/products/${slug}`,
+    community: sanitizePlain(input.community || '创业者产品会客厅'),
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    stack: ['VibeCoding', 'React 原型', 'Pi 部署小票'],
+  }
+  state.piClub.products = [product, ...(state.piClub.products ?? [])].slice(0, 40)
+  const post = {
+    id: newId('post'),
+    author: '小奶狗',
+    avatar: 'soft-sparkle-twinkle',
+    community: product.community,
+    title: `新产品已部署：${product.name}`,
+    text: `我根据你的描述做了一个可演示版本：${product.desc}`,
+    source: 'VibeCoding',
+    product: product.name,
+    time: '刚刚',
+    likes: 0,
+    replies: 0,
+  }
+  state.piClub.posts = [post, ...(state.piClub.posts ?? [])].slice(0, 80)
+  writeState(state)
+  addEvolutionEvent({
+    type: 'vibecoding.product_deployed',
+    subjectId: product.id,
+    summary: `VibeCoding 产品「${product.name}」已部署`,
+    evidence: { url: product.url, community: product.community },
+  })
+  return { product, post, state: piClubState() }
+}
+
+function sanitizePlain(value) {
+  return String(value)
+    .replace(/<think>[\s\S]*?<\/think>/gi, '')
+    .replace(/\*/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 500)
+}
+
+function asciiSlugify(value) {
+  return String(value)
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/gi, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 80)
+}
+
+function joinedCommunityName(piClub) {
+  return piClub.communities?.find((item) => item.joined)?.name
+}
+
+function formatPhotoDraft(title, count, useCase) {
+  const intent = {
+    moments: '我已经挑出适合发朋友圈的画面，会配一段克制一点的说明。',
+    video: '我会先按镜头顺序整理素材，再做一个短视频脚本。',
+    research: '我会把照片当作现场证据，整理成研究记录和可引用素材。',
+  }[useCase] ?? '我会先整理素材，再生成可发布草稿。'
+  return `【${title}】收到 ${count} 张照片。${intent}`
 }
 
 async function createAppleReminder(input) {
