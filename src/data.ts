@@ -327,9 +327,53 @@ export type RoomPerson = {
   basis: string // 生成的资料依据
   avatar: string // 图标 slug
   online?: boolean
+  agentKind?: 'openclaw' | 'hermes' | 'pi'
+  skillName?: string
+  sourceUrl?: string
+  sourceLabel?: string
+  skillPath?: string
 }
 
 export const presetPersons: RoomPerson[] = [
+  {
+    id: 'elon-musk',
+    name: 'Elon Musk',
+    type: 'preset',
+    desc: '马斯克式第一性原理视角',
+    basis: 'alchaincyf/elon-musk-skill · 公开资料蒸馏',
+    avatar: 'soft-target-bullseye',
+    online: true,
+    agentKind: 'pi',
+    skillName: 'elon-musk-perspective',
+    sourceUrl: 'https://github.com/alchaincyf/elon-musk-skill',
+    sourceLabel: 'alchaincyf/elon-musk-skill',
+  },
+  {
+    id: 'karpathy',
+    name: 'Andrej Karpathy',
+    type: 'preset',
+    desc: 'Karpathy 式 AI 工程现实主义视角',
+    basis: 'alchaincyf/karpathy-skill · 公开资料蒸馏',
+    avatar: 'soft-notebook-lines',
+    online: true,
+    agentKind: 'pi',
+    skillName: 'andrej-karpathy-perspective',
+    sourceUrl: 'https://github.com/alchaincyf/karpathy-skill',
+    sourceLabel: 'alchaincyf/karpathy-skill',
+  },
+  {
+    id: 'feynman',
+    name: 'Richard Feynman',
+    type: 'preset',
+    desc: '费曼式反自欺与解释视角',
+    basis: 'alchaincyf/feynman-skill · 公开资料蒸馏',
+    avatar: 'soft-idea-bulb',
+    online: true,
+    agentKind: 'pi',
+    skillName: 'feynman-perspective',
+    sourceUrl: 'https://github.com/alchaincyf/feynman-skill',
+    sourceLabel: 'alchaincyf/feynman-skill',
+  },
   { id: 'zhangxuefeng', name: '张雪峰', type: 'preset', desc: '考研与专业选择视角', basis: '公开演讲、访谈、直播片段', avatar: 'soft-role-users', online: true },
   { id: 'jobs', name: '产品审稿人（乔布斯式）', type: 'preset', desc: '极致用户视角的产品审视', basis: '公开发布会、传记访谈', avatar: 'soft-sparkle-edit', online: false },
   { id: 'investor', name: '投资人视角', type: 'preset', desc: '从商业模式和增长提问', basis: '公开行业分析与访谈', avatar: 'soft-target-bullseye', online: false },
@@ -643,4 +687,3 @@ export const onboardingQuestions: OnboardQuestion[] = [
     ],
   },
 ]
-

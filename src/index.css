@@ -184,3 +184,8 @@ input {
 @keyframes dash {
   to { stroke-dashoffset: -1000; }
 }
+
+/* 按钮内 loading 转圈 */
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}

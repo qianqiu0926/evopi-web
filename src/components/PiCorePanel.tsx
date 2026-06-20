@@ -22,6 +22,7 @@ export function PiCorePanel({
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState('')
   const [petting, setPetting] = useState(false)
+  const [engaged, setEngaged] = useState(false)
   const pet = adoptablePets[0]
   const anim = petAnimations.find((a) => a.mood === mood) ?? petAnimations[0]
 
@@ -37,7 +38,8 @@ export function PiCorePanel({
     setTimeout(() => setPetting(false), 2200)
   }
 
-  const displayMood: PetMood = petting ? 'happy' : paused ? 'sleeping' : mood
+  const displayMood: PetMood = petting ? 'happy' : paused ? 'sleeping' : engaged ? 'learning' : mood
+  const displayAnim = petAnimations.find((a) => a.mood === displayMood) ?? anim
 
   return (
     <section className="picore-panel">
@@ -45,15 +47,31 @@ export function PiCorePanel({
         <span className="cute-icon-wrap"><img className="cute-icon" src="/cute-line-icons/soft-sparkle-twinkle.png" alt="" /></span>
         <div>
           <strong>EvoPi 生命核</strong>
-          <span>{petName ? `${petName} · ${anim.label}` : '认领你的 Pi 伙伴'}</span>
+          <span>{petName ? `${petName} · ${displayAnim.label}` : '认领你的 Pi 伙伴'}</span>
         </div>
       </div>
 
       {/* 宠物舞台 */}
-      <div className="pet-stage" onClick={petIt} role="button" tabIndex={0}>
+      <div
+        className="pet-stage"
+        onClick={petIt}
+        onPointerEnter={() => setEngaged(true)}
+        onPointerLeave={() => setEngaged(false)}
+        onFocus={() => setEngaged(true)}
+        onBlur={() => setEngaged(false)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault()
+            petIt()
+          }
+        }}
+        role="button"
+        tabIndex={0}
+        aria-label={`互动 PiCore，当前状态：${displayAnim.label}`}
+      >
         <div className="pet-floor" />
-        <PetSprite mood={displayMood} size={132} paused={paused && !petting} />
-        <span className="pet-mood-bubble">{anim.desc}</span>
+        <PetSprite mood={displayMood} size={118} paused={paused && !petting} />
+        <span className="pet-mood-bubble">{displayAnim.desc}</span>
       </div>
 
       {/* 认领 / 命名 */}
