@@ -39,6 +39,8 @@
 
 .app-shell.wide-center {
   grid-template-columns: 244px minmax(0, 1fr);
+  min-height: 100svh;
+  overflow: hidden;
 }
 
 .app-shell.wide-center.nav-collapsed {
@@ -3762,10 +3764,439 @@ body[data-theme="glass"] .mm-core {
 /* ============================================================
    今日工作台（Notion 风精简）
    ============================================================ */
-.today-narrow {
-  max-width: 720px;
+.today-narrow,
+.today-workbench {
   display: grid;
   gap: 18px;
+  max-width: 100%;
+}
+
+.today-narrow {
+  max-width: 720px;
+}
+
+.eve-workbench-panel,
+.context-continuation,
+.eve-capture-actions {
+  border: var(--border-w) solid var(--line);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+  box-shadow: var(--shadow-offset) var(--shadow-offset) 0 var(--shadow-hard);
+}
+
+.eve-workbench-panel {
+  display: grid;
+  gap: 16px;
+  padding: 18px;
+}
+
+.eve-workbench-copy {
+  display: grid;
+  gap: 8px;
+  max-width: 900px;
+}
+
+.eve-workbench-copy h2 {
+  margin: 0;
+  font-size: clamp(24px, 3vw, 40px);
+  line-height: 1.08;
+}
+
+.eve-workbench-copy p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 14px;
+  font-weight: 800;
+  line-height: 1.6;
+}
+
+.eve-workbench-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(260px, 340px);
+  gap: 14px;
+  align-items: stretch;
+}
+
+.eve-chat-card,
+.eve-vision-card {
+  border: 2px solid var(--line);
+  border-radius: var(--r-lg);
+  background: var(--paper);
+}
+
+.eve-chat-card {
+  display: grid;
+  grid-template-rows: minmax(360px, 52vh) auto;
+  overflow: hidden;
+}
+
+.eve-chat-stream {
+  display: grid;
+  align-content: start;
+  gap: 12px;
+  overflow: auto;
+  padding: 16px;
+  background:
+    radial-gradient(circle at 14% 12%, rgba(236, 247, 255, 0.76), transparent 22%),
+    radial-gradient(circle at 92% 8%, rgba(255, 244, 220, 0.72), transparent 26%),
+    var(--surface-soft);
+}
+
+.eve-message {
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr);
+  gap: 10px;
+  align-items: start;
+  max-width: 88%;
+}
+
+.eve-message.from-me {
+  justify-self: end;
+  grid-template-columns: minmax(0, 1fr) 42px;
+}
+
+.eve-message.from-me .eve-message-avatar {
+  grid-column: 2;
+}
+
+.eve-message.from-me .eve-message-body {
+  grid-column: 1;
+  grid-row: 1;
+  background: var(--cute-yellow);
+}
+
+.eve-message-avatar {
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  border: 2px solid var(--line);
+  border-radius: 16px;
+  background: var(--surface);
+}
+
+.eve-message-avatar .cute-icon {
+  width: 26px;
+  height: 26px;
+}
+
+.eve-message-body {
+  display: grid;
+  gap: 8px;
+  border: 2px solid var(--line);
+  border-radius: 18px;
+  padding: 12px;
+  background: var(--surface);
+  box-shadow: 3px 3px 0 var(--line-soft);
+}
+
+.eve-message-body p {
+  margin: 0;
+  white-space: pre-wrap;
+  line-height: 1.65;
+  font-size: 14px;
+  font-weight: 780;
+}
+
+.eve-message-body em {
+  color: var(--muted);
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 850;
+}
+
+.eve-message-tags,
+.context-actions,
+.eve-capture-actions,
+.eve-vision-actions,
+.vision-signal-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.eve-message-tags span {
+  border: 1.5px solid var(--line-soft);
+  border-radius: 999px;
+  padding: 3px 8px;
+  background: var(--surface-soft);
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.eve-vision-bubble,
+.eve-capture-bubble {
+  display: grid;
+  grid-template-columns: 32px minmax(0, 1fr);
+  gap: 10px;
+  align-items: center;
+  max-width: 620px;
+  border: 2px dashed var(--line);
+  border-radius: 18px;
+  padding: 10px 12px;
+  background: color-mix(in srgb, var(--cute-blue) 38%, var(--surface));
+}
+
+.eve-capture-bubble {
+  background: color-mix(in srgb, var(--cute-mint) 42%, var(--surface));
+}
+
+.eve-vision-bubble .cute-icon,
+.eve-capture-bubble .cute-icon {
+  width: 28px;
+  height: 28px;
+}
+
+.eve-vision-bubble div,
+.eve-capture-bubble div {
+  display: grid;
+  gap: 3px;
+}
+
+.eve-vision-bubble span,
+.eve-capture-bubble span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.45;
+}
+
+.eve-chat-input {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr) 42px 42px 52px;
+  gap: 9px;
+  align-items: end;
+  border-top: 2px solid var(--line);
+  padding: 10px;
+  background: var(--surface);
+}
+
+.eve-chat-input > .cute-icon {
+  width: 28px;
+  height: 28px;
+  align-self: center;
+}
+
+.eve-chat-input textarea {
+  width: 100%;
+  min-width: 0;
+  max-height: 150px;
+  border: 0;
+  outline: none;
+  resize: vertical;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.eve-chat-input textarea::placeholder {
+  color: var(--muted);
+}
+
+.mini-action.active {
+  background: var(--cute-mint);
+  box-shadow: 3px 3px 0 var(--line-soft);
+}
+
+.eve-vision-card {
+  display: grid;
+  grid-template-rows: 190px auto auto auto auto;
+  gap: 12px;
+  padding: 12px;
+}
+
+.eve-vision-preview {
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  border: 2px solid var(--line);
+  border-radius: var(--r-md);
+  background:
+    radial-gradient(circle at 50% 42%, rgba(218, 246, 232, 0.7), transparent 36%),
+    var(--surface-soft);
+}
+
+.eve-vision-preview video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transform: scaleX(-1);
+}
+
+.eve-camera-placeholder {
+  display: grid;
+  place-items: center;
+  gap: 8px;
+  padding: 14px;
+  text-align: center;
+}
+
+.eve-camera-placeholder .cute-icon {
+  width: 42px;
+  height: 42px;
+}
+
+.eve-camera-placeholder span,
+.eve-vision-head span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.45;
+}
+
+.eve-vision-head {
+  display: grid;
+  gap: 4px;
+}
+
+.vision-signal-grid button {
+  flex: 1 1 calc(50% - 6px);
+  min-height: 34px;
+  border: 1.5px solid var(--line-soft);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.vision-signal-grid button.active {
+  border-color: var(--line);
+  background: var(--cute-blue);
+  color: var(--text);
+}
+
+.context-continuation {
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+}
+
+.context-card-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.context-card {
+  display: grid;
+  gap: 12px;
+  align-content: space-between;
+  min-height: 210px;
+  border: 1.5px dashed var(--line-soft);
+  border-radius: var(--r-md);
+  padding: 13px;
+  background: var(--surface-soft);
+}
+
+.context-card.active {
+  border-style: solid;
+  background: color-mix(in srgb, var(--cute-blue) 32%, var(--surface));
+}
+
+.context-card div:first-child {
+  display: grid;
+  gap: 7px;
+}
+
+.context-card em {
+  width: max-content;
+  max-width: 100%;
+  overflow: hidden;
+  border: 1.5px solid var(--line-soft);
+  border-radius: 999px;
+  padding: 3px 8px;
+  background: var(--surface);
+  color: var(--muted);
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 950;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.context-card strong {
+  font-size: 15px;
+  line-height: 1.3;
+}
+
+.context-card p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12.5px;
+  font-weight: 800;
+  line-height: 1.55;
+}
+
+.eve-capture-actions {
+  align-items: center;
+  padding: 12px;
+  background: color-mix(in srgb, var(--cute-mint) 22%, var(--surface));
+}
+
+@media (max-width: 980px) {
+  .eve-workbench-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .eve-chat-card {
+    grid-template-rows: minmax(260px, 42vh) auto;
+  }
+
+  .eve-vision-card {
+    grid-template-rows: minmax(160px, 28vh) auto auto auto auto;
+  }
+
+  .context-card-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 640px) {
+  .eve-workbench-panel {
+    padding: 12px;
+  }
+
+  .eve-chat-card {
+    grid-template-rows: minmax(220px, 34vh) auto;
+  }
+
+  .eve-message,
+  .eve-message.from-me {
+    max-width: 100%;
+  }
+
+  .eve-chat-input {
+    grid-template-columns: 28px minmax(0, 1fr) 38px 38px 46px;
+    gap: 7px;
+    padding: 8px;
+  }
+
+  .eve-chat-input textarea {
+    font-size: 13px;
+  }
+
+  .eve-capture-actions {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+}
+
+body[data-pi-emotion="happy"] .pet-sprite {
+  animation: petExcitedHop 0.72s ease-in-out infinite;
+}
+
+body[data-pi-emotion="confused"] .picore-panel {
+  box-shadow: var(--shadow-offset-lg) var(--shadow-offset-lg) 0 var(--shadow-hard), 0 0 0 4px color-mix(in srgb, var(--cute-yellow) 45%, transparent);
+}
+
+@keyframes petExcitedHop {
+  0%, 100% { transform: translateY(0); }
+  40% { transform: translateY(-8px); }
+  68% { transform: translateY(2px); }
 }
 
 .focus-hero {
@@ -4329,7 +4760,7 @@ body[data-theme="glass"] .focus-hero {
 }
 
 .chat-body.with-assets {
-  grid-template-columns: minmax(0, 1fr) minmax(340px, 38%);
+  grid-template-columns: minmax(0, 1fr) clamp(360px, 38vw, 430px);
 }
 
 .chat-stream {
@@ -4353,7 +4784,7 @@ body[data-theme="glass"] .focus-hero {
 
 .msg.me {
   align-self: flex-end;
-  flex-direction: row-reverse;
+  flex-direction: row;
 }
 
 .msg-avatar {
@@ -4410,7 +4841,7 @@ body[data-theme="glass"] .focus-hero {
   border-radius: 50%;
   background: var(--cute-yellow);
   box-shadow: 2px 2px 0 var(--line-soft);
-  opacity: 0;
+  opacity: 0.72;
   transform: translateX(-4px) scale(0.9);
   transition:
     opacity var(--dur-fast) var(--ease-smooth),
@@ -4419,7 +4850,7 @@ body[data-theme="glass"] .focus-hero {
 }
 
 .msg.me .capture-arrow {
-  transform: translateX(4px) scale(0.9) rotate(180deg);
+  transform: translateX(-4px) scale(0.9);
 }
 
 .msg:hover .capture-arrow,
@@ -4430,7 +4861,7 @@ body[data-theme="glass"] .focus-hero {
 
 .msg.me:hover .capture-arrow,
 .msg.me:focus-within .capture-arrow {
-  transform: translateX(0) scale(1) rotate(180deg);
+  transform: translateX(0) scale(1);
 }
 
 .capture-arrow:hover {
@@ -4446,12 +4877,13 @@ body[data-theme="glass"] .focus-hero {
 .thinking-rail {
   border-left: var(--border-w) solid var(--line);
   background:
-    linear-gradient(180deg, color-mix(in srgb, var(--cute-blue) 22%, transparent), transparent 34%),
+    linear-gradient(180deg, color-mix(in srgb, var(--cute-blue) 14%, transparent), transparent 30%),
     var(--surface);
   display: grid;
-  grid-template-rows: minmax(0, 0.95fr) minmax(0, 1.05fr);
+  grid-template-rows: minmax(286px, 0.56fr) minmax(0, 1fr);
   gap: 0;
   min-height: 0;
+  min-width: 0;
   overflow: hidden;
 }
 
@@ -4459,18 +4891,21 @@ body[data-theme="glass"] .focus-hero {
 .inspiration-desk {
   display: grid;
   min-height: 0;
-  align-content: start;
-  gap: 12px;
-  padding: 14px;
+  min-width: 0;
+  gap: 9px;
+  padding: 16px;
+  overflow: hidden;
 }
 
 .research-desk {
+  grid-template-rows: auto auto 102px 32px 38px;
   border-bottom: var(--border-w) solid var(--line);
 }
 
 .inspiration-desk {
+  grid-template-rows: auto auto minmax(0, 1fr) auto auto;
   background:
-    radial-gradient(circle at 14% 8%, color-mix(in srgb, var(--cute-yellow) 55%, transparent), transparent 30%),
+    linear-gradient(135deg, color-mix(in srgb, var(--cute-yellow) 24%, transparent), transparent 38%),
     var(--surface-soft);
 }
 
@@ -4479,6 +4914,11 @@ body[data-theme="glass"] .focus-hero {
   align-items: center;
   justify-content: space-between;
   gap: 8px;
+  min-width: 0;
+}
+
+.rail-section-head > div {
+  min-width: 0;
 }
 
 .rail-section-head .cute-icon {
@@ -4501,19 +4941,19 @@ body[data-theme="glass"] .focus-hero {
 
 .research-search {
   display: grid;
-  grid-template-columns: 26px minmax(0, 1fr);
+  grid-template-columns: 24px minmax(0, 1fr);
   align-items: center;
-  gap: 8px;
+  gap: 7px;
   border: var(--border-w) solid var(--line);
   border-radius: var(--r-sm);
-  padding: 8px 10px;
+  padding: 7px 10px;
   background: var(--surface-soft);
   box-shadow: 2px 2px 0 var(--line-soft);
 }
 
 .research-search .cute-icon {
-  width: 22px;
-  height: 22px;
+  width: 20px;
+  height: 20px;
 }
 
 .research-search input {
@@ -4526,13 +4966,11 @@ body[data-theme="glass"] .focus-hero {
   font-size: 12.5px;
 }
 
-.research-list {
+.research-focus {
   display: grid;
-  gap: 8px;
   min-height: 0;
-  overflow-y: auto;
-  padding-right: 3px;
-  scrollbar-width: thin;
+  min-width: 0;
+  overflow: hidden;
 }
 
 .research-card {
@@ -4540,14 +4978,24 @@ body[data-theme="glass"] .focus-hero {
   display: grid;
   grid-template-columns: 30px minmax(0, 1fr);
   gap: 9px;
-  border: 1.5px solid var(--line-soft);
-  border-radius: var(--r-sm);
-  padding: 10px;
+  min-width: 0;
+  border: var(--border-w) solid var(--line);
+  border-radius: var(--r-md);
+  padding: 10px 11px;
   background: var(--surface);
   transition:
     border-color var(--dur-fast) var(--ease-smooth),
     background var(--dur-fast) var(--ease-smooth),
     transform var(--dur-fast) var(--ease-press);
+}
+
+.research-card.primary {
+  height: 100%;
+  padding: 8px 10px;
+}
+
+.research-card > div {
+  min-width: 0;
 }
 
 .research-card:hover {
@@ -4557,8 +5005,8 @@ body[data-theme="glass"] .focus-hero {
 
 .research-card.selected {
   border-color: var(--line);
-  background: color-mix(in srgb, var(--cute-mint) 58%, var(--surface));
-  box-shadow: 2px 2px 0 var(--line-soft);
+  background: color-mix(in srgb, var(--cute-mint) 44%, var(--surface));
+  box-shadow: 3px 3px 0 var(--line-soft);
 }
 
 .research-check {
@@ -4585,17 +5033,34 @@ body[data-theme="glass"] .focus-hero {
 }
 
 .research-card strong {
+  display: -webkit-box;
   display: block;
   margin-top: 3px;
-  font-size: 12.4px;
-  line-height: 1.35;
+  overflow: hidden;
+  font-size: 12.6px;
+  line-height: 1.38;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
 }
 
 .research-card p {
-  margin-top: 5px;
+  display: -webkit-box;
+  margin-top: 6px;
+  overflow: hidden;
   color: var(--muted);
-  font-size: 11.5px;
+  font-size: 11.4px;
   line-height: 1.45;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 1;
+}
+
+.research-card.primary p {
+  display: none;
+}
+
+.research-card.primary .mini-link {
+  min-height: 22px;
+  margin-top: 4px;
 }
 
 .mini-link {
@@ -4617,31 +5082,98 @@ body[data-theme="glass"] .focus-hero {
   height: 16px;
 }
 
-.asset-mini-panel {
+.research-empty {
   border: 1.5px dashed var(--line-soft);
+  border-radius: var(--r-md);
+  padding: 14px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+  background: rgba(255, 255, 255, 0.62);
+}
+
+.research-candidates {
+  display: flex;
+  gap: 6px;
+  height: 32px;
+  min-height: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.research-candidates::-webkit-scrollbar {
+  display: none;
+}
+
+.research-candidate {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 8px;
+  min-height: 30px;
+  max-width: 240px;
+  border: 1.5px solid var(--line-soft);
   border-radius: var(--r-sm);
-  padding: 10px;
-  background: color-mix(in srgb, var(--cute-yellow) 35%, var(--surface));
+  padding: 4px 8px;
+  background: rgba(255, 255, 255, 0.68);
+  color: var(--text);
+  text-align: left;
+}
+
+.research-candidate.selected {
+  border-color: var(--line);
+  background: color-mix(in srgb, var(--cute-mint) 42%, var(--surface));
+}
+
+.research-candidate span {
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 10.5px;
+  font-weight: 900;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.research-candidate strong {
+  overflow: hidden;
+  font-size: 11.3px;
+  line-height: 1.3;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.context-strip {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  height: 38px;
+  border: 1.5px solid var(--line-soft);
+  border-radius: var(--r-md);
+  min-width: 0;
+  padding: 5px 8px;
+  background: color-mix(in srgb, var(--cute-yellow) 18%, var(--surface));
 }
 
 .asset-mini-head {
   display: flex;
   align-items: center;
   gap: 7px;
-  margin-bottom: 8px;
+  margin-bottom: 0;
+  white-space: nowrap;
 }
 
 .asset-mini-head .cute-icon {
-  width: 18px;
-  height: 18px;
+  width: 16px;
+  height: 16px;
 }
 
 .asset-mini-head strong {
-  font-size: 12px;
+  font-size: 11px;
 }
 
 .asset-mini-head span {
-  margin-left: auto;
+  margin-left: 0;
   color: var(--muted);
   font-size: 11px;
   font-weight: 850;
@@ -4664,16 +5196,19 @@ body[data-theme="glass"] .focus-hero {
   flex: 0 0 auto;
   align-items: center;
   gap: 5px;
-  max-width: 168px;
-  min-height: 30px;
-  border: 1.5px solid var(--line-soft);
+  max-width: 132px;
+  min-width: 0;
+  min-height: 24px;
+  border: 1px solid var(--line-soft);
   border-radius: 999px;
   padding: 0 10px;
   background: var(--surface);
   color: var(--text);
-  font-size: 11px;
+  font-size: 10.4px;
   font-weight: 850;
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .asset-chip.selected {
@@ -4682,35 +5217,50 @@ body[data-theme="glass"] .focus-hero {
 }
 
 .asset-chip .cute-icon {
-  width: 16px;
-  height: 16px;
+  width: 14px;
+  height: 14px;
 }
 
 .memory-topic {
-  border: var(--border-w) solid var(--line);
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  border: 1.5px solid var(--line);
   border-radius: var(--r-md);
-  padding: 12px;
+  padding: 12px 13px;
+  min-width: 0;
   background: var(--surface);
-  box-shadow: 3px 3px 0 var(--line-soft);
+  box-shadow: 2px 2px 0 var(--line-soft);
+}
+
+.memory-topic > div {
+  min-width: 0;
 }
 
 .memory-topic h3 {
   margin-top: 4px;
-  font-size: 15px;
+  font-size: 15.5px;
   line-height: 1.32;
 }
 
-.memory-topic p {
-  margin-top: 7px;
+.memory-topic em {
+  flex: 0 0 auto;
+  border: 1.5px solid var(--line-soft);
+  border-radius: 999px;
+  padding: 3px 8px;
+  background: var(--cute-blue);
   color: var(--muted);
-  font-size: 11.5px;
-  line-height: 1.48;
+  font-size: 10.5px;
+  font-style: normal;
+  font-weight: 900;
 }
 
 .inspiration-thread {
   display: grid;
   gap: 8px;
   min-height: 0;
+  min-width: 0;
   overflow-y: auto;
   padding-right: 3px;
   scrollbar-width: thin;
@@ -4718,37 +5268,46 @@ body[data-theme="glass"] .focus-hero {
 
 .inspiration-note {
   display: grid;
-  grid-template-columns: 32px minmax(0, 1fr);
-  gap: 9px;
-  border: 1.5px solid var(--line-soft);
+  grid-template-columns: 28px minmax(0, 1fr);
+  gap: 8px;
+  min-width: 0;
+  border: 1px solid var(--line-soft);
   border-radius: var(--r-sm);
-  padding: 9px;
+  padding: 8px 9px;
   background: rgba(255, 255, 255, 0.72);
+}
+
+.inspiration-note > div {
+  min-width: 0;
 }
 
 .note-index {
   display: grid;
-  width: 30px;
-  height: 30px;
+  width: 26px;
+  height: 26px;
   place-items: center;
-  border: 1.5px solid var(--line);
+  border: 1px solid var(--line);
   border-radius: 50%;
   background: var(--cute-blue);
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 950;
 }
 
 .inspiration-note p {
   margin-top: 3px;
-  font-size: 12px;
-  line-height: 1.5;
+  font-size: 11.6px;
+  line-height: 1.46;
 }
 
 .pi-organizer {
-  border: 1.5px dashed var(--line);
+  border: 1.5px solid color-mix(in srgb, var(--line) 62%, transparent);
   border-radius: var(--r-md);
-  padding: 11px 12px;
-  background: color-mix(in srgb, var(--cute-mint) 48%, var(--surface));
+  min-width: 0;
+  max-height: 118px;
+  overflow-y: auto;
+  padding: 10px 12px;
+  background: color-mix(in srgb, var(--cute-mint) 34%, var(--surface));
+  scrollbar-width: thin;
 }
 
 .pi-organizer strong {
@@ -4765,15 +5324,15 @@ body[data-theme="glass"] .focus-hero {
 
 .pi-organizer ul {
   display: grid;
-  gap: 6px;
-  margin: 8px 0 0;
+  gap: 5px;
+  margin: 7px 0 0;
   padding-left: 17px;
 }
 
 .pi-organizer li {
   color: var(--muted);
-  font-size: 11.8px;
-  line-height: 1.45;
+  font-size: 11.5px;
+  line-height: 1.4;
 }
 
 .save-memory-btn {
@@ -4781,6 +5340,8 @@ body[data-theme="glass"] .focus-hero {
   align-items: center;
   justify-content: center;
   gap: 8px;
+  width: 100%;
+  min-width: 0;
   min-height: 42px;
   border: var(--border-w) solid var(--line);
   border-radius: var(--r-sm);

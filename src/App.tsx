@@ -82,6 +82,7 @@ import {
   revokeEvoMapConnection,
   runEvoMapDeveloperWorkflow,
   runExternalAgentWithReceipt,
+  runPiAgent,
   searchEvoMapRecipes,
   syncSkillEvoMapReuse,
   syncExternalSkillsToEvoPi,
@@ -511,7 +512,12 @@ function AppShell({
           </header>
         )}
 
-        {page === 'today' && <TodayPage goRoom={() => { setPage('room') }} />}
+        {page === 'today' && (
+          <TodayPage
+            goRoom={() => { setPage('room') }}
+            goGoals={() => { setPage('goals') }}
+          />
+        )}
         {page === 'goals' && <GoalsPage />}
         {page === 'memory' && <MemoryPage />}
         {page === 'room' && (
@@ -574,27 +580,96 @@ function pageIcon(page: string): CuteIconName {
    今日工作台（Notion 风精简）
    ============================================================ */
 
-// 可轮换的「今日聚焦」候选（本地 mock，点「换一件」切换）
-const todayFocusOptions: string[] = [
-  todayFocus.next,
-  '整理本周三次会议的关键结论，写进目标舱',
-  '把上周的职业方向对话沉淀成一条可复用记忆',
-  '为「内容创作」目标补一版本周推进计划',
+type WorkbenchContextKind = 'goal' | 'collab' | 'skill'
+type VisualSignal = 'attentive' | 'confused' | 'happy' | 'away'
+
+type WorkbenchContextCard = {
+  id: string
+  kind: WorkbenchContextKind
+  title: string
+  desc: string
+  meta: string
+  seed: string
+  cta: string
+}
+
+const visualSignalMeta: Record<VisualSignal, { label: string; bubble: string; cue: string }> = {
+  attentive: {
+    label: '专注中',
+    bubble: '我看到你在电脑前，我们可以直接把这件事往下拆。',
+    cue: 'Pi 正在同步你的注意力状态。',
+  },
+  confused: {
+    label: '有点疑惑',
+    bubble: '看到你可能有点疑惑，我会先把下一步拆成更小的判断，不急着推进。',
+    cue: 'Pi 会放慢解释速度，先补背景。',
+  },
+  happy: {
+    label: '有好点子',
+    bubble: '你看起来状态不错，像是刚冒出一个好 idea。要不要我帮你马上记成一个小产品方向？',
+    cue: '小宠物会兴奋地跳一下。',
+  },
+  away: {
+    label: '暂时离开',
+    bubble: '你似乎不在电脑前。我会先做低风险整理，等你回来再确认是否执行。',
+    cue: 'Pi 进入低打扰自动整理模式。',
+  },
+}
+
+const workbenchContexts: WorkbenchContextCard[] = [
+  {
+    id: 'career-quarter',
+    kind: 'goal',
+    title: todayFocus.next,
+    desc: '这件事属于「职业成长」目标舱，可以直接回到目标舱继续补素材。',
+    meta: '目标舱 · 上次停在述职材料',
+    seed: '继续整理我的季度成果素材，先帮我列出还缺哪些证据。',
+    cta: '进目标舱',
+  },
+  {
+    id: 'piroom-career',
+    kind: 'collab',
+    title: '继续和张雪峰聊：考研还是换赛道',
+    desc: '上次对话里已经沉淀出“先校准赛道，再判断读研”的核心观点。',
+    meta: 'PiRoom · 14:06',
+    seed: '继续上次关于考研和换赛道的讨论，帮我把判断条件列清楚。',
+    cta: '继续协作',
+  },
+  {
+    id: 'vibe-product',
+    kind: 'skill',
+    title: '把用户访谈整理成 VibeCoding 小产品',
+    desc: '这不像长期目标，可以先协作完成，再决定是否沉淀成 Skill 或归入目标舱。',
+    meta: '工作台 · 可沉淀为 Skill',
+    seed: '我想做一个用户访谈洞察看板，帮我先梳理产品逻辑。',
+    cta: '开始对话',
+  },
 ]
 
-function TodayPage({ goRoom }: { goRoom: () => void }) {
+const initialWorkbenchMessages: ChatMsg[] = [
+  {
+    from: 'them',
+    text: '告诉我你现在想做什么。我会先和你聊清楚，再决定是跳到目标舱、留在当前工作台协作，还是把过程沉淀成一个 Skill。',
+    time: '现在',
+    attached: ['可接入摄像头观察', '可续接历史上下文'],
+  },
+]
+
+function TodayPage({ goRoom, goGoals }: { goRoom: () => void; goGoals: () => void }) {
   const [text, setText] = useState('')
-  const [focusIdx, setFocusIdx] = useState(0)
+  const [messages, setMessages] = useState<ChatMsg[]>(initialWorkbenchMessages)
+  const [activeContextId, setActiveContextId] = useState<string | null>(workbenchContexts[0]?.id ?? null)
+  const [cameraStatus, setCameraStatus] = useState<'idle' | 'requesting' | 'on' | 'error'>('idle')
+  const [cameraError, setCameraError] = useState('')
+  const [visualSignal, setVisualSignal] = useState<VisualSignal>('attentive')
+  const [captureHint, setCaptureHint] = useState<'idle' | 'skill' | 'goal'>('idle')
   const [externalConnections, setExternalConnections] = useState<ExternalAgentConnection[]>([])
   const [developerEnvironment, setDeveloperEnvironment] = useState<DeveloperEnvironmentConnection | null>(null)
   const [externalBootState, setExternalBootState] = useState<'loading' | 'ready' | 'error'>('loading')
   const [externalBootMessage, setExternalBootMessage] = useState('')
-
-  // 开始推进：loading → 已推进（停留）+ 就近提示
-  const push = useActionState({ ttl: 2200 })
-  const pushHint = useInlineHint(2600)
-  // 换一件：loading → 切换文案
-  const swap = useActionState()
+  const chatRef = useRef<HTMLDivElement>(null)
+  const videoRef = useRef<HTMLVideoElement>(null)
+  const streamRef = useRef<MediaStream | null>(null)
   // 发送：loading → 清空 + 提示
   const send = useActionState()
   const sendHint = useInlineHint(2600)
@@ -645,88 +720,338 @@ function TodayPage({ goRoom }: { goRoom: () => void }) {
     }
   }, [])
 
-  const onPush = () =>
-    push.run(() => pushHint.show('EvoPi 已记下这次推进，相关进展会同步到目标舱'), { duration: 700 })
+  useEffect(() => {
+    chatRef.current?.scrollTo({ top: chatRef.current.scrollHeight, behavior: 'smooth' })
+  }, [messages, cameraStatus, visualSignal])
 
-  const onSwap = () =>
-    swap.run(() => setFocusIdx((i) => (i + 1) % todayFocusOptions.length), { duration: 500 })
+  useEffect(() => {
+    if (cameraStatus === 'on') document.body.dataset.piEmotion = visualSignal
+    else delete document.body.dataset.piEmotion
+    return () => { delete document.body.dataset.piEmotion }
+  }, [cameraStatus, visualSignal])
+
+  useEffect(() => {
+    if (cameraStatus === 'on' && videoRef.current && streamRef.current) {
+      videoRef.current.srcObject = streamRef.current
+    }
+  }, [cameraStatus])
+
+  useEffect(() => {
+    return () => {
+      streamRef.current?.getTracks().forEach((track) => track.stop())
+      streamRef.current = null
+    }
+  }, [])
+
+  const activeContext = workbenchContexts.find((item) => item.id === activeContextId) ?? workbenchContexts[0]
+  const visualMeta = visualSignalMeta[visualSignal]
+
+  const startCamera = async () => {
+    if (!navigator.mediaDevices?.getUserMedia) {
+      setCameraStatus('error')
+      setCameraError('当前浏览器不支持摄像头调用。')
+      return
+    }
+    setCameraStatus('requesting')
+    setCameraError('')
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 360 }, audio: false })
+      streamRef.current = stream
+      if (videoRef.current) videoRef.current.srcObject = stream
+      setCameraStatus('on')
+      setVisualSignal('attentive')
+    } catch (error) {
+      setCameraStatus('error')
+      setCameraError(formatApiError(error))
+    }
+  }
+
+  const stopCamera = () => {
+    streamRef.current?.getTracks().forEach((track) => track.stop())
+    streamRef.current = null
+    if (videoRef.current) videoRef.current.srcObject = null
+    setCameraStatus('idle')
+    delete document.body.dataset.piEmotion
+  }
+
+  const continueContext = (context: WorkbenchContextCard) => {
+    setActiveContextId(context.id)
+    if (context.kind === 'goal') {
+      setMessages((current) => [
+        ...current,
+        {
+          from: 'them',
+          text: `这件事属于目标舱。我可以带你回「职业成长」继续推进，也可以先在这里帮你把问题拆成小票。`,
+          time: '现在',
+          attached: ['目标舱', context.title],
+        },
+      ])
+      return
+    }
+    setText(context.seed)
+    setMessages((current) => [
+      ...current,
+      {
+        from: 'them',
+        text: `我把上次上下文放进来了。你可以直接发送，我会接着这个方向继续问你关键问题。`,
+        time: '现在',
+        attached: [context.meta],
+      },
+    ])
+  }
 
   const onSend = () => {
-    if (!text.trim()) return
-    send.run(
-      () => {
-        setText('')
-        sendHint.show('已记下，EvoPi 会按这个方向准备')
+    const clean = text.trim()
+    if (!clean) return
+    const contextText = activeContext ? `当前续接上下文：${activeContext.title}。${activeContext.desc}` : '没有选择历史上下文。'
+    const visionText = cameraStatus === 'on'
+      ? `本地摄像头观察状态：${visualMeta.label}。${visualMeta.cue}`
+      : '用户尚未开启本机摄像头观察。'
+
+    setMessages((current) => [...current, { from: 'me', text: clean, time: '现在' }])
+    setText('')
+    setCaptureHint('idle')
+    send.run(async () => {
+      try {
+        const result = await runPiAgent({
+          workspaceTitle: 'EVE 派今日工作台',
+          goalName: activeContext?.kind === 'goal' ? '职业成长' : undefined,
+          sessionKey: 'today-eve-workbench',
+          message: [
+            '你是 EVE 派，用户的自进化个人助理。',
+            '请用中文自然回复，不要使用星号符号。',
+            '你的任务不是只给建议，而是先对话协作，判断这件事应该进入目标舱、继续在工作台完成，还是沉淀成 Skill。',
+            contextText,
+            visionText,
+            `用户说：${clean}`,
+          ].join('\n'),
+          timeoutSec: 30,
+        })
+        const reply = externalAgentOutput(result.result) || '我收到你的想法了。我们先把目标、约束和下一步动作拆清楚。'
+        setMessages((current) => [...current, { from: 'them', text: reply, time: '现在' }])
+        setCaptureHint(activeContext?.kind === 'goal' ? 'goal' : 'skill')
+      } catch (error) {
+        setMessages((current) => [
+          ...current,
+          {
+            from: 'them',
+            text: `后端暂时没有回复：${formatApiError(error)}。我先在本地帮你记下这件事，等连接恢复后继续处理。`,
+            time: '现在',
+          },
+        ])
+      }
+    }, { duration: 0 })
+  }
+
+  const captureAsSkill = () => {
+    setCaptureHint('skill')
+    setMessages((current) => [
+      ...current,
+      {
+        from: 'them',
+        text: '可以。我会把这次协作里可复用的步骤整理成 Skill 草稿，等你确认后再安装到技能中心。',
+        time: '现在',
+        attached: ['Skill 草稿', activeContext?.title ?? '当前任务'],
       },
-      { duration: 600 },
-    )
+    ])
+    sendHint.show('已生成 Skill 沉淀意向，待确认后写入技能中心')
+  }
+
+  const captureAsGoal = () => {
+    setCaptureHint('goal')
+    setMessages((current) => [
+      ...current,
+      {
+        from: 'them',
+        text: '可以。我会先把这件事归纳成长期维护事项，并建议放入目标舱。你进入目标舱后可以继续拆里程碑。',
+        time: '现在',
+        attached: ['目标舱候选'],
+      },
+    ])
+    sendHint.show('已准备归纳到目标舱')
   }
 
   return (
-    <div className="today-narrow">
-      <article className="focus-hero">
-        <div className="focus-label">
-          <CuteIcon name="soft-target-bullseye" />
-          <span>今日聚焦</span>
-          <em className="tag">{todayFocus.deadline}</em>
+    <div className="today-workbench">
+      <section className="eve-workbench-panel">
+        <div className="eve-workbench-copy">
+          <span className="tag blue">EVE 派工作台</span>
+          <h2>告诉 EVE 派你现在想做什么</h2>
+          <p>先在这里对话协作。属于长期目标的事会回到目标舱，不属于目标舱的事先做完，再决定是否沉淀成 Skill 或长期维护目标。</p>
         </div>
-        <h2>{todayFocusOptions[focusIdx]}</h2>
-        <div className="focus-actions">
-          <button
-            className={`primary-btn ${statusCls(push.status)}`}
-            onClick={onPush}
-            disabled={push.status === 'loading'}
-          >
-            {push.status === 'loading'
-              ? <><span className="btn-spinner" />推进中…</>
-              : push.status === 'done'
-                ? <><span className="btn-done-check">✓</span>已推进</>
-                : <><CuteIcon name="soft-sparkle-edit" />开始推进</>}
-          </button>
-          <button
-            className={`ghost-btn ${swap.status === 'loading' ? 'btn-loading' : ''}`}
-            onClick={onSwap}
-            disabled={swap.status === 'loading'}
-          >
-            {swap.status === 'loading' ? <span className="btn-spinner" /> : <CuteIcon name="soft-arrow-right" />}
-            换一件
-          </button>
-        </div>
-        {pushHint.hint && (
-          <div className="inline-hint"><CuteIcon name="soft-success-check" />{pushHint.hint}</div>
-        )}
-      </article>
 
-      <div className="today-compose">
-        <CuteIcon name="soft-sparkle-twinkle" />
-        <input
-          placeholder="或者告诉 EvoPi 你现在想做什么……"
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-          onKeyDown={(e) => { if (e.key === 'Enter') onSend() }}
-        />
-        <button
-          className={`mini-action ${voiceHint.hint ? 'btn-loading' : ''}`}
-          aria-label="语音"
-          onClick={() => voiceHint.show('语音输入即将上线')}
-        >
-          <CuteIcon name="soft-microphone-voice" />
-        </button>
-        <button
-          className={`send-button ${statusCls(send.status)}`}
-          aria-label="发送"
-          onClick={onSend}
-          disabled={send.status === 'loading' || !text.trim()}
-        >
-          {send.status === 'loading' ? <span className="btn-spinner" /> : <CuteIcon name="soft-send-plane" />}
-        </button>
-      </div>
+        <div className="eve-workbench-grid">
+          <div className="eve-chat-card">
+            <div className="eve-chat-stream" ref={chatRef}>
+              {messages.map((msg, index) => (
+                <article className={`eve-message ${msg.from === 'me' ? 'from-me' : 'from-pi'}`} key={`${msg.time}-${index}`}>
+                  <div className="eve-message-avatar">
+                    <CuteIcon name={msg.from === 'me' ? 'soft-role-users' : 'soft-sparkle-twinkle'} />
+                  </div>
+                  <div className="eve-message-body">
+                    <p>{msg.text}</p>
+                    {msg.attached && (
+                      <div className="eve-message-tags">
+                        {msg.attached.map((item) => <span key={item}>{item}</span>)}
+                      </div>
+                    )}
+                    <em>{msg.time}</em>
+                  </div>
+                </article>
+              ))}
+              {cameraStatus === 'on' && (
+                <article className="eve-vision-bubble">
+                  <CuteIcon name="soft-privacy-eye" />
+                  <div>
+                    <strong>{visualMeta.label}</strong>
+                    <span>{visualMeta.bubble}</span>
+                  </div>
+                </article>
+              )}
+              {captureHint !== 'idle' && (
+                <article className="eve-capture-bubble">
+                  <CuteIcon name={captureHint === 'skill' ? 'soft-settings-gear' : 'soft-goal-flag'} />
+                  <div>
+                    <strong>{captureHint === 'skill' ? '是否整理成 Skill？' : '是否归纳到目标舱？'}</strong>
+                    <span>{captureHint === 'skill' ? '这次协作里有可复用流程，可以确认后安装到技能中心。' : '这件事已经像长期事项，可以进入目标舱做里程碑维护。'}</span>
+                  </div>
+                </article>
+              )}
+            </div>
+
+            <div className="eve-chat-input">
+              <CuteIcon name="soft-sparkle-twinkle" />
+              <textarea
+                placeholder="比如：我现在想做一个用户访谈洞察看板，帮我先想清楚产品逻辑。"
+                value={text}
+                rows={2}
+                onChange={(e) => setText(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault()
+                    onSend()
+                  }
+                }}
+              />
+              <button
+                className={`mini-action ${voiceHint.hint ? 'btn-loading' : ''}`}
+                aria-label="语音"
+                onClick={() => voiceHint.show('语音输入即将上线')}
+              >
+                <CuteIcon name="soft-microphone-voice" />
+              </button>
+              <button
+                className={`mini-action ${cameraStatus === 'on' ? 'active' : ''}`}
+                aria-label="摄像头观察"
+                onClick={() => cameraStatus === 'on' ? stopCamera() : void startCamera()}
+              >
+                <CuteIcon name="soft-privacy-eye" />
+              </button>
+              <button
+                className={`send-button ${statusCls(send.status)}`}
+                aria-label="发送"
+                onClick={onSend}
+                disabled={send.status === 'loading' || !text.trim()}
+              >
+                {send.status === 'loading' ? <span className="btn-spinner" /> : <CuteIcon name="soft-send-plane" />}
+              </button>
+            </div>
+          </div>
+
+          <aside className="eve-vision-card">
+            <div className="eve-vision-preview">
+              {cameraStatus === 'on' ? (
+                <video ref={videoRef} autoPlay playsInline muted />
+              ) : (
+                <div className="eve-camera-placeholder">
+                  <CuteIcon name="soft-privacy-eye" />
+                  <strong>{cameraStatus === 'requesting' ? '等待摄像头授权' : '本机视觉观察'}</strong>
+                  <span>开启后你能看见自己，EVE 派会根据状态调整解释节奏。画面默认不上传。</span>
+                </div>
+              )}
+            </div>
+            <div className="eve-vision-head">
+              <strong>视觉参与</strong>
+              <span>{cameraStatus === 'on' ? visualMeta.cue : '点击开启后开始本机预览'}</span>
+            </div>
+            <div className="eve-vision-actions">
+              <button className="primary-btn sm" onClick={() => cameraStatus === 'on' ? stopCamera() : void startCamera()}>
+                <CuteIcon name={cameraStatus === 'on' ? 'soft-success-check' : 'soft-privacy-eye'} />
+                {cameraStatus === 'on' ? '关闭摄像头' : cameraStatus === 'requesting' ? '请求中' : '开启摄像头'}
+              </button>
+            </div>
+            {cameraStatus === 'error' && (
+              <div className="inline-hint"><CuteIcon name="soft-warning-triangle" />{cameraError || '摄像头暂不可用'}</div>
+            )}
+            <div className="vision-signal-grid" role="group" aria-label="模拟视觉状态">
+              {(Object.keys(visualSignalMeta) as VisualSignal[]).map((signal) => (
+                <button
+                  className={visualSignal === signal ? 'active' : ''}
+                  key={signal}
+                  onClick={() => setVisualSignal(signal)}
+                >
+                  {visualSignalMeta[signal].label}
+                </button>
+              ))}
+            </div>
+          </aside>
+        </div>
+      </section>
+
       {voiceHint.hint && (
         <div className="inline-hint"><CuteIcon name="soft-microphone-voice" />{voiceHint.hint}</div>
       )}
       {sendHint.hint && (
         <div className="inline-hint"><CuteIcon name="soft-success-check" />{sendHint.hint}</div>
       )}
+
+      <section className="context-continuation">
+        <div className="section-title">
+          <CuteIcon name="soft-bookmark-study" />
+          <strong>你可能想继续这些上下文</strong>
+          <span>按任务归路由，不再只是今日聚焦</span>
+        </div>
+        <div className="context-card-grid">
+          {workbenchContexts.map((context) => (
+            <article className={`context-card ${activeContextId === context.id ? 'active' : ''}`} key={context.id}>
+              <div>
+                <em>{context.meta}</em>
+                <strong>{context.title}</strong>
+                <p>{context.desc}</p>
+              </div>
+              <div className="context-actions">
+                {context.kind === 'goal' ? (
+                  <button className="primary-btn sm" onClick={goGoals}>
+                    <CuteIcon name="soft-goal-flag" />{context.cta}
+                  </button>
+                ) : (
+                  <button className="primary-btn sm" onClick={() => continueContext(context)}>
+                    <CuteIcon name="soft-chat-bubble" />{context.cta}
+                  </button>
+                )}
+                <button className="ghost-btn sm" onClick={() => {
+                  setActiveContextId(context.id)
+                  setText(context.seed)
+                }}>
+                  放到输入框
+                </button>
+              </div>
+            </article>
+          ))}
+        </div>
+      </section>
+
+      <section className="eve-capture-actions">
+        <button className="ghost-btn sm" onClick={captureAsSkill}>
+          <CuteIcon name="soft-settings-gear" />整理成 Skill
+        </button>
+        <button className="ghost-btn sm" onClick={captureAsGoal}>
+          <CuteIcon name="soft-goal-flag" />归纳到目标舱
+        </button>
+        <button className="ghost-btn sm" onClick={goRoom}>
+          <CuteIcon name="soft-chat-bubble" />进入 PiRoom 深聊
+        </button>
+      </section>
 
       <section className="startup-env-panel">
         <div className="startup-env-head">
@@ -2421,6 +2746,14 @@ function RoomChat({ person, onBack }: { person: RoomPerson; onBack: () => void }
 
   const inspirationTitle = useMemo(() => buildInspirationTitle(inspirations), [inspirations])
   const inspirationPoints = useMemo(() => buildInspirationPoints(inspirations), [inspirations])
+  const primaryResearch = filteredResearch[0]
+  const researchCandidates = filteredResearch.slice(1, 4)
+  const latestNotes = inspirations.slice(-3)
+
+  useEffect(() => {
+    document.querySelector('.page-area')?.scrollTo({ top: 0 })
+    window.scrollTo({ top: 0 })
+  }, [person.id])
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' })
@@ -2523,7 +2856,7 @@ function RoomChat({ person, onBack }: { person: RoomPerson; onBack: () => void }
           </div>
         </div>
         <button className="ghost-btn sm" onClick={() => setShowAssets((v) => !v)}>
-          <CuteIcon name="soft-folder-tab" />{showAssets ? '收起资料' : '展开资料'}
+          <CuteIcon name="soft-folder-tab" />{showAssets ? '收起沉淀' : '展开沉淀'}
         </button>
       </header>
 
@@ -2575,24 +2908,40 @@ function RoomChat({ person, onBack }: { person: RoomPerson; onBack: () => void }
                   placeholder="搜论据、案例或反驳资料"
                 />
               </label>
-              <div className="research-list">
-                {filteredResearch.map((item) => (
-                  <article className={`research-card ${selectedResearch.has(item.id) ? 'selected' : ''}`} key={item.id}>
-                    <button className="research-check" onClick={() => toggleResearch(item.id)} aria-label="选中资料">
-                      {selectedResearch.has(item.id) ? '✓' : '+'}
+              <div className="research-focus">
+                {primaryResearch ? (
+                  <article className={`research-card primary ${selectedResearch.has(primaryResearch.id) ? 'selected' : ''}`}>
+                    <button className="research-check" onClick={() => toggleResearch(primaryResearch.id)} aria-label="选中资料">
+                      {selectedResearch.has(primaryResearch.id) ? '✓' : '+'}
                     </button>
                     <div>
-                      <span>{item.source} · {item.tag}</span>
-                      <strong>{item.title}</strong>
-                      <p>{item.angle}</p>
-                      <button className="mini-link" onClick={() => collectResearch(item)}>
+                      <span>{primaryResearch.source} · {primaryResearch.tag}</span>
+                      <strong>{primaryResearch.title}</strong>
+                      <p>{primaryResearch.angle}</p>
+                      <button className="mini-link" onClick={() => collectResearch(primaryResearch)}>
                         <CuteIcon name="soft-arrow-right" />收进沉淀
                       </button>
                     </div>
                   </article>
-                ))}
+                ) : (
+                  <div className="research-empty">换个关键词试试，Pi 会把合适资料放在这里。</div>
+                )}
               </div>
-              <div className="asset-mini-panel">
+              {researchCandidates.length > 0 && (
+                <div className="research-candidates">
+                  {researchCandidates.map((item) => (
+                    <button
+                      className={`research-candidate ${selectedResearch.has(item.id) ? 'selected' : ''}`}
+                      key={item.id}
+                      onClick={() => collectResearch(item)}
+                    >
+                      <span>{item.tag}</span>
+                      <strong>{item.title}</strong>
+                    </button>
+                  ))}
+                </div>
+              )}
+              <div className="context-strip">
                 <div className="asset-mini-head">
                   <CuteIcon name="soft-folder-tab" />
                   <strong>带入当前对话</strong>
@@ -2622,14 +2971,16 @@ function RoomChat({ person, onBack }: { person: RoomPerson; onBack: () => void }
                 <CuteIcon name="soft-idea-bulb" />
               </div>
               <div className="memory-topic">
-                <span>本轮灵感专题</span>
-                <h3>{inspirationTitle}</h3>
-                <p>Pi 会把你收进来的句子和资料串联成一条可复用记忆，而不是只存原文。</p>
+                <div>
+                  <span>本轮灵感专题</span>
+                  <h3>{inspirationTitle}</h3>
+                </div>
+                <em>{inspirations.length} 条素材</em>
               </div>
               <div className="inspiration-thread">
-                {inspirations.map((note, index) => (
+                {latestNotes.map((note, index) => (
                   <article className="inspiration-note" key={note.id}>
-                    <span className="note-index">{String(index + 1).padStart(2, '0')}</span>
+                    <span className="note-index">{String(inspirations.length - latestNotes.length + index + 1).padStart(2, '0')}</span>
                     <div>
                       <em>{noteSourceLabel(note.source)} · {note.time}</em>
                       <p>{note.text}</p>

@@ -14,7 +14,7 @@ export type Depth = 0 | 1 | 2 | 3 | 4
 export type PageMeta = { title: string; desc?: string }
 
 export const pageMeta: Record<string, PageMeta> = {
-  today: { title: '今日工作台', desc: '今天 EvoPi 为你整理好的，等你来确认' },
+  today: { title: '今日工作台', desc: '告诉 EVE 派你现在想做什么，它会和你一起推进' },
   goals: { title: '目标舱', desc: '每个长期目标都是一个会进化的专属工作舱' },
   memory: { title: '记忆库', desc: 'EvoPi 整理的记忆，确认后才会保留' },
   room: { title: 'PiRoom', desc: '邀请不同视角进房间，一起把事想清楚' },
