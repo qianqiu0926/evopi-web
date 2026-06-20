@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent } from 'react'
 import {
   journeyMilestones,
   professionBranches,
@@ -6,29 +6,37 @@ import {
   type MilestoneKind,
   type Profession,
 } from '../data'
+import { PetSprite } from './PetSprite'
 
 /* ============================================================
-   EvolutionMapCanvas · 进化旅程全屏地图画布
-   - 点击进化中枢后全屏打开
-   - 可拖拽平移 + 滚轮缩放（pinch / wheel）
-   - 神经网络中枢 = PiCore，向外辐射成长轨迹
-   - 主旅程路径：起点 → 里程碑（已达成实线 / 未来虚线）
-   - 个性化分支：随职业变化（管理者/老师/创业者/通用）
-   - 点里程碑 → 右侧滑出交互记录面板（日志/截图/对话）
+   EvolutionMapCanvas · EvoMAP 进化中枢
+   - 默认全览一张大画布，放大后探索里程碑
+   - 主画布保持干净，只显示阶段、时间、核心等级
+   - 点击里程碑后打开右侧记录面板，查看交互证据
+   - PiCore 与宠物 Level 在中枢联动展示
    ============================================================ */
 
-const kindMeta: Record<MilestoneKind, { color: string; ring: string }> = {
-  start: { color: 'var(--cute-mint)', ring: '#7eddb0' },
-  data: { color: 'var(--cute-blue)', ring: '#7ec8ff' },
-  goal: { color: 'var(--cute-yellow)', ring: '#ffd76b' },
-  permission: { color: 'var(--cute-lilac)', ring: '#b8a6ff' },
-  core: { color: 'var(--cute-pink)', ring: '#ff9ec4' },
-  skill: { color: 'var(--cute-peach)', ring: '#ffb38a' },
-  current: { color: 'var(--cute-blue)', ring: '#60a5fa' },
+const CANVAS = {
+  width: 3800,
+  height: 2400,
+  minX: -1900,
+  minY: -1200,
+}
+
+const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value))
+
+const kindMeta: Record<MilestoneKind, { color: string; ring: string; label: string; icon: string }> = {
+  start: { color: 'var(--cute-mint)', ring: '#68d69f', label: '起点', icon: 'soft-sparkle-twinkle' },
+  data: { color: 'var(--cute-blue)', ring: '#72bfff', label: '资料', icon: 'soft-database-stack' },
+  goal: { color: 'var(--cute-yellow)', ring: '#f4c642', label: '目标', icon: 'soft-target-bullseye' },
+  permission: { color: 'var(--cute-lilac)', ring: '#a997ff', label: '权限', icon: 'soft-unlock-next' },
+  core: { color: 'var(--cute-pink)', ring: '#ff97bd', label: '生命核', icon: 'soft-heart-favorite' },
+  skill: { color: 'var(--cute-peach)', ring: '#ffac7a', label: '技能', icon: 'soft-settings-gear' },
+  current: { color: 'var(--cute-blue)', ring: '#4f9df7', label: '当前', icon: 'soft-sparkle-edit' },
 }
 
 export function EvolutionMapCanvas({ onClose }: { onClose: () => void }) {
-  const [transform, setTransform] = useState({ x: 0, y: 0, scale: 0.72 })
+  const [transform, setTransform] = useState({ x: 0, y: 24, scale: 0.4 })
   const [selected, setSelected] = useState<Milestone | null>(null)
   const [profession, setProfession] = useState<Profession>('manager')
   const drag = useRef<{ active: boolean; startX: number; startY: number; baseX: number; baseY: number }>({
@@ -40,53 +48,84 @@ export function EvolutionMapCanvas({ onClose }: { onClose: () => void }) {
   })
   const wrapRef = useRef<HTMLDivElement>(null)
 
-  // 平移
-  const onPointerDown = useCallback((e: React.PointerEvent) => {
-    if ((e.target as HTMLElement).closest('.map-node, .map-branch, .map-toolbar, .map-record-panel')) return
-    drag.current = { active: true, startX: e.clientX, startY: e.clientY, baseX: transform.x, baseY: transform.y }
-    ;(e.target as HTMLElement).setPointerCapture?.(e.pointerId)
-  }, [transform.x, transform.y])
+  const achievedMilestones = useMemo(() => journeyMilestones.filter((item) => item.achieved), [])
+  const currentCoreLevel = Math.max(1, ...achievedMilestones.map((item) => item.coreLevel ?? 1))
+  const currentPetLevel = Math.max(1, ...achievedMilestones.map((item) => item.petLevel ?? 1))
+  const latestPermission = [...achievedMilestones].reverse().find((item) => item.permissionLevel)?.permissionLevel ?? 'L1'
+  const activeBranch = professionBranches.find((branch) => branch.id === profession) ?? professionBranches[0]
+  const branchPosition = useMemo(() => ({
+    x: Math.cos(activeBranch.angle) * 900,
+    y: Math.sin(activeBranch.angle) * 760,
+  }), [activeBranch.angle])
 
-  const onPointerMove = useCallback((e: React.PointerEvent) => {
-    if (!drag.current.active) return
-    const dx = e.clientX - drag.current.startX
-    const dy = e.clientY - drag.current.startY
-    setTransform((t) => ({ ...t, x: drag.current.baseX + dx, y: drag.current.baseY + dy }))
+  const fitOverview = useCallback(() => {
+    const el = wrapRef.current
+    const width = el?.clientWidth ?? window.innerWidth
+    const height = el?.clientHeight ?? window.innerHeight
+    const scale = clamp(Math.min((width - 130) / CANVAS.width, (height - 150) / CANVAS.height), 0.3, 0.62)
+    setTransform({ x: 0, y: 26, scale })
   }, [])
 
-  const onPointerUp = useCallback(() => { drag.current.active = false }, [])
+  useEffect(() => {
+    const timer = window.setTimeout(fitOverview, 0)
+    return () => window.clearTimeout(timer)
+  }, [fitOverview])
 
-  // 缩放（滚轮）
   useEffect(() => {
     const el = wrapRef.current
     if (!el) return
     const onWheel = (e: WheelEvent) => {
       e.preventDefault()
-      const delta = -e.deltaY * 0.0012
-      setTransform((t) => ({ ...t, scale: Math.min(1.8, Math.max(0.35, t.scale + delta)) }))
+      setTransform((current) => ({
+        ...current,
+        scale: clamp(current.scale - e.deltaY * 0.0011, 0.3, 1.65),
+      }))
     }
     el.addEventListener('wheel', onWheel, { passive: false })
     return () => el.removeEventListener('wheel', onWheel)
   }, [])
 
-  const zoomBy = (d: number) =>
-    setTransform((t) => ({ ...t, scale: Math.min(1.8, Math.max(0.35, t.scale + d)) }))
+  const onPointerDown = useCallback((e: PointerEvent<HTMLDivElement>) => {
+    if ((e.target as HTMLElement).closest('.map-node, .map-branch, .map-toolbar, .map-record-panel')) return
+    drag.current = { active: true, startX: e.clientX, startY: e.clientY, baseX: transform.x, baseY: transform.y }
+    e.currentTarget.setPointerCapture?.(e.pointerId)
+  }, [transform.x, transform.y])
 
-  const reset = () => setTransform({ x: 0, y: 0, scale: 0.72 })
+  const onPointerMove = useCallback((e: PointerEvent<HTMLDivElement>) => {
+    if (!drag.current.active) return
+    const dx = e.clientX - drag.current.startX
+    const dy = e.clientY - drag.current.startY
+    setTransform((current) => ({ ...current, x: drag.current.baseX + dx, y: drag.current.baseY + dy }))
+  }, [])
 
-  const activeBranch = professionBranches.find((b) => b.id === profession)!
+  const onPointerUp = useCallback(() => { drag.current.active = false }, [])
 
-  // Esc 关闭 / 选中清除
+  const zoomBy = (delta: number) => {
+    setTransform((current) => ({ ...current, scale: clamp(current.scale + delta, 0.3, 1.65) }))
+  }
+
+  const focusMilestone = (milestone: Milestone) => {
+    setSelected(milestone)
+    setTransform((current) => ({
+      x: -milestone.x * current.scale,
+      y: -milestone.y * current.scale + 20,
+      scale: clamp(Math.max(current.scale, 0.86), 0.3, 1.35),
+    }))
+  }
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') { if (selected) setSelected(null); else onClose() }
+      if (e.key === 'Escape') {
+        if (selected) setSelected(null)
+        else onClose()
+      }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [onClose, selected])
 
   return (
-    <div className="map-overlay" role="dialog" aria-modal="true" aria-label="进化旅程地图">
+    <div className="map-overlay" role="dialog" aria-modal="true" aria-label="EvoMAP 进化中枢">
       <div
         className="map-viewport"
         ref={wrapRef}
@@ -99,138 +138,181 @@ export function EvolutionMapCanvas({ onClose }: { onClose: () => void }) {
           className="map-world"
           style={{ transform: `translate(calc(-50% + ${transform.x}px), calc(-50% + ${transform.y}px)) scale(${transform.scale})` }}
         >
-          {/* 神经网络背景连线（装饰，从中心放射） */}
-          <svg className="map-nerves" viewBox="-1000 -700 2000 1400" preserveAspectRatio="xMidYMid meet" aria-hidden="true">
+          <svg className="map-nerves" viewBox={`${CANVAS.minX} ${CANVAS.minY} ${CANVAS.width} ${CANVAS.height}`} preserveAspectRatio="xMidYMid meet" aria-hidden="true">
             <defs>
-              <radialGradient id="nerveGlow" cx="50%" cy="50%" r="50%">
-                <stop offset="0%" stopColor="var(--cute-blue)" stopOpacity="0.5" />
-                <stop offset="100%" stopColor="var(--cute-blue)" stopOpacity="0" />
+              <radialGradient id="mapCoreGlow" cx="50%" cy="50%" r="50%">
+                <stop offset="0%" stopColor="#9be8ff" stopOpacity="0.58" />
+                <stop offset="54%" stopColor="#b8f4d5" stopOpacity="0.18" />
+                <stop offset="100%" stopColor="#ffffff" stopOpacity="0" />
               </radialGradient>
+              <linearGradient id="mapJourneyLine" x1="0%" x2="100%" y1="50%" y2="50%">
+                <stop offset="0%" stopColor="#7eddb0" />
+                <stop offset="48%" stopColor="#7ec8ff" />
+                <stop offset="100%" stopColor="#ffc5dc" />
+              </linearGradient>
             </defs>
-            <circle cx="0" cy="0" r="320" fill="url(#nerveGlow)" />
-            {/* 主旅程连线 */}
-            {journeyMilestones.slice(0, -1).map((m, i) => {
-              const next = journeyMilestones[i + 1]
-              const achieved = m.achieved && next.achieved
+            <rect x={CANVAS.minX + 90} y={CANVAS.minY + 80} width={CANVAS.width - 180} height={CANVAS.height - 160} rx="88" className="map-boundary" />
+            <circle cx="0" cy="0" r="520" fill="url(#mapCoreGlow)" />
+            <ellipse cx="-1020" cy="160" rx="640" ry="410" className="map-region region-memory" />
+            <ellipse cx="-240" cy="-250" rx="640" ry="380" className="map-region region-permission" />
+            <ellipse cx="930" cy="-20" rx="690" ry="430" className="map-region region-community" />
+            <ellipse cx="1560" cy="160" rx="460" ry="340" className="map-region region-future" />
+
+            {journeyMilestones.slice(0, -1).map((milestone, index) => {
+              const next = journeyMilestones[index + 1]
               return (
-                <line
-                  key={m.id}
-                  x1={m.x}
-                  y1={m.y}
-                  x2={next.x}
-                  y2={next.y}
-                  className={`map-link ${achieved ? 'solid' : 'dashed'}`}
+                <path
+                  className={`map-link ${milestone.achieved && next.achieved ? 'solid' : 'dashed'}`}
+                  d={journeyPath(milestone, next)}
+                  key={milestone.id}
                 />
               )
             })}
-            {/* 中枢放射神经线（装饰） */}
-            {[-2.4, -1.6, -0.8, 0, 0.8, 1.6, 2.4].map((a) => (
-              <line key={a} x1="0" y1="0" x2={Math.cos(a) * 280} y2={Math.sin(a) * 280} className="map-nerve-line" />
+
+            {journeyMilestones.map((milestone) => (
+              <line
+                className={milestone.achieved ? 'map-nerve-line' : 'map-nerve-line future'}
+                key={`nerve-${milestone.id}`}
+                x1="0"
+                y1="0"
+                x2={milestone.x}
+                y2={milestone.y}
+              />
             ))}
+            <path className="map-branch-link" d={`M 0 0 C ${branchPosition.x * 0.28} ${branchPosition.y * 0.18}, ${branchPosition.x * 0.66} ${branchPosition.y * 0.92}, ${branchPosition.x} ${branchPosition.y}`} />
           </svg>
 
-          {/* 中枢：PiCore 神经网络核心 */}
           <div className="map-core">
             <span className="map-core-ring r1" />
             <span className="map-core-ring r2" />
             <span className="map-core-ring r3" />
+            <div className="map-core-pet">
+              <PetSprite mood="happy" size={86} />
+            </div>
             <div className="map-core-body">
               <img className="cute-icon" src="/cute-line-icons/soft-sparkle-twinkle.png" alt="" />
-              <strong>PiCore</strong>
+              <strong>PiCore Lv.{currentCoreLevel}</strong>
               <span>进化中枢</span>
+            </div>
+            <div className="map-core-stats">
+              <em>小奶狗 Lv.{currentPetLevel}</em>
+              <em>{latestPermission}</em>
+              <em>{achievedMilestones.length} 个里程碑</em>
             </div>
           </div>
 
-          {/* 主旅程里程碑 */}
-          {journeyMilestones.map((m) => (
-            <button
-              key={m.id}
-              className={`map-node kind-${m.kind} ${m.achieved ? '' : 'future'}`}
-              style={{ left: m.x, top: m.y, '--node-color': kindMeta[m.kind].color, '--node-ring': kindMeta[m.kind].ring } as React.CSSProperties}
-              onClick={() => setSelected(m)}
-            >
-              <span className="map-node-dot">
-                {m.kind === 'current' && <span className="map-node-pulse" />}
-              </span>
-              <div className="map-node-label">
-                <strong>{m.title}</strong>
-                <span>{m.date}</span>
-              </div>
-            </button>
-          ))}
+          {journeyMilestones.map((milestone) => {
+            const meta = kindMeta[milestone.kind]
+            return (
+              <button
+                className={`map-node kind-${milestone.kind} ${milestone.achieved ? 'achieved' : 'future'} ${selected?.id === milestone.id ? 'active' : ''}`}
+                key={milestone.id}
+                style={{ left: milestone.x, top: milestone.y, '--node-color': meta.color, '--node-ring': meta.ring } as CSSProperties}
+                onClick={() => focusMilestone(milestone)}
+              >
+                <span className="map-node-dot">
+                  <img src={`/cute-line-icons/${meta.icon}.png`} alt="" />
+                  {milestone.kind === 'current' && <span className="map-node-pulse" />}
+                </span>
+                <span className="map-node-label">
+                  <em>{milestone.badge ?? meta.label}</em>
+                  <strong>{milestone.title}</strong>
+                  <span>{milestone.date}{milestone.coreLevel ? ` · PiCore Lv.${milestone.coreLevel}` : ''}</span>
+                </span>
+              </button>
+            )
+          })}
 
-          {/* 个性化职业分支 */}
-          <div className={`map-branch branch-${profession}`} style={{ '--branch-angle': `${activeBranch.angle}rad` } as React.CSSProperties}>
+          <div className="map-branch" style={{ left: branchPosition.x, top: branchPosition.y } as CSSProperties}>
             <div className="map-branch-head">
               <img className="cute-icon" src={`/cute-line-icons/${activeBranch.icon}.png`} alt="" />
-              <strong>{activeBranch.label}进化线</strong>
-              <span>{activeBranch.desc}</span>
+              <div>
+                <strong>{activeBranch.label}进化分支</strong>
+                <span>{activeBranch.desc}</span>
+              </div>
             </div>
             <div className="map-branch-nodes">
-              {activeBranch.nodes.map((n) => (
-                <div className="map-branch-node" key={n.title}>
-                  <strong>{n.title}</strong>
-                  <span>{n.hint}</span>
-                </div>
+              {activeBranch.nodes.map((node, index) => (
+                <article className="map-branch-node" key={node.title}>
+                  <span>{String(index + 1).padStart(2, '0')}</span>
+                  <strong>{node.title}</strong>
+                  <em>{node.hint}</em>
+                </article>
               ))}
             </div>
           </div>
         </div>
       </div>
 
-      {/* 顶部工具栏 */}
       <div className="map-toolbar">
-        <button className="ghost-btn sm" onClick={onClose}><img className="cute-icon" src="/cute-line-icons/soft-arrow-left.png" alt="" />返回</button>
-        <div className="map-prof-pick" role="group" aria-label="选择你的职业">
-          <span className="map-prof-label">你的进化线</span>
-          {professionBranches.map((b) => (
+        <div className="map-toolbar-title">
+          <strong>EvoMAP 进化中枢</strong>
+          <span>全览你的资料、目标、权限、PiCore 和宠物养成旅程</span>
+        </div>
+        <div className="map-prof-pick" role="group" aria-label="选择个体进化分支">
+          <span className="map-prof-label">个体分支</span>
+          {professionBranches.map((branch) => (
             <button
-              key={b.id}
-              className={profession === b.id ? 'map-prof active' : 'map-prof'}
-              onClick={() => setProfession(b.id)}
-              title={b.desc}
+              className={profession === branch.id ? 'map-prof active' : 'map-prof'}
+              key={branch.id}
+              onClick={() => setProfession(branch.id)}
+              title={branch.desc}
             >
-              {b.label}
+              {branch.label}
             </button>
           ))}
         </div>
         <div className="map-zoom">
-          <button onClick={() => zoomBy(0.15)} aria-label="放大">+</button>
-          <button onClick={() => zoomBy(-0.15)} aria-label="缩小">−</button>
-          <button onClick={reset} aria-label="重置视图">⟲</button>
+          <button onClick={() => zoomBy(0.14)} aria-label="放大">+</button>
+          <button onClick={() => zoomBy(-0.14)} aria-label="缩小">-</button>
+          <button onClick={fitOverview} aria-label="全览">全览</button>
+          <button onClick={onClose} aria-label="关闭进化中枢">返回</button>
         </div>
       </div>
 
-      {/* 提示条 */}
-      <div className="map-hint">拖拽平移 · 滚轮缩放 · 点里程碑查看记录 · Esc 返回</div>
-
-      {/* 里程碑交互记录面板 */}
+      <div className="map-hint">拖拽平移 · 滚轮缩放 · 点击里程碑查看交互记录 · Esc 返回</div>
       {selected && <RecordPanel milestone={selected} onClose={() => setSelected(null)} />}
     </div>
   )
 }
 
+function journeyPath(current: Milestone, next: Milestone): string {
+  const midX = (current.x + next.x) / 2
+  const lift = current.y > next.y ? -90 : 90
+  return `M ${current.x} ${current.y} C ${midX} ${current.y + lift}, ${midX} ${next.y - lift}, ${next.x} ${next.y}`
+}
+
 function RecordPanel({ milestone, onClose }: { milestone: Milestone; onClose: () => void }) {
   const meta = kindMeta[milestone.kind]
   return (
-    <aside className="map-record-panel" style={{ '--panel-color': meta.color } as React.CSSProperties}>
+    <aside className="map-record-panel" style={{ '--panel-color': meta.color } as CSSProperties}>
       <div className="map-record-head">
         <div>
-          <span className="map-record-kind">{kindLabel(milestone.kind)}</span>
+          <span className="map-record-kind">{meta.label}</span>
           <strong>{milestone.title}</strong>
-          <span className="map-record-date">{milestone.date}{milestone.coreLevel ? ` · 生命核 Lv.${milestone.coreLevel}` : ''}</span>
+          <span className="map-record-date">{milestone.date}{milestone.coreLevel ? ` · PiCore Lv.${milestone.coreLevel}` : ''}</span>
         </div>
-        <button className="map-record-close" onClick={onClose} aria-label="关闭">✕</button>
+        <button className="map-record-close" onClick={onClose} aria-label="关闭记录面板">关闭</button>
       </div>
       {milestone.desc && <p className="map-record-desc">{milestone.desc}</p>}
+      <div className="map-record-metrics">
+        {milestone.petLevel && <span>宠物 Lv.{milestone.petLevel}</span>}
+        {milestone.permissionLevel && <span>{milestone.permissionLevel}</span>}
+        <span>{milestone.achieved ? '已达成' : '待解锁'}</span>
+      </div>
+      {milestone.unlocks && milestone.unlocks.length > 0 && (
+        <div className="map-record-unlocks">
+          {milestone.unlocks.map((item) => <em key={item}>{item}</em>)}
+        </div>
+      )}
       <div className="map-record-list">
         {milestone.records && milestone.records.length > 0 ? (
-          milestone.records.map((r, i) => (
-            <article className={`map-record-item type-${r.type}`} key={i}>
-              <span className="map-record-type">{recordTypeLabel(r.type)}</span>
-              <strong>{r.title}</strong>
-              <span>{r.detail}</span>
-              <em>{r.time}</em>
+          milestone.records.map((record, index) => (
+            <article className={`map-record-item type-${record.type}`} key={`${record.title}-${index}`}>
+              <span className="map-record-type">{recordTypeLabel(record.type)}</span>
+              <strong>{record.title}</strong>
+              <span>{record.detail}</span>
+              <em>{record.time}</em>
             </article>
           ))
         ) : (
@@ -241,14 +323,7 @@ function RecordPanel({ milestone, onClose }: { milestone: Milestone; onClose: ()
   )
 }
 
-function kindLabel(k: MilestoneKind): string {
-  const m: Record<MilestoneKind, string> = {
-    start: '起点', data: '资料', goal: '目标', permission: '权限', core: '生命核', skill: '技能', current: '当前',
-  }
-  return m[k]
-}
-
-function recordTypeLabel(t: 'log' | 'screenshot' | 'dialogue'): string {
-  const m = { log: '日志', screenshot: '截图', dialogue: '对话' }
-  return m[t]
+function recordTypeLabel(type: 'log' | 'screenshot' | 'dialogue'): string {
+  const labels = { log: '日志', screenshot: '截图', dialogue: '对话' }
+  return labels[type]
 }

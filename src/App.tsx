@@ -11,6 +11,7 @@ import {
   goalSnippets,
   greeting,
   installedSkills,
+  journeyMilestones,
   memories,
   memoryCategories,
   navGroups,
@@ -2507,6 +2508,7 @@ function PiClubPage({ onExit }: { onExit: () => void }) {
   const [photoCount, setPhotoCount] = useState(9)
   const [vibeName, setVibeName] = useState('用户访谈洞察看板')
   const [vibeBrief, setVibeBrief] = useState('把访谈记录自动整理成痛点、证据、下一步实验，并生成一个可分享的小网站。')
+  const [postComposerOpen, setPostComposerOpen] = useState(false)
   const [likedPosts, setLikedPosts] = useState<Set<string>>(() => new Set())
   const [openComments, setOpenComments] = useState<Set<string>>(() => new Set())
   const [commentDrafts, setCommentDrafts] = useState<ClubCommentDrafts>({})
@@ -2543,6 +2545,7 @@ function PiClubPage({ onExit }: { onExit: () => void }) {
       source: 'EvoPi 朋友圈',
     })
     refreshState(result.state)
+    setPostComposerOpen(false)
     actionHint.show(`已发到 ${result.post.community}`)
   })
 
@@ -2565,6 +2568,7 @@ function PiClubPage({ onExit }: { onExit: () => void }) {
     refreshState(result.state)
     setPostTitle(photoTitle)
     setPostText(result.drop.draftText)
+    setPostComposerOpen(true)
     actionHint.show('Apple 相册素材已生成朋友圈草稿')
   })
 
@@ -2672,8 +2676,8 @@ function PiClubPage({ onExit }: { onExit: () => void }) {
           <h2>让你的 EvoPi 去社区里工作、表达和协作</h2>
           <p>Pi 可以替你发朋友圈，加入学术组织做研究，也能把已经完成的子产品投到社区里收反馈。</p>
           <div className="piclub-hero-actions">
-            <button className="primary-btn sm" onClick={publishPost} disabled={postAction.status === 'loading'}>
-              {postAction.status === 'loading' ? <span className="btn-spinner" /> : <CuteIcon name="soft-send-plane" />}
+            <button className="primary-btn sm" onClick={() => setPostComposerOpen(true)}>
+              <CuteIcon name="soft-add-plus" />
               发一条 Pi 朋友圈
             </button>
             <button className="ghost-btn sm" onClick={dropPhotos} disabled={photoAction.status === 'loading'}>
@@ -2703,20 +2707,35 @@ function PiClubPage({ onExit }: { onExit: () => void }) {
       )}
 
       <section className="piclub-grid">
-        <div className="piclub-panel piclub-post-composer">
-          <div className="skill-section-title"><CuteIcon name="soft-send-plane" />Pi 朋友圈</div>
-          <input className="text-input" value={postTitle} onChange={(e) => setPostTitle(e.target.value)} />
-          <textarea value={postText} onChange={(e) => setPostText(e.target.value)} rows={4} />
-          <select value={selectedCommunity} onChange={(e) => setSelectedCommunity(e.target.value)}>
-            {communityOptions.map((community) => (
-              <option key={community.id} value={community.name}>{community.name}</option>
-            ))}
-          </select>
-          <button className="primary-btn" onClick={publishPost} disabled={postAction.status === 'loading'}>
-            {postAction.status === 'loading' ? <span className="btn-spinner" /> : <CuteIcon name="soft-send-plane" />}
-            让 Pi 发布
+        {postComposerOpen ? (
+          <div className="piclub-panel piclub-post-composer is-open">
+            <div className="piclub-panel-head">
+              <div className="skill-section-title"><CuteIcon name="soft-send-plane" />Pi 朋友圈</div>
+              <button className="ghost-btn sm" onClick={() => setPostComposerOpen(false)} aria-label="收起 Pi 朋友圈编辑器">
+                <CuteIcon name="soft-arrow-left" />收起
+              </button>
+            </div>
+            <input className="text-input" value={postTitle} onChange={(e) => setPostTitle(e.target.value)} />
+            <textarea value={postText} onChange={(e) => setPostText(e.target.value)} rows={4} />
+            <select value={selectedCommunity} onChange={(e) => setSelectedCommunity(e.target.value)}>
+              {communityOptions.map((community) => (
+                <option key={community.id} value={community.name}>{community.name}</option>
+              ))}
+            </select>
+            <button className="primary-btn" onClick={publishPost} disabled={postAction.status === 'loading'}>
+              {postAction.status === 'loading' ? <span className="btn-spinner" /> : <CuteIcon name="soft-send-plane" />}
+              让 Pi 发布
+            </button>
+          </div>
+        ) : (
+          <button className="piclub-panel piclub-compose-launch" onClick={() => setPostComposerOpen(true)}>
+            <span className="piclub-compose-plus"><CuteIcon name="soft-add-plus" /></span>
+            <div>
+              <strong>发 Pi 朋友圈</strong>
+              <span>点击加号后再编辑标题、正文和投放的 Club，自习室不会被编辑框长期占住。</span>
+            </div>
           </button>
-        </div>
+        )}
 
         <div className="piclub-panel piclub-vibe">
           <div className="skill-section-title"><CuteIcon name="soft-sparkle-edit" />VibeCoding</div>
@@ -3404,13 +3423,19 @@ function EvolutionPage() {
     [events, laneFilter],
   )
   const stats = useMemo(() => evolutionStats(events), [events])
-  const newestEvent = events[0]
-  const stageCompletion = useMemo(() => evolutionStageCompletion(events), [events])
   const densityBars = useMemo(() => evolutionDensityBars(events), [events])
   const recentLiveEvents = useMemo(() => events.slice(0, 5), [events])
   const userSignalEvents = useMemo(() => events.filter(isUserFacingEvolutionEvent).slice(0, 8), [events])
   const chainLanes = useMemo(() => evolutionLanes.filter((lane) => lane.key !== 'all'), [])
   const allFilteredExpanded = filteredEvents.length > 0 && filteredEvents.every((event) => expandedEventIds.has(event.id))
+  const journeySummary = useMemo(() => {
+    const achieved = journeyMilestones.filter((milestone) => milestone.achieved)
+    const current = [...achieved].reverse().find((milestone) => milestone.kind === 'current') ?? achieved.at(-1)
+    const coreLevel = Math.max(1, ...achieved.map((milestone) => milestone.coreLevel ?? 1))
+    const petLevel = Math.max(1, ...achieved.map((milestone) => milestone.petLevel ?? 1))
+    const permission = [...achieved].reverse().find((milestone) => milestone.permissionLevel)?.permissionLevel ?? 'L1'
+    return { achieved, current, coreLevel, petLevel, permission }
+  }, [])
 
   const toggleEventExpansion = (eventId: string) => {
     setExpandedEventIds((current) => {
@@ -3436,15 +3461,15 @@ function EvolutionPage() {
       <section className="evo-hero">
         <div className="evo-hero-top">
           <div className="evo-hero-copy">
-            <span className="tag blue">EvolutionEvent</span>
-            <h2>进化日志</h2>
-            <p>Signal → Local Skill → Recipe Draft → Test Publish → Reuse Graph → EvolutionEvent</p>
+            <span className="tag blue">EvoMAP Neural Hub</span>
+            <h2>进化中枢</h2>
+            <p>把资料、目标、权限、PiCore、宠物等级和关键交互折叠成一张可探索的进化神经网络。</p>
           </div>
           <div className="evo-live-panel">
             <span className={`evo-live-dot ${eventsState === 'error' ? 'error' : autoRefresh ? 'on' : ''}`} />
             <div>
-              <strong>{eventsState === 'error' ? '事件流离线' : evolutionTransportTitle(autoRefresh, eventTransport)}</strong>
-              <span>{lastUpdatedAt ? `最后同步 ${formatEvolutionTime(lastUpdatedAt)}` : '等待第一次同步'}</span>
+              <strong>{eventsState === 'error' ? '审计轨迹离线' : evolutionTransportTitle(autoRefresh, eventTransport)}</strong>
+              <span>{lastUpdatedAt ? `后台同步 ${formatEvolutionTime(lastUpdatedAt)}` : '等待第一次同步'}</span>
             </div>
             <button className="ghost-btn sm" onClick={() => setAutoRefresh((value) => !value)}>
               <CuteIcon name="soft-refresh-loop" />{autoRefresh ? '暂停' : '实时'}
@@ -3456,55 +3481,55 @@ function EvolutionPage() {
         </div>
         <div className="evo-hero-progress">
           <div className="evo-progress-head">
-            <span>自进化闭环</span>
-            <strong>{stageCompletion.percent}%</strong>
+            <span>PiCore 旅程完整度</span>
+            <strong>{journeySummary.achieved.length}/{journeyMilestones.length}</strong>
           </div>
           <div className="evo-progress-bar" aria-label="自进化闭环完成度">
-            <span style={{ width: `${stageCompletion.percent}%` }} />
+            <span style={{ width: `${Math.round((journeySummary.achieved.length / journeyMilestones.length) * 100)}%` }} />
           </div>
           <div className="evo-progress-nodes">
-            {chainLanes.map((lane) => (
+            {journeyMilestones.slice(0, 6).map((milestone) => (
               <span
-                className={events.some((event) => evolutionEventLane(event) === lane.key) ? 'done' : ''}
-                key={lane.key}
+                className={milestone.achieved ? 'done' : ''}
+                key={milestone.id}
               >
-                {lane.label}
+                {milestone.badge ?? milestone.title}
               </span>
             ))}
           </div>
         </div>
         <div className="evo-hero-summary">
           <article>
-            <span>链路推进</span>
-            <strong>{stageCompletion.done}/{stageCompletion.total}</strong>
-            <em>{stageCompletion.label}</em>
+            <span>生命核等级</span>
+            <strong>Lv.{journeySummary.coreLevel}</strong>
+            <em>{journeySummary.permission}</em>
           </article>
           <article>
-            <span>最新事件</span>
-            <strong>{newestEvent ? evolutionLaneLabel(evolutionEventLane(newestEvent)) : '等待'}</strong>
-            <em>{newestEvent ? newestEvent.type : '还没有 EvolutionEvent'}</em>
+            <span>宠物养成</span>
+            <strong>Lv.{journeySummary.petLevel}</strong>
+            <em>目标完成会继续提升</em>
           </article>
           <article>
-            <span>事件新鲜度</span>
-            <strong>{newestEvent ? evolutionFreshness(newestEvent.createdAt).label : '待同步'}</strong>
-            <em>{eventsState === 'error' ? '后端暂不可用' : evolutionTransportNote(autoRefresh, eventTransport)}</em>
+            <span>当前节点</span>
+            <strong>{journeySummary.current?.badge ?? '中枢'}</strong>
+            <em>{journeySummary.current?.title ?? '等待里程碑'}</em>
           </article>
         </div>
-        <div className="evo-live-strip" aria-label="最近进化事件">
+        <div className="evo-live-strip evo-live-strip-compact" aria-label="后台审计轨迹">
           {recentLiveEvents.length ? recentLiveEvents.map((event) => (
             <div className={`evo-live-strip-item ${freshEventIds.includes(event.id) ? 'is-live' : ''}`} key={event.id}>
               <CuteIcon name={eventIcon(event.type)} />
               <div>
                 <strong>{event.summary}</strong>
-                <span>{event.type} · {formatEvolutionAge(event.createdAt)}</span>
+                <span>审计轨迹 · {event.type} · {formatEvolutionAge(event.createdAt)}</span>
               </div>
             </div>
           )) : (
             <div className="evo-live-strip-item empty">
               <CuteIcon name="soft-log-lines" />
               <div>
-                <strong>等待第一条可审计进化</strong>
-                <span>搜索 EvoMap、确认 Skill、发布 draft 或 webhook 到达后会自动出现。</span>
+                <strong>等待第一条后台审计轨迹</strong>
+                <span>用户确认、Skill 固化、社区发布或 webhook 到达后会进入审计台。</span>
               </div>
             </div>
           )}
@@ -3604,8 +3629,8 @@ function EvolutionPage() {
                   <CuteIcon name="soft-sparkle-twinkle" />
                 </span>
                 <div className="evo-hub-text">
-                  <strong>打开进化旅程地图</strong>
-                  <span>基于神经网络中枢，回顾你从起点到现在走过的每一步，点里程碑可看交互记录。</span>
+                  <strong>全屏打开 EvoMAP 进化神经网络</strong>
+                  <span>查看从起点、资料、目标、权限到 PiClub 的整张大画布；关键里程碑点开后才显示交互记录。</span>
                 </div>
                 <span className="evo-hub-cta">
                   展开 <CuteIcon name="soft-arrow-right" />
@@ -3619,28 +3644,20 @@ function EvolutionPage() {
             </div>
             <aside className="evo-current-panel">
               <div className="skill-section-title">
-                <CuteIcon name={newestEvent ? eventIcon(newestEvent.type) : 'soft-log-lines'} />
-                最近一次进化
+                <CuteIcon name="soft-role-users" />
+                当前进化画像
               </div>
-              {newestEvent ? (
-                <div className="evo-current-card">
-                  <span className={`evo-lane-pill lane-${evolutionEventLane(newestEvent)}`}>{evolutionLaneLabel(evolutionEventLane(newestEvent))}</span>
-                  <strong>{newestEvent.type}</strong>
-                  <p>{newestEvent.summary}</p>
-                  <div className="evo-current-meta">
-                    <span>{formatEvolutionTime(newestEvent.createdAt)}</span>
-                    {newestEvent.subjectId && <span>{shortIdentifier(newestEvent.subjectId)}</span>}
-                  </div>
-                  <div className="evo-evidence-chips">
-                    {evidenceChips(newestEvent).slice(0, 5).map((chip) => <em key={chip}>{chip}</em>)}
-                  </div>
+              <div className="evo-current-card evo-profile-card">
+                <span className="evo-lane-pill lane-reuse">老板 / 管理者分支</span>
+                <strong>从个人助理升级为组织智能中枢</strong>
+                <p>Pi 正在把你的资料、管理任务、产品想法和社区反馈沉淀成可复用的管理思维，而不是把每一次操作都当作一条朋友圈动态。</p>
+                <div className="evo-profile-grid">
+                  <span>组织任务中枢</span>
+                  <span>管理思维进化</span>
+                  <span>子产品投放台</span>
+                  <span>宠物 Lv.{journeySummary.petLevel}</span>
                 </div>
-              ) : (
-                <div className="evo-empty-panel">
-                  <CuteIcon name="soft-log-lines" />
-                  <span>等待第一条 EvolutionEvent</span>
-                </div>
-              )}
+              </div>
             </aside>
           </section>
 
@@ -3768,8 +3785,6 @@ function EvolutionPage() {
         </div>
       )}
 
-      {/* 全屏进化旅程地图：点击中枢入口打开 */}
-      {mapOpen && <EvolutionMapCanvas onClose={() => setMapOpen(false)} />}
     </div>
   )
 }
