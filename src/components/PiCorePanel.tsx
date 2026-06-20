@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { PetSprite } from './PetSprite'
 import { Integrations } from './Integrations'
+import { AgentTasks } from './AgentTasks'
 import { adoptablePets, petAnimations, type PetMood } from '../data'
 
 type PiCoreEmotion = 'calm' | 'happy' | 'waiting'
@@ -147,6 +148,8 @@ export function PiCorePanel({
           {healthActive ? '回到训练画面' : '开始身心检测'}
         </button>
       </section>
+
+      <AgentTasks />
 
       <Integrations />
     </section>

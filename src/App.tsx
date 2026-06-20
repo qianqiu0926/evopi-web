@@ -123,6 +123,13 @@ type AppPage = 'launch' | 'today' | 'goals' | 'memory' | 'room' | 'club' | 'skil
 type Theme = 'cute' | 'notion' | 'glass'
 type PiCoreEmotion = 'calm' | 'happy' | 'waiting'
 type WorkspaceRuntimeKind = ExternalAgentKind | 'evomap-developers'
+type PiRoomGroup = {
+  id: string
+  name: string
+  topic: string
+  people: RoomPerson[]
+  createdAt: string
+}
 type ExternalRuntimePathForm = {
   openclaw: {
     bin: string
@@ -180,6 +187,7 @@ function App() {
   const [page, setPage] = useState<AppPage>('today')
   const [theme, setTheme] = useState<Theme>('cute')
   const [activePerson, setActivePerson] = useState<RoomPerson | null>(null)
+  const [activeGroupRoom, setActiveGroupRoom] = useState<PiRoomGroup | null>(null)
   const [navCollapsed, setNavCollapsed] = useState(false) // 控制台整体收起
   const [user, setUser] = useState<AuthUser | null>(null) // 登录态
   const [authOpen, setAuthOpen] = useState<Mode>(null) // 'login' | 'register' | null
@@ -293,7 +301,11 @@ function App() {
         <TechCursor active={theme === 'notion'} />
     <IconThemeSwap />
         <LaunchPage
-          onEnter={(p) => setPage(p)}
+          onEnter={(p) => {
+            setActivePerson(null)
+            setActiveGroupRoom(null)
+            setPage(p)
+          }}
           theme={theme}
           setTheme={setTheme}
           user={user}
@@ -320,6 +332,8 @@ function App() {
       setTheme={setTheme}
       activePerson={activePerson}
       setActivePerson={setActivePerson}
+      activeGroupRoom={activeGroupRoom}
+      setActiveGroupRoom={setActiveGroupRoom}
       navCollapsed={navCollapsed}
       setNavCollapsed={setNavCollapsed}
       mood={mood}
@@ -424,7 +438,7 @@ function LaunchPage({
    应用主体壳（三栏）
    ============================================================ */
 function AppShell({
-  page, setPage, theme, setTheme, activePerson, setActivePerson,
+  page, setPage, theme, setTheme, activePerson, setActivePerson, activeGroupRoom, setActiveGroupRoom,
   navCollapsed, setNavCollapsed, mood, moodIsLive, piEmotion, user, onboardDepth, onAuth, onLogout,
 }: {
   page: AppPage
@@ -433,6 +447,8 @@ function AppShell({
   setTheme: (t: Theme) => void
   activePerson: RoomPerson | null
   setActivePerson: (p: RoomPerson | null) => void
+  activeGroupRoom: PiRoomGroup | null
+  setActiveGroupRoom: (room: PiRoomGroup | null) => void
   navCollapsed: boolean
   setNavCollapsed: (v: boolean) => void
   mood: PetMood
@@ -443,7 +459,7 @@ function AppShell({
   onAuth: (m: 'login' | 'register') => void
   onLogout: () => void
 }) {
-  const inRoomChat = page === 'room' && activePerson
+  const inRoomChat = page === 'room' && Boolean(activePerson || activeGroupRoom)
   const [railCollapsed, setRailCollapsed] = useState(false)
   const [healthModeActive, setHealthModeActive] = useState(false)
   const headerHint = useInlineHint(2400)
@@ -468,6 +484,7 @@ function AppShell({
   const selectPage = (key: string) => {
     setPage(key as AppPage)
     setActivePerson(null)
+    setActiveGroupRoom(null)
     if (key !== 'today') setHealthModeActive(false)
     emitPiCoreSignal(key === 'goals' || key === 'club' ? 'work' : 'interaction')
   }
@@ -475,6 +492,7 @@ function AppShell({
   const openHealthMode = () => {
     setPage('today')
     setActivePerson(null)
+    setActiveGroupRoom(null)
     setHealthModeActive(true)
     setRailCollapsed(false)
     emitPiCoreSignal('interaction', { mood: 'learning', duration: 9000 })
@@ -585,7 +603,7 @@ function AppShell({
 
         {page === 'today' && (
           <TodayPage
-            goRoom={() => { setPage('room') }}
+            goRoom={() => { setActivePerson(null); setActiveGroupRoom(null); setPage('room') }}
             healthModeActive={healthModeActive}
             onHealthModeChange={setHealthModeActive}
           />
@@ -593,7 +611,18 @@ function AppShell({
         {page === 'goals' && <GoalsPage />}
         {page === 'memory' && <MemoryPage />}
         {page === 'room' && (
-          <RoomPage activePerson={activePerson} setActivePerson={setActivePerson} />
+          <RoomPage
+            activePerson={activePerson}
+            setActivePerson={(person) => {
+              setActiveGroupRoom(null)
+              setActivePerson(person)
+            }}
+            activeGroupRoom={activeGroupRoom}
+            setActiveGroupRoom={(room) => {
+              setActivePerson(null)
+              setActiveGroupRoom(room)
+            }}
+          />
         )}
         {page === 'club' && <PiClubPage onExit={() => setPage('today')} />}
         {page === 'skills' && <SkillsPage />}
@@ -3447,21 +3476,36 @@ function MemoryAction({
    PiRoom：大厅 → 对话
    ============================================================ */
 function RoomPage({
-  activePerson, setActivePerson,
+  activePerson, setActivePerson, activeGroupRoom, setActiveGroupRoom,
 }: {
   activePerson: RoomPerson | null
   setActivePerson: (p: RoomPerson | null) => void
+  activeGroupRoom: PiRoomGroup | null
+  setActiveGroupRoom: (room: PiRoomGroup | null) => void
 }) {
+  if (activeGroupRoom) {
+    return <RoomGroupChat room={activeGroupRoom} onBack={() => setActiveGroupRoom(null)} />
+  }
   if (activePerson) {
     return <RoomChat person={activePerson} onBack={() => setActivePerson(null)} />
   }
-  return <RoomLobby setActivePerson={setActivePerson} />
+  return <RoomLobby setActivePerson={setActivePerson} setActiveGroupRoom={setActiveGroupRoom} />
 }
 
-function RoomLobby({ setActivePerson }: { setActivePerson: (p: RoomPerson) => void }) {
+function RoomLobby({
+  setActivePerson,
+  setActiveGroupRoom,
+}: {
+  setActivePerson: (p: RoomPerson) => void
+  setActiveGroupRoom: (room: PiRoomGroup) => void
+}) {
   const [importing, setImporting] = useState(false)
+  const [grouping, setGrouping] = useState(false)
   const [customName, setCustomName] = useState('')
   const [customBasis, setCustomBasis] = useState('')
+  const [groupName, setGroupName] = useState('创业判断小组')
+  const [groupTopic, setGroupTopic] = useState('我现在要不要换赛道，怎么判断下一步最稳？')
+  const [selectedGroupIds, setSelectedGroupIds] = useState<Set<string>>(() => new Set(['elon-musk', 'zhangxuefeng']))
   // 进入对话前的短暂 loading（区分被点中的卡片）
   const [enteringId, setEnteringId] = useState<string | null>(null)
   const [creating, setCreating] = useState(false)
@@ -3505,6 +3549,43 @@ function RoomLobby({ setActivePerson }: { setActivePerson: (p: RoomPerson) => vo
     }, 500)
   }
 
+  const effectiveGroupIds = useMemo(() => {
+    const validIds = new Set(roomPeople.map((person) => person.id))
+    const next = new Set([...selectedGroupIds].filter((id) => validIds.has(id)))
+    for (const person of roomPeople) {
+      if (next.size >= 2) break
+      next.add(person.id)
+    }
+    return next
+  }, [roomPeople, selectedGroupIds])
+  const selectedGroupPeople = useMemo(() => {
+    return roomPeople.filter((person) => effectiveGroupIds.has(person.id)).slice(0, 3)
+  }, [effectiveGroupIds, roomPeople])
+  const canCreateGroup = Boolean(groupName.trim() && groupTopic.trim() && selectedGroupPeople.length >= 2 && selectedGroupPeople.length <= 3)
+
+  const toggleGroupPerson = (personId: string) => {
+    setSelectedGroupIds(() => {
+      const next = new Set(effectiveGroupIds)
+      if (next.has(personId)) {
+        next.delete(personId)
+      } else if (next.size < 3) {
+        next.add(personId)
+      }
+      return next
+    })
+  }
+
+  const createGroupRoom = () => {
+    if (!canCreateGroup) return
+    setActiveGroupRoom({
+      id: 'group-' + Date.now(),
+      name: groupName.trim(),
+      topic: groupTopic.trim(),
+      people: selectedGroupPeople,
+      createdAt: '现在',
+    })
+  }
+
   const create = () => {
     if (!customName.trim() || creating) return
     setCreating(true)
@@ -3535,10 +3616,72 @@ function RoomLobby({ setActivePerson }: { setActivePerson: (p: RoomPerson) => vo
             <em className="tag">{personaState === 'ready' ? '已连接 Skill 清单' : personaState === 'loading' ? '正在扫描' : personaState === 'error' ? '使用本地卡片' : '待扫描'}</em>
           </div>
         </div>
-        <button className="primary-btn" onClick={() => setImporting((v) => !v)}>
-          <CuteIcon name="soft-user-add" /> 导入新人物
-        </button>
+        <div className="room-actions">
+          <button className="primary-btn" onClick={() => setGrouping((v) => !v)}>
+            <CuteIcon name="soft-role-users" /> 新建群聊
+          </button>
+          <button className="ghost-btn" onClick={() => setImporting((v) => !v)}>
+            <CuteIcon name="soft-user-add" /> 导入新人物
+          </button>
+        </div>
       </div>
+
+      {grouping && (
+        <div className="group-create-panel">
+          <div className="group-create-head">
+            <div>
+              <strong><CuteIcon name="soft-chat-bubble" /> 像微信一样建一个 PiRoom 群聊</strong>
+              <p>给房间命名，选择 2-3 个模拟视角，再围绕一个 topic 开始讨论。</p>
+            </div>
+            <em className="tag blue">已选择 {selectedGroupPeople.length} / 3</em>
+          </div>
+          <div className="group-create-grid">
+            <label>
+              <span>群聊名称</span>
+              <input className="text-input" value={groupName} onChange={(e) => setGroupName(e.target.value)} placeholder="例如：职业方向圆桌" />
+            </label>
+            <label>
+              <span>讨论主题</span>
+              <input className="text-input" value={groupTopic} onChange={(e) => setGroupTopic(e.target.value)} placeholder="例如：我是否要换赛道？" />
+            </label>
+          </div>
+          <div className="group-person-picker" aria-label="选择群聊成员">
+            {roomPeople.map((person) => {
+              const selected = effectiveGroupIds.has(person.id)
+              const locked = !selected && selectedGroupPeople.length >= 3
+              return (
+                <button
+                  className={`group-person-option ${selected ? 'selected' : ''}`}
+                  key={person.id}
+                  onClick={() => toggleGroupPerson(person.id)}
+                  disabled={locked}
+                  type="button"
+                >
+                  <span className="person-avatar sm"><CuteIcon name={person.avatar as CuteIconName} /></span>
+                  <span>
+                    <strong>{person.name}</strong>
+                    <em>{person.desc}</em>
+                  </span>
+                  <b>{selected ? '✓' : '+'}</b>
+                </button>
+              )
+            })}
+          </div>
+          <div className="group-selected-bar">
+            <div className="group-avatar-stack" aria-label="已选成员">
+              {selectedGroupPeople.map((person) => (
+                <span className="person-avatar sm" key={person.id} title={person.name}>
+                  <CuteIcon name={person.avatar as CuteIconName} />
+                </span>
+              ))}
+            </div>
+            <span>{selectedGroupPeople.length < 2 ? '至少选择 2 位成员' : selectedGroupPeople.map((person) => person.name).join('、')}</span>
+            <button className="primary-btn sm" onClick={createGroupRoom} disabled={!canCreateGroup}>
+              <CuteIcon name="soft-send-plane" /> 进入群聊
+            </button>
+          </div>
+        </div>
+      )}
 
       {importing && (
         <div className="import-panel">
@@ -3992,6 +4135,407 @@ function RoomChat({ person, onBack }: { person: RoomPerson; onBack: () => void }
         )}
         <input
           placeholder={`和 ${person.name} 聊聊……`}
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Enter') void send() }}
+        />
+        <button className={`send-button ${sending ? 'btn-loading' : ''}`} onClick={() => void send()} disabled={sending} aria-label="发送">
+          {sending ? <span className="btn-spinner" /> : <CuteIcon name="soft-send-plane" />}
+        </button>
+      </div>
+    </div>
+  )
+}
+
+type GroupChatMsg = {
+  id: string
+  from: 'me' | 'them' | 'system'
+  text: string
+  time: string
+  speakerId?: string
+  speakerName?: string
+  avatar?: string
+  attached?: string[]
+}
+
+function compactRoomReply(text: string) {
+  return text.replace(/\*/g, '').replace(/\n{3,}/g, '\n\n').trim().slice(0, 620)
+}
+
+function localGroupReply(person: RoomPerson, topic: string, userText: string) {
+  const base = userText || topic
+  if (person.id.includes('zhangxuefeng')) {
+    return `我先把话说直一点：别先问“喜不喜欢”，先算你换方向的成本、出口和确定性。围绕「${base}」，你最好列出三个可验证证据，再决定要不要投入长期路径。\n\n来源：${person.basis}`
+  }
+  if (person.id.includes('elon')) {
+    return `我会先拆到第一性原理：这个目标的真实约束是什么，哪些只是惯性假设。先做一个最小实验，证明「${topic}」里最关键的假设能不能成立。\n\n来源：${person.basis}`
+  }
+  if (person.id.includes('karpathy')) {
+    return `从工程角度看，别一上来追求完整答案。把「${base}」变成一个一周内能跑完的小实验，记录输入、输出和失败原因，迭代会比空想快很多。\n\n来源：${person.basis}`
+  }
+  if (person.id.includes('feynman')) {
+    return `我会要求你用最简单的话解释这件事：你到底想得到什么，为什么现在的方法不够好。如果解释不清，说明问题定义还没完成。\n\n来源：${person.basis}`
+  }
+  if (person.id.includes('jobs')) {
+    return `先站到最终使用者那边看：这件事有没有让体验变得更清楚、更少打扰、更有情绪价值。如果没有，方向再宏大也要先收回来。\n\n来源：${person.basis}`
+  }
+  if (person.id.includes('investor')) {
+    return `我会先问回报结构：这件事解决的需求够不够强，增长路径是否清楚，时间成本能不能换来可复利资产。先把这三点写在同一张纸上。\n\n来源：${person.basis}`
+  }
+  return `我从「${person.desc}」看，建议先把「${base}」拆成目标、证据、下一步动作三块。这样群聊里的观点才能沉淀成可执行判断。\n\n来源：${person.basis}`
+}
+
+function RoomGroupChat({ room, onBack }: { room: PiRoomGroup; onBack: () => void }) {
+  const [messages, setMessages] = useState<GroupChatMsg[]>([
+    {
+      id: `system-${room.id}`,
+      from: 'system',
+      text: `群聊「${room.name}」已建好。${room.people.map((person) => person.name).join('、')} 会围绕「${room.topic}」各给一个角度，你也可以随时把关键句沉淀到右侧专题。`,
+      time: room.createdAt,
+    },
+  ])
+  const [input, setInput] = useState('')
+  const [selectedAssets, setSelectedAssets] = useState<Set<string>>(new Set())
+  const [showAssets, setShowAssets] = useState(true)
+  const [sending, setSending] = useState(false)
+  const [searchQuery, setSearchQuery] = useState(room.topic)
+  const [selectedResearch, setSelectedResearch] = useState<Set<string>>(new Set(['r-product-career']))
+  const [inspirations, setInspirations] = useState<InspirationNote[]>([])
+  const [memorySaved, setMemorySaved] = useState(false)
+  const scrollRef = useRef<HTMLDivElement>(null)
+
+  const filteredResearch = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase()
+    if (!query) return researchSuggestions
+    return researchSuggestions.filter((item) => {
+      const haystack = `${item.title} ${item.source} ${item.angle} ${item.quote} ${item.tag}`.toLowerCase()
+      return query.split(/\s+/).some((word) => haystack.includes(word))
+    })
+  }, [searchQuery])
+
+  const inspirationTitle = useMemo(() => buildInspirationTitle(inspirations), [inspirations])
+  const inspirationPoints = useMemo(() => buildInspirationPoints(inspirations), [inspirations])
+  const primaryResearch = filteredResearch[0]
+  const researchCandidates = filteredResearch.slice(1, 4)
+  const latestNotes = inspirations.slice(-3)
+
+  useEffect(() => {
+    document.querySelector('.page-area')?.scrollTo({ top: 0 })
+    window.scrollTo({ top: 0 })
+  }, [room.id])
+
+  useEffect(() => {
+    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' })
+  }, [messages])
+
+  const toggleAsset = (id: string) => {
+    setSelectedAssets((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  const toggleResearch = (id: string) => {
+    setSelectedResearch((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  const collectGroupMessage = (msg: GroupChatMsg, index: number) => {
+    if (msg.from === 'system') return
+    const id = `group-${room.id}-${msg.id || index}`
+    setMemorySaved(false)
+    setInspirations((prev) => {
+      if (prev.some((item) => item.id === id)) return prev
+      const text = msg.from === 'them' && msg.speakerName ? `${msg.speakerName}：${msg.text}` : msg.text
+      return [...prev, { id, text, source: msg.from === 'me' ? 'me' : 'them', time: msg.time }]
+    })
+  }
+
+  const collectResearch = (item: ResearchItem) => {
+    setMemorySaved(false)
+    setSelectedResearch((prev) => new Set(prev).add(item.id))
+    setInspirations((prev) => {
+      const id = `group-research-${item.id}`
+      if (prev.some((note) => note.id === id)) return prev
+      return [...prev, { id, text: `${item.title}：${item.quote}`, source: 'research', time: item.source }]
+    })
+  }
+
+  const buildPersonaReply = async (person: RoomPerson, userText: string, attached: string[]) => {
+    if (person.agentKind === 'pi' && person.skillName) {
+      const peerNames = room.people.filter((item) => item.id !== person.id).map((item) => item.name).join('、') || '无'
+      const assetContext = attached.length ? `\n本轮附加资料：${attached.join('、')}` : ''
+      const { result } = await callExternalAgent({
+        kind: person.agentKind as ExternalAgentKind,
+        agent: person.skillName,
+        sessionKey: `piroom-group-${room.id}-${person.id}`,
+        message: [
+          `这是 PiRoom 群聊「${room.name}」。`,
+          `群聊主题：「${room.topic}」。`,
+          `其他成员：${peerNames}。`,
+          `用户刚说：${userText || '请先围绕主题给出你的角度。'}`,
+          assetContext,
+          `你只代表「${person.name}」的公开资料模拟视角，不冒充真人。请用中文给 2-4 句短回复，观点明确，能被沉淀成灵感专题。`,
+        ].filter(Boolean).join('\n'),
+        timeoutSec: 180,
+      })
+      const reply = externalAgentOutput(result)
+      if (reply) return compactRoomReply(reply)
+    }
+    return localGroupReply(person, room.topic, userText)
+  }
+
+  const send = async () => {
+    if ((!input.trim() && selectedAssets.size === 0) || sending) return
+    const userText = input.trim()
+    const attached = assetLibrary.filter((asset) => selectedAssets.has(asset.id)).map((asset) => asset.name)
+    const userMessage: GroupChatMsg = {
+      id: `me-${Date.now()}`,
+      from: 'me',
+      text: userText || '（附上几份资料）',
+      time: '现在',
+      attached: attached.length ? attached : undefined,
+    }
+    setMessages((prev) => [...prev, userMessage])
+    setInput('')
+    setSelectedAssets(new Set())
+    setSending(true)
+
+    const settled = await Promise.allSettled(
+      room.people.map(async (person) => ({
+        person,
+        text: await buildPersonaReply(person, userText, attached),
+      })),
+    )
+    const replies: GroupChatMsg[] = settled.map((result, index) => {
+      const person = room.people[index]
+      const text = result.status === 'fulfilled'
+        ? result.value.text
+        : `${localGroupReply(person, room.topic, userText)}`
+      return {
+        id: `them-${person.id}-${Date.now()}-${index}`,
+        from: 'them',
+        text,
+        time: '现在',
+        speakerId: person.id,
+        speakerName: person.name,
+        avatar: person.avatar,
+      }
+    })
+    setMessages((prev) => [...prev, ...replies])
+    setSending(false)
+  }
+
+  return (
+    <div className="room-chat-shell group-room-shell">
+      <header className="chat-header group-chat-header">
+        <button className="ghost-btn sm" onClick={onBack}><CuteIcon name="soft-arrow-left" />返回</button>
+        <div className="chat-person group-chat-person">
+          <div className="group-avatar-stack">
+            {room.people.map((person) => (
+              <span className="person-avatar sm" key={person.id} title={person.name}>
+                <CuteIcon name={person.avatar as CuteIconName} />
+              </span>
+            ))}
+          </div>
+          <div>
+            <strong>{room.name}</strong>
+            <span>{room.people.map((person) => person.name).join('、')} · 主题：{room.topic}</span>
+          </div>
+        </div>
+        <em className="room-topic-pill">{room.people.length} 人群聊</em>
+        <button className="ghost-btn sm" onClick={() => setShowAssets((v) => !v)}>
+          <CuteIcon name="soft-folder-tab" />{showAssets ? '收起沉淀' : '展开沉淀'}
+        </button>
+      </header>
+
+      <div className="group-member-strip">
+        {room.people.map((person) => (
+          <span key={person.id}>
+            <CuteIcon name={person.avatar as CuteIconName} />
+            {person.name}
+          </span>
+        ))}
+      </div>
+
+      <div className={`chat-body ${showAssets ? 'with-assets' : ''}`}>
+        <div className="chat-stream" ref={scrollRef}>
+          {messages.map((msg, i) => (
+            <div className={`msg ${msg.from === 'me' ? 'me' : 'them'} ${msg.from === 'system' ? 'system' : ''}`} key={msg.id}>
+              {msg.from === 'them' && (
+                <div className="msg-avatar sm"><CuteIcon name={(msg.avatar || 'soft-chat-bubble') as CuteIconName} /></div>
+              )}
+              <div className="msg-bubble">
+                {msg.from === 'them' && msg.speakerName && <span className="group-msg-speaker">{msg.speakerName}</span>}
+                <p>{msg.text}</p>
+                {msg.attached && (
+                  <div className="msg-attached">
+                    {msg.attached.map((asset) => (
+                      <span className="tag" key={asset}><CuteIcon name="soft-document-page" />{asset}</span>
+                    ))}
+                  </div>
+                )}
+                <span className="msg-time">{msg.time}</span>
+              </div>
+              {msg.from !== 'system' && (
+                <button
+                  className="capture-arrow"
+                  onClick={() => collectGroupMessage(msg, i)}
+                  aria-label="沉淀到右侧灵感专题"
+                  title="沉淀到右侧灵感专题"
+                >
+                  <CuteIcon name="soft-arrow-right" />
+                </button>
+              )}
+            </div>
+          ))}
+          {sending && (
+            <div className="group-thinking">
+              {room.people.map((person) => (
+                <span key={person.id}><CuteIcon name={person.avatar as CuteIconName} />{person.name} 正在组织观点…</span>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {showAssets && (
+          <aside className="thinking-rail">
+            <section className="research-desk">
+              <div className="rail-section-head">
+                <div>
+                  <span className="rail-eyebrow">找论据</span>
+                  <strong>资料借鉴窗</strong>
+                </div>
+                <em className="tag blue">{selectedResearch.size} 条可引用</em>
+              </div>
+              <label className="research-search">
+                <CuteIcon name="soft-search-spark" />
+                <input
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="搜论据、案例或反驳资料"
+                />
+              </label>
+              <div className="research-focus">
+                {primaryResearch ? (
+                  <article className={`research-card primary ${selectedResearch.has(primaryResearch.id) ? 'selected' : ''}`}>
+                    <button className="research-check" onClick={() => toggleResearch(primaryResearch.id)} aria-label="选中资料">
+                      {selectedResearch.has(primaryResearch.id) ? '✓' : '+'}
+                    </button>
+                    <div>
+                      <span>{primaryResearch.source} · {primaryResearch.tag}</span>
+                      <strong>{primaryResearch.title}</strong>
+                      <p>{primaryResearch.angle}</p>
+                      <button className="mini-link" onClick={() => collectResearch(primaryResearch)}>
+                        <CuteIcon name="soft-arrow-right" />收进沉淀
+                      </button>
+                    </div>
+                  </article>
+                ) : (
+                  <div className="research-empty">换个关键词试试，Pi 会把合适资料放在这里。</div>
+                )}
+              </div>
+              {researchCandidates.length > 0 && (
+                <div className="research-candidates">
+                  {researchCandidates.map((item) => (
+                    <button
+                      className={`research-candidate ${selectedResearch.has(item.id) ? 'selected' : ''}`}
+                      key={item.id}
+                      onClick={() => collectResearch(item)}
+                    >
+                      <span>{item.tag}</span>
+                      <strong>{item.title}</strong>
+                    </button>
+                  ))}
+                </div>
+              )}
+              <div className="context-strip">
+                <div className="asset-mini-head">
+                  <CuteIcon name="soft-folder-tab" />
+                  <strong>带入当前群聊</strong>
+                  <span>{selectedAssets.size} 份</span>
+                </div>
+                <div className="asset-chip-list">
+                  {assetLibrary.slice(0, 5).map((asset) => (
+                    <button
+                      className={`asset-chip ${selectedAssets.has(asset.id) ? 'selected' : ''}`}
+                      key={asset.id}
+                      onClick={() => toggleAsset(asset.id)}
+                    >
+                      <CuteIcon name={assetIcon(asset.kind)} />
+                      {asset.name}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </section>
+
+            <section className="inspiration-desk">
+              <div className="rail-section-head">
+                <div>
+                  <span className="rail-eyebrow">沉淀成专题</span>
+                  <strong>群聊灵感沉淀</strong>
+                </div>
+                <CuteIcon name="soft-idea-bulb" />
+              </div>
+              <div className="memory-topic">
+                <div>
+                  <span>本轮群聊专题</span>
+                  <h3>{inspirationTitle}</h3>
+                </div>
+                <em>{inspirations.length} 条素材</em>
+              </div>
+              <div className="inspiration-thread">
+                {latestNotes.length > 0 ? latestNotes.map((note, index) => (
+                  <article className="inspiration-note" key={note.id}>
+                    <span className="note-index">{String(inspirations.length - latestNotes.length + index + 1).padStart(2, '0')}</span>
+                    <div>
+                      <em>{noteSourceLabel(note.source)} · {note.time}</em>
+                      <p>{note.text}</p>
+                    </div>
+                  </article>
+                )) : (
+                  <div className="research-empty">点消息旁边的箭头，把群聊里的关键判断收进这里。</div>
+                )}
+              </div>
+              <div className="pi-organizer">
+                <strong><CuteIcon name="soft-sparkle-edit" />Pi 自动整理</strong>
+                <ul>
+                  {inspirationPoints.map((point) => (
+                    <li key={point}>{point}</li>
+                  ))}
+                </ul>
+              </div>
+              <button className={`save-memory-btn ${memorySaved ? 'saved' : ''}`} onClick={() => setMemorySaved(true)}>
+                <CuteIcon name={memorySaved ? 'soft-success-check' : 'soft-database-stack'} />
+                {memorySaved ? '已写入 Pi 记忆库' : '写入 Pi 记忆库'}
+              </button>
+            </section>
+          </aside>
+        )}
+      </div>
+
+      <div className="chat-input-bar">
+        <button className="ghost-btn sm" onClick={() => setShowAssets((v) => !v)} aria-label="附件">
+          <CuteIcon name="soft-file-upload" />
+        </button>
+        {selectedAssets.size > 0 && (
+          <div className="input-chips">
+            {assetLibrary.filter((asset) => selectedAssets.has(asset.id)).map((asset) => (
+              <span className="chip removable" key={asset.id} onClick={() => toggleAsset(asset.id)}>
+                {asset.name} ✕
+              </span>
+            ))}
+          </div>
+        )}
+        <input
+          placeholder={`在「${room.name}」里继续说……`}
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={(e) => { if (e.key === 'Enter') void send() }}

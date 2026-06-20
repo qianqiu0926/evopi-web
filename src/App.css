@@ -5787,6 +5787,14 @@ body[data-theme="glass"] .focus-hero {
   margin-top: 10px;
 }
 
+.room-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
 .import-panel {
   border: var(--border-w) solid var(--line);
   border-radius: var(--r-md);
@@ -5836,6 +5844,156 @@ body[data-theme="glass"] .focus-hero {
   display: flex;
   justify-content: flex-end;
   gap: 10px;
+}
+
+.group-create-panel {
+  border: var(--border-w) solid var(--line);
+  border-radius: var(--r-lg);
+  padding: 16px;
+  background:
+    linear-gradient(135deg, color-mix(in srgb, var(--cute-mint) 34%, transparent), transparent 42%),
+    var(--surface);
+  box-shadow: var(--shadow-offset) var(--shadow-offset) 0 var(--shadow-hard);
+  display: grid;
+  gap: 14px;
+  animation: fadeUp var(--dur-mid) var(--ease-smooth) both;
+}
+
+.group-create-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.group-create-head strong {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 15px;
+}
+
+.group-create-head .cute-icon {
+  width: 22px;
+  height: 22px;
+}
+
+.group-create-head p {
+  margin-top: 5px;
+  color: var(--muted);
+  font-size: 12.8px;
+  line-height: 1.45;
+}
+
+.group-create-grid {
+  display: grid;
+  grid-template-columns: minmax(180px, 0.75fr) minmax(240px, 1.25fr);
+  gap: 10px;
+}
+
+.group-create-grid label {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.group-create-grid span {
+  color: var(--muted);
+  font-size: 11.8px;
+  font-weight: 850;
+}
+
+.group-person-picker {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.group-person-option {
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr) 24px;
+  align-items: center;
+  gap: 9px;
+  min-height: 70px;
+  border: var(--border-w) solid var(--line);
+  border-radius: var(--r-md);
+  padding: 10px;
+  background: var(--surface-soft);
+  color: var(--text);
+  text-align: left;
+  transition:
+    transform var(--dur-fast) var(--ease-press),
+    box-shadow var(--dur-fast) var(--ease-smooth),
+    background var(--dur-fast) var(--ease-smooth);
+}
+
+.group-person-option:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 3px 3px 0 var(--line-soft);
+}
+
+.group-person-option.selected {
+  background: color-mix(in srgb, var(--cute-blue) 48%, var(--surface));
+  box-shadow: 3px 3px 0 var(--line-soft);
+}
+
+.group-person-option:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.group-person-option strong,
+.group-person-option em {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.group-person-option strong {
+  font-size: 13px;
+}
+
+.group-person-option em {
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 11px;
+  font-style: normal;
+}
+
+.group-person-option b {
+  display: grid;
+  width: 24px;
+  height: 24px;
+  place-items: center;
+  border: 1.5px solid var(--line);
+  border-radius: 50%;
+  background: var(--cute-yellow);
+  font-size: 13px;
+  line-height: 1;
+}
+
+.group-selected-bar {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  min-height: 54px;
+  border: var(--border-w) solid var(--line);
+  border-radius: var(--r-md);
+  padding: 8px 10px;
+  background: var(--surface-soft);
+}
+
+.group-selected-bar > span {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 12.5px;
+  font-weight: 800;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .person-grid {
@@ -5936,6 +6094,10 @@ body[data-theme="glass"] .focus-hero {
   overflow: hidden;
 }
 
+.room-chat-shell.group-room-shell {
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
+}
+
 .chat-header {
   display: flex;
   align-items: center;
@@ -5965,6 +6127,70 @@ body[data-theme="glass"] .focus-hero {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.group-chat-header {
+  gap: 12px;
+}
+
+.group-chat-person {
+  gap: 12px;
+}
+
+.group-avatar-stack {
+  display: flex;
+  align-items: center;
+  padding-left: 8px;
+}
+
+.group-avatar-stack .person-avatar {
+  margin-left: -8px;
+  background: var(--cute-lilac);
+  box-shadow: 0 0 0 2px var(--surface);
+}
+
+.room-topic-pill {
+  flex: 0 0 auto;
+  border: var(--border-w) solid var(--line);
+  border-radius: 999px;
+  padding: 6px 10px;
+  background: var(--cute-mint);
+  color: var(--text);
+  font-size: 11.5px;
+  font-style: normal;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.group-member-strip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  overflow-x: auto;
+  border-bottom: var(--border-w) solid var(--line);
+  padding: 8px 16px;
+  background: color-mix(in srgb, var(--surface) 84%, var(--cute-yellow));
+  scrollbar-width: none;
+}
+
+.group-member-strip span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: 0 0 auto;
+  border: 1.5px solid var(--line);
+  border-radius: 999px;
+  padding: 5px 9px;
+  background: var(--surface);
+  color: var(--muted);
+  font-size: 11.5px;
+  font-weight: 850;
+}
+
+.group-member-strip .cute-icon {
+  width: 18px;
+  height: 18px;
 }
 
 .chat-body {
@@ -6020,6 +6246,25 @@ body[data-theme="glass"] .focus-hero {
 .msg-bubble p {
   font-size: 14px;
   line-height: 1.55;
+}
+
+.msg.system {
+  align-self: center;
+  max-width: min(720px, 88%);
+}
+
+.msg.system .msg-bubble {
+  border-style: dashed;
+  background: color-mix(in srgb, var(--cute-yellow) 28%, var(--surface));
+  text-align: center;
+}
+
+.group-msg-speaker {
+  display: block;
+  margin-bottom: 5px;
+  color: var(--muted);
+  font-size: 11.5px;
+  font-weight: 900;
 }
 
 .msg-attached {
@@ -6085,6 +6330,41 @@ body[data-theme="glass"] .focus-hero {
 .capture-arrow .cute-icon {
   width: 19px;
   height: 19px;
+}
+
+.group-thinking {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  max-width: 82%;
+  animation: fadeUp var(--dur-mid) var(--ease-smooth) both;
+}
+
+.group-thinking span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: var(--border-w) solid var(--line);
+  border-radius: 999px;
+  padding: 7px 10px;
+  background: var(--surface);
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 850;
+  box-shadow: 2px 2px 0 var(--line-soft);
+}
+
+.group-thinking .cute-icon {
+  width: 18px;
+  height: 18px;
+  animation: iconWiggle 1.3s var(--ease-smooth) infinite;
+}
+
+@keyframes iconWiggle {
+  0%, 100% { transform: rotate(0deg) scale(1); }
+  38% { transform: rotate(-5deg) scale(1.04); }
+  72% { transform: rotate(4deg) scale(1.02); }
 }
 
 /* —— 右侧资料检索 + 思想沉淀 —— */
@@ -8085,7 +8365,8 @@ body[data-theme="glass"] .evo-evidence-chips em {
     grid-template-columns: 1fr;
   }
 
-  .asset-rail {
+  .asset-rail,
+  .thinking-rail {
     position: fixed;
     inset: 0;
     z-index: 30;
@@ -8093,8 +8374,30 @@ body[data-theme="glass"] .evo-evidence-chips em {
   }
 
   .person-grid,
-  .import-grid {
+  .import-grid,
+  .group-create-grid,
+  .group-person-picker {
     grid-template-columns: 1fr;
+  }
+
+  .group-create-head,
+  .group-selected-bar,
+  .group-chat-header {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .group-selected-bar {
+    grid-template-columns: 1fr;
+  }
+
+  .group-selected-bar .primary-btn {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .room-topic-pill {
+    width: max-content;
   }
 
   .level-control {
