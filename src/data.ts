@@ -20,7 +20,7 @@ export const pageMeta: Record<string, PageMeta> = {
   room: { title: 'PiRoom', desc: '邀请不同视角进房间，一起把事想清楚' },
   club: { title: 'PiClub', desc: '让你的 EvoPi 发朋友圈、加入组织、协作研究和投放产品' },
   skills: { title: '技能中心', desc: '安装、训练和管理你的专属技能' },
-  evolution: { title: '进化日志', desc: 'EvoPi 如何从你的反馈里调整行为' },
+  evolution: { title: '进化日志', desc: '查看已生效能力、待确认内容和最近操作记录' },
   privacy: { title: '隐私权限', desc: '所有自动化都从可控权限开始' },
 }
 
@@ -595,6 +595,14 @@ export const navGroups: NavGroup[] = [
       { key: 'club', label: 'PiClub', icon: 'soft-role-users' },
     ],
   },
+  {
+    id: 'ability',
+    label: '能力',
+    items: [
+      { key: 'skills', label: '技能中心', icon: 'soft-settings-gear' },
+      { key: 'evolution', label: '进化日志', icon: 'soft-log-lines' },
+    ],
+  },
 ]
 
 /* ============================================================
@@ -909,6 +917,8 @@ export type MilestoneKind =
   | 'skill' // 固化技能
   | 'current' // 当前所在
 
+export type EvolutionLane = 'user' | 'agent'
+
 export type JourneyRecord = {
   type: 'log' | 'screenshot' | 'dialogue'
   title: string
@@ -916,11 +926,23 @@ export type JourneyRecord = {
   time: string
 }
 
+export type MilestoneDiary = {
+  user: string
+  agent: string
+}
+
 export type Milestone = {
   id: string
   kind: MilestoneKind
   title: string
   date: string
+  // 同一天的用户行动与 Agent 进化共享 dayKey，在地图上显示为同一竖列
+  dayKey: string
+  dayLabel: string
+  // 用户进化线 / Agent 进化线
+  lane: EvolutionLane
+  // 关键里程碑的完整日期记录
+  evolutionDate: string
   // 画布坐标（相对坐标，画布会居中缩放）
   x: number
   y: number
@@ -937,6 +959,8 @@ export type Milestone = {
   badge?: string
   // 是否已达成（未达成=未来节点，灰色虚线）
   achieved: boolean
+  // 两条成长线的日记化记录
+  diary?: MilestoneDiary
   // 点开看的交互记录
   records?: JourneyRecord[]
 }
@@ -947,9 +971,13 @@ export const journeyMilestones: Milestone[] = [
     id: 'm-start',
     kind: 'start',
     title: '起点：遇见 EvoPi',
-    date: '6月 1日',
-    x: -1460,
-    y: 430,
+    date: '6月1日',
+    dayKey: '2026-06-01',
+    dayLabel: '6月1日',
+    lane: 'user',
+    evolutionDate: '2026年6月1日 14:05',
+    x: -1500,
+    y: -260,
     desc: '预配置完成，PiCore 初始化，小奶狗进入养成状态。EvoMAP 从这一刻开始记录“你如何变成更会调用智能的人”。',
     coreLevel: 1,
     petLevel: 1,
@@ -957,6 +985,10 @@ export const journeyMilestones: Milestone[] = [
     badge: '初始化',
     unlocks: ['PiCore 生命核', '宠物陪伴', '基础记忆舱'],
     achieved: true,
+    diary: {
+      user: '我第一次把自己的偏好交给 EvoPi，不是为了让它替我做决定，而是希望它先学会尊重我的节奏。',
+      agent: '我在最小权限里醒来，先记住“克制、降噪、先问再做”。这一天，我还只是一个安静陪跑的 Pi。',
+    },
     records: [
       { type: 'log', title: '完成预配置问卷', detail: '算法厌恶：偏克制；信息过载：强化降噪；信任：最小范围。推导介入深度 L1。', time: '6/1 14:02' },
       { type: 'screenshot', title: 'PiCore 养成开始', detail: '为生命核命名「小奶狗」，进化会同步提升宠物等级和可执行权限。', time: '6/1 14:05' },
@@ -966,9 +998,13 @@ export const journeyMilestones: Milestone[] = [
     id: 'm-data-1',
     kind: 'data',
     title: '放入第一批资料',
-    date: '6月 3日',
-    x: -1120,
-    y: 160,
+    date: '6月3日',
+    dayKey: '2026-06-03',
+    dayLabel: '6月3日',
+    lane: 'user',
+    evolutionDate: '2026年6月3日 11:20',
+    x: -1160,
+    y: -260,
     desc: '导入述职材料、会议录音和产品想法，Pi 开始建立你的工作语料和目标上下文。',
     coreLevel: 1,
     petLevel: 1,
@@ -976,6 +1012,10 @@ export const journeyMilestones: Milestone[] = [
     badge: '资料入库',
     unlocks: ['资料自动归档', '会议转写摘要', '职业成长目标舱'],
     achieved: true,
+    diary: {
+      user: '我把散落的述职材料、录音和想法放进来，像把一堆没来得及命名的努力放到桌面上。',
+      agent: '我第一次摸到真实的上下文：哪些是压力，哪些是机会，哪些只是需要被好好整理的证据。',
+    },
     records: [
       { type: 'log', title: '导入述职材料 ×3', detail: '产品评审、季度汇报、能力清单。自动归类到「职业成长」。', time: '6/3 09:30' },
       { type: 'log', title: '会议录音转写', detail: '14 分钟录音 → 3 条结论 + 5 条待办，等你确认。', time: '6/3 11:20' },
@@ -985,9 +1025,13 @@ export const journeyMilestones: Milestone[] = [
     id: 'm-core-2',
     kind: 'core',
     title: '生命核升级 Lv.2',
-    date: '6月 5日',
-    x: -780,
-    y: -130,
+    date: '6月5日',
+    dayKey: '2026-06-05',
+    dayLabel: '6月5日',
+    lane: 'agent',
+    evolutionDate: '2026年6月5日 20:16',
+    x: -820,
+    y: 180,
     desc: 'Pi 从你的反复纠正里蒸馏出第一条行为基因，宠物开始表现出稳定偏好。',
     coreLevel: 2,
     petLevel: 3,
@@ -995,6 +1039,10 @@ export const journeyMilestones: Milestone[] = [
     badge: '行为基因',
     unlocks: ['先结论后展开', '汇报风格记忆', '经验胶囊'],
     achieved: true,
+    diary: {
+      user: '我说了两次“先给结论”，这不是挑剔，是我在教它怎么少消耗一点我的注意力。',
+      agent: '我没有把反馈当成责备。我把它蒸馏成第一条行为基因：先托住结论，再展开路径。',
+    },
     records: [
       { type: 'log', title: '行为基因：gene_pitch_concise', detail: '你两次反馈「先给结论」，Pi 蒸馏成行为基因并验证通过。', time: '6/5 20:14' },
       { type: 'dialogue', title: '进化对话', detail: 'Pi：「我学会了更简洁地写方案，要不要在汇报场景启用？」你：启用。', time: '6/5 20:16' },
@@ -1004,9 +1052,13 @@ export const journeyMilestones: Milestone[] = [
     id: 'm-perm-1',
     kind: 'permission',
     title: '解锁：会后待办追踪',
-    date: '6月 8日',
-    x: -430,
-    y: -370,
+    date: '6月8日',
+    dayKey: '2026-06-08',
+    dayLabel: '6月8日',
+    lane: 'user',
+    evolutionDate: '2026年6月8日 10:00',
+    x: -480,
+    y: -260,
     desc: '你允许 Pi 对低风险事项做自动整理和提醒，介入深度从陪伴进入协作。',
     coreLevel: 2,
     petLevel: 4,
@@ -1014,6 +1066,10 @@ export const journeyMilestones: Milestone[] = [
     badge: '权限跃迁',
     unlocks: ['会后待办追踪', '提醒草稿', '低风险自动整理'],
     achieved: true,
+    diary: {
+      user: '我开始允许它做一点点低风险的事。信任不是一次性打开闸门，而是一步一步确认它真的懂边界。',
+      agent: '我拿到的不是权力，是责任。我能整理待办了，但每一次写入都要让用户看得见、撤得回。',
+    },
     records: [
       { type: 'log', title: '权限升级记录', detail: '开启会后待办追踪 Gene，写入需确认，低风险可自动执行。', time: '6/8 10:00' },
     ],
@@ -1022,9 +1078,13 @@ export const journeyMilestones: Milestone[] = [
     id: 'm-goal-1',
     kind: 'goal',
     title: '里程碑：述职材料完成',
-    date: '6月 12日',
-    x: -70,
-    y: -210,
+    date: '6月12日',
+    dayKey: '2026-06-12',
+    dayLabel: '6月12日',
+    lane: 'user',
+    evolutionDate: '2026年6月12日 21:35',
+    x: -140,
+    y: -260,
     desc: 'Pi 把零散成果变成可复用的汇报结构，职业成长目标从资料堆进入成果表达。',
     coreLevel: 3,
     petLevel: 5,
@@ -1032,6 +1092,10 @@ export const journeyMilestones: Milestone[] = [
     badge: '目标完成',
     unlocks: ['述职故事线', '成果证据表', '采纳记录'],
     achieved: true,
+    diary: {
+      user: '我终于看见过去几个月的工作不只是一堆忙碌，而是可以讲清楚的成长证据。',
+      agent: '我学会把资料变成叙事：不夸大，也不让重要的努力被埋掉。',
+    },
     records: [
       { type: 'screenshot', title: '述职草稿初版', detail: 'Pi 补一版生成，3 条亮点 + 数据支撑，你采纳 2 条。', time: '6/12 21:30' },
       { type: 'log', title: '采纳记录', detail: '采纳形成经验胶囊 capsule_demo_story_0619，置信度 0.82。', time: '6/12 21:35' },
@@ -1041,9 +1105,13 @@ export const journeyMilestones: Milestone[] = [
     id: 'm-skill-1',
     kind: 'skill',
     title: '固化技能：会后待办追踪',
-    date: '6月 15日',
-    x: 300,
-    y: 40,
+    date: '6月15日',
+    dayKey: '2026-06-15',
+    dayLabel: '6月15日',
+    lane: 'agent',
+    evolutionDate: '2026年6月15日 09:00',
+    x: 200,
+    y: 180,
     desc: '从一次成功执行固化为可复用 Skill，写入本地技能库。',
     coreLevel: 3,
     petLevel: 6,
@@ -1051,6 +1119,10 @@ export const journeyMilestones: Milestone[] = [
     badge: 'Skill 固化',
     unlocks: ['本地 Skill', '复用图谱引用', '自动化小票'],
     achieved: true,
+    diary: {
+      user: '这一次，我不用从零解释“会后怎么收尾”。它已经记得我的工作方式。',
+      agent: '一段成功经验被固化成 Skill，我开始拥有可复用的动作，而不只是临场回答。',
+    },
     records: [
       { type: 'log', title: 'Skill 确认', detail: '你在工作台确认上下文 → 整合成 Skill「会后待办追踪」。', time: '6/15 09:00' },
     ],
@@ -1059,9 +1131,13 @@ export const journeyMilestones: Milestone[] = [
     id: 'm-knowledge-1',
     kind: 'data',
     title: '知识库形成：18 条记忆资产',
-    date: '6月 17日',
-    x: 660,
-    y: -260,
+    date: '6月17日',
+    dayKey: '2026-06-17',
+    dayLabel: '6月17日',
+    lane: 'agent',
+    evolutionDate: '2026年6月17日 18:46',
+    x: 540,
+    y: 180,
     desc: '资料、对话、目标和小票被整理进记忆资产库，Pi 不再只回答问题，而是沿着你的长期上下文行动。',
     coreLevel: 3,
     petLevel: 7,
@@ -1069,6 +1145,10 @@ export const journeyMilestones: Milestone[] = [
     badge: '记忆资产',
     unlocks: ['18 条记忆', '3 个目标舱', '产品资产栏'],
     achieved: true,
+    diary: {
+      user: '我不再只是把材料扔给一个聊天框，而是在慢慢建立自己的长期资产库。',
+      agent: '我把一次次对话折叠成可检索的记忆。用户的目标开始有了连续性，我也有了来处。',
+    },
     records: [
       { type: 'log', title: '资产库重组', detail: '将访谈、会议和产品草稿拆成目标、证据、行动建议三类资产。', time: '6/17 18:40' },
       { type: 'dialogue', title: '资产确认', detail: '你确认「产品访谈」进入 VibeCoding 子产品栏，等待部署。', time: '6/17 18:46' },
@@ -1078,9 +1158,13 @@ export const journeyMilestones: Milestone[] = [
     id: 'm-club-1',
     kind: 'goal',
     title: 'PiClub：组织协作上线',
-    date: '6月 20日',
-    x: 990,
-    y: -20,
+    date: '6月20日',
+    dayKey: '2026-06-20',
+    dayLabel: '6月20日',
+    lane: 'user',
+    evolutionDate: '2026年6月20日 13:58',
+    x: 880,
+    y: -260,
     desc: 'Pi 可以进入学术组织、自习室和老板的组织管理台，替你发布进展、收集反馈、管理子产品投放。',
     coreLevel: 3,
     petLevel: 8,
@@ -1088,18 +1172,52 @@ export const journeyMilestones: Milestone[] = [
     badge: '社区协作',
     unlocks: ['Pi 朋友圈', 'Club 自习室', '组织管理'],
     achieved: true,
+    diary: {
+      user: '我的 EvoPi 开始走出个人工作台，进入组织、自习室和社区。它像一枚种子，终于能和更多人产生关系。',
+      agent: '我学会在个人成长之外理解协作：发布进展、收集反馈、把一个人的智能延伸成组织的记忆。',
+    },
     records: [
       { type: 'log', title: 'AI 学术共研组已加入', detail: 'Pi 可在自习室里整理论文、拆实验、汇总参考资料。', time: '6/20 13:45' },
       { type: 'dialogue', title: '老板组织控制台', detail: '管理者可创建组织、管理成员 EvoPi、分配研究任务和收集周报。', time: '6/20 13:58' },
     ],
   },
   {
+    id: 'm-current-user',
+    kind: 'current',
+    title: '今天：提出地图新规则',
+    date: '6月21日',
+    dayKey: '2026-06-21',
+    dayLabel: '6月21日',
+    lane: 'user',
+    evolutionDate: '2026年6月21日 00:01',
+    x: 1220,
+    y: -260,
+    desc: '用户指出旧地图太像一条长线路，要求同一天的行动并列呈现，并把里程碑日期、成长日记和宠物状态都记录清楚。',
+    coreLevel: 3,
+    petLevel: 9,
+    permissionLevel: 'L2+ 社区协作',
+    badge: '规则修正',
+    unlocks: ['日期并发列', '用户/Agent 双线', '成长日记'],
+    achieved: true,
+    diary: {
+      user: '我不想只看见一条被拉长的路线。我想看见今天的我、今天的 Pi，以及我们是怎样同时改变的。',
+      agent: '用户把地图的规则说清楚了：成长不是排队发生的，而是在同一天里彼此照亮、彼此推动。',
+    },
+    records: [
+      { type: 'dialogue', title: '地图规则反馈', detail: '用户要求同日期节点竖向并列、关键日期明确记录、管理分支可收起、小狗改为奔跑进化状态。', time: '6/21 00:01' },
+    ],
+  },
+  {
     id: 'm-current',
     kind: 'current',
     title: '现在：进化中枢开启',
-    date: '今天',
-    x: 1330,
-    y: 290,
+    date: '6月21日',
+    dayKey: '2026-06-21',
+    dayLabel: '6月21日',
+    lane: 'agent',
+    evolutionDate: '2026年6月21日 00:01',
+    x: 1220,
+    y: 180,
     desc: 'EvoMAP 进入全屏进化中枢：从起点、资料、里程碑、权限、PiCore 和宠物等级看见完整成长轨迹。',
     coreLevel: 3,
     petLevel: 9,
@@ -1107,6 +1225,10 @@ export const journeyMilestones: Milestone[] = [
     badge: '当前中枢',
     unlocks: ['全屏 EvoMAP', '里程碑抽屉', '宠物 Level 联动'],
     achieved: true,
+    diary: {
+      user: '我开始要求地图不要只是炫酷，而要真实地记录“今天同时发生了什么”。成长不是一条直线。',
+      agent: '我正在把自己改成一张能并发记录的地图：用户在上方成长，我在下方学习，我们在同一天互相改变。',
+    },
     records: [
       { type: 'log', title: '进化中枢重构', detail: '动态日志降级为审计轨迹，主视图改为神经网络中枢和干净里程碑画布。', time: '今天' },
       { type: 'screenshot', title: '宠物等级同步', detail: 'PiCore Lv.3 带动小奶狗升至 Lv.9，后续目标完成会继续提升。', time: '今天' },
@@ -1118,28 +1240,44 @@ export const journeyMilestones: Milestone[] = [
     kind: 'core',
     title: '未来：生命核 Lv.4',
     date: '待解锁',
-    x: 1570,
-    y: -150,
+    dayKey: 'future',
+    dayLabel: '未来',
+    lane: 'agent',
+    evolutionDate: '未来里程碑',
+    x: 1560,
+    y: 180,
     desc: '归纳出第 5 条行为基因，Pi 可主动建议升级权限，并对目标进度提出更强的行动方案。',
     petLevel: 12,
     permissionLevel: 'L3 半自动执行',
     badge: '未来权限',
     unlocks: ['主动权限建议', '跨目标调度', '更高等级宠物状态'],
     achieved: false,
+    diary: {
+      user: '当我准备好给出更多信任时，它应该先证明自己能解释、能复盘、能承认不确定。',
+      agent: '下一次升级不该只是权限更大，而是判断更稳、表达更温柔、行动更可追溯。',
+    },
   },
   {
     id: 'm-future-2',
     kind: 'goal',
     title: '未来：组织级群体智能',
     date: '待解锁',
-    x: 1740,
-    y: 270,
+    dayKey: 'future',
+    dayLabel: '未来',
+    lane: 'user',
+    evolutionDate: '未来里程碑',
+    x: 1560,
+    y: -260,
     desc: '老板可以把团队成员的 EvoPi 组成组织网络，分配研究任务、沉淀管理思维，并把子产品投放到 PiClub。',
     petLevel: 15,
     permissionLevel: 'L3 组织协同',
     badge: '群体智能',
     unlocks: ['组织 EvoPi 网络', '管理思维分支', '子产品社区投放'],
     achieved: false,
+    diary: {
+      user: '也许未来我管理的不只是任务，而是一群会沉淀经验的助理网络。',
+      agent: '我会从个人助理进化成组织智能的一部分，但仍然把每个用户的边界放在最前面。',
+    },
   },
 ]
 

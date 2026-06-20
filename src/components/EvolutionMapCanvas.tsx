@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom'
 import {
   journeyMilestones,
   professionBranches,
+  type EvolutionLane,
   type Milestone,
   type MilestoneKind,
   type Profession,
@@ -24,6 +25,31 @@ const CANVAS = {
   minY: -1200,
 }
 
+const evolutionLanes: Array<{ lane: EvolutionLane; label: string; y: number }> = [
+  { lane: 'user', label: '用户进化线', y: -260 },
+  { lane: 'agent', label: 'Agent 进化线', y: 180 },
+]
+
+const CALENDAR = {
+  top: -560,
+  monthWidth: 960,
+  monthGap: 74,
+  rowGap: 96,
+  maxColumns: 3,
+  monthHeight: 1010,
+  weekStep: 150,
+  dayStep: 116,
+  laneOffset: 28,
+}
+
+type PlacedMilestone = {
+  milestone: Milestone
+  x: number
+  y: number
+  dayY: number
+  monthKey: string
+}
+
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value))
 
 const kindMeta: Record<MilestoneKind, { color: string; ring: string; label: string; icon: string }> = {
@@ -40,6 +66,7 @@ export function EvolutionMapCanvas({ onClose }: { onClose: () => void }) {
   const [transform, setTransform] = useState({ x: 0, y: 24, scale: 0.4 })
   const [selected, setSelected] = useState<Milestone | null>(null)
   const [profession, setProfession] = useState<Profession>('manager')
+  const [branchOpen, setBranchOpen] = useState(false)
   const drag = useRef<{ active: boolean; startX: number; startY: number; baseX: number; baseY: number }>({
     active: false,
     startX: 0,
@@ -54,10 +81,34 @@ export function EvolutionMapCanvas({ onClose }: { onClose: () => void }) {
   const currentPetLevel = Math.max(1, ...achievedMilestones.map((item) => item.petLevel ?? 1))
   const latestPermission = [...achievedMilestones].reverse().find((item) => item.permissionLevel)?.permissionLevel ?? 'L1'
   const activeBranch = professionBranches.find((branch) => branch.id === profession) ?? professionBranches[0]
-  const branchPosition = useMemo(() => ({
-    x: Math.cos(activeBranch.angle) * 900,
-    y: Math.sin(activeBranch.angle) * 760,
-  }), [activeBranch.angle])
+  const calendarLayout = useMemo(() => buildCalendarLayout(journeyMilestones), [])
+  const placedMilestones = calendarLayout.milestones
+  const currentMilestone = [...placedMilestones].reverse().find((item) => item.milestone.achieved && item.milestone.kind === 'current')
+    ?? [...placedMilestones].reverse().find((item) => item.milestone.achieved)
+  const dayGroups = useMemo(() => {
+    const groups = new Map<string, { key: string; label: string; x: number; y: number; achieved: boolean }>()
+    placedMilestones.forEach((placed) => {
+      const current = groups.get(placed.milestone.dayKey)
+      if (!current) {
+        groups.set(placed.milestone.dayKey, {
+          key: placed.milestone.dayKey,
+          label: placed.milestone.dayLabel,
+          x: placed.x,
+          y: placed.dayY,
+          achieved: placed.milestone.achieved,
+        })
+        return
+      }
+      current.x = Math.min(current.x, placed.x)
+      current.y = Math.min(current.y, placed.dayY)
+      current.achieved = current.achieved || placed.milestone.achieved
+    })
+    return Array.from(groups.values()).sort((a, b) => a.x - b.x)
+  }, [placedMilestones])
+  const laneJourneys = useMemo(() => evolutionLanes.map(({ lane }) => ({
+    lane,
+    milestones: placedMilestones.filter((placed) => placed.milestone.lane === lane).sort((a, b) => a.x - b.x),
+  })), [placedMilestones])
 
   const fitOverview = useCallback(() => {
     const el = wrapRef.current
@@ -87,7 +138,7 @@ export function EvolutionMapCanvas({ onClose }: { onClose: () => void }) {
   }, [])
 
   const onPointerDown = useCallback((e: PointerEvent<HTMLDivElement>) => {
-    if ((e.target as HTMLElement).closest('.map-node, .map-branch, .map-toolbar, .map-record-panel')) return
+    if ((e.target as HTMLElement).closest('.map-node, .map-branch-dock, .map-toolbar, .map-record-panel')) return
     drag.current = { active: true, startX: e.clientX, startY: e.clientY, baseX: transform.x, baseY: transform.y }
     e.currentTarget.setPointerCapture?.(e.pointerId)
   }, [transform.x, transform.y])
@@ -106,10 +157,13 @@ export function EvolutionMapCanvas({ onClose }: { onClose: () => void }) {
   }
 
   const focusMilestone = (milestone: Milestone) => {
+    const placed = placedMilestones.find((item) => item.milestone.id === milestone.id)
+    const x = placed?.x ?? milestone.x
+    const y = placed?.y ?? milestone.y
     setSelected(milestone)
     setTransform((current) => ({
-      x: -milestone.x * current.scale,
-      y: -milestone.y * current.scale + 20,
+      x: -x * current.scale,
+      y: -y * current.scale + 20,
       scale: clamp(Math.max(current.scale, 0.86), 0.3, 1.35),
     }))
   }
@@ -126,7 +180,7 @@ export function EvolutionMapCanvas({ onClose }: { onClose: () => void }) {
   }, [onClose, selected])
 
   const map = (
-    <div className="map-overlay" role="dialog" aria-modal="true" aria-label="EvoMAP 进化中枢">
+    <div className="map-overlay map-calendar-overlay" role="dialog" aria-modal="true" aria-label="EvoMAP 进化中枢">
       <div
         className="map-viewport"
         ref={wrapRef}
@@ -159,37 +213,53 @@ export function EvolutionMapCanvas({ onClose }: { onClose: () => void }) {
             <ellipse cx="930" cy="-20" rx="690" ry="430" className="map-region region-community" />
             <ellipse cx="1560" cy="160" rx="460" ry="340" className="map-region region-future" />
 
-            {journeyMilestones.slice(0, -1).map((milestone, index) => {
-              const next = journeyMilestones[index + 1]
+            {calendarLayout.months.map((month) => (
+              <g className={month.isFuture ? 'map-month-panel future' : 'map-month-panel'} key={month.key}>
+                <rect x={month.x} y={month.y} width={CALENDAR.monthWidth} height={CALENDAR.monthHeight} rx="34" />
+                <text x={month.x + 28} y={month.y + 48}>{month.label}</text>
+              </g>
+            ))}
+
+            {dayGroups.map((day) => (
+              <g className={day.achieved ? 'map-day-column' : 'map-day-column future'} key={day.key}>
+                <line x1={day.x} y1={day.y - 44} x2={day.x} y2={day.y + 66} />
+              </g>
+            ))}
+
+            {evolutionLanes.map((lane) => (
+              <g className={`map-lane-guide lane-${lane.lane}`} key={lane.lane}>
+                <line x1={calendarLayout.bounds.left} y1={lane.y} x2={calendarLayout.bounds.right} y2={lane.y} />
+                <text x={calendarLayout.bounds.left - 34} y={lane.y - 22}>{lane.label}</text>
+              </g>
+            ))}
+
+            {laneJourneys.map(({ lane, milestones }) => milestones.slice(0, -1).map((milestone, index) => {
+              const next = milestones[index + 1]
               return (
                 <path
-                  className={`map-link ${milestone.achieved && next.achieved ? 'solid' : 'dashed'}`}
+                  className={`map-link lane-${lane} ${milestone.milestone.achieved && next.milestone.achieved ? 'solid' : 'dashed'}`}
                   d={journeyPath(milestone, next)}
-                  key={milestone.id}
+                  key={`${lane}-${milestone.milestone.id}`}
                 />
               )
-            })}
+            }))}
 
-            {journeyMilestones.map((milestone) => (
+            {placedMilestones.map((placed) => (
               <line
-                className={milestone.achieved ? 'map-nerve-line' : 'map-nerve-line future'}
-                key={`nerve-${milestone.id}`}
+                className={placed.milestone.achieved ? 'map-nerve-line' : 'map-nerve-line future'}
+                key={`nerve-${placed.milestone.id}`}
                 x1="0"
-                y1="0"
-                x2={milestone.x}
-                y2={milestone.y}
+                y1="640"
+                x2={placed.x}
+                y2={placed.y}
               />
             ))}
-            <path className="map-branch-link" d={`M 0 0 C ${branchPosition.x * 0.28} ${branchPosition.y * 0.18}, ${branchPosition.x * 0.66} ${branchPosition.y * 0.92}, ${branchPosition.x} ${branchPosition.y}`} />
           </svg>
 
-          <div className="map-core">
+          <div className="map-core map-calendar-core" style={{ top: calendarLayout.bounds.bottom + 220 } as CSSProperties}>
             <span className="map-core-ring r1" />
             <span className="map-core-ring r2" />
             <span className="map-core-ring r3" />
-            <div className="map-core-pet">
-              <PetSprite mood="happy" size={86} />
-            </div>
             <div className="map-core-body">
               <img className="cute-icon" src="/cute-line-icons/soft-sparkle-twinkle.png" alt="" />
               <strong>PiCore Lv.{currentCoreLevel}</strong>
@@ -202,13 +272,28 @@ export function EvolutionMapCanvas({ onClose }: { onClose: () => void }) {
             </div>
           </div>
 
-          {journeyMilestones.map((milestone) => {
+          {dayGroups.map((day) => (
+            <div className={day.achieved ? 'map-date-pin' : 'map-date-pin future'} key={`pin-${day.key}`} style={{ left: day.x, top: day.y - 46 } as CSSProperties}>
+              {day.label}
+            </div>
+          ))}
+
+          {currentMilestone && (
+            <div className="map-running-pet" style={{ left: currentMilestone.x + 92, top: currentMilestone.y - 94 } as CSSProperties}>
+              <span className="map-pet-trail" />
+              <PetSprite mood="happy" size={96} />
+              <em>奔跑中 · Lv.{currentPetLevel}</em>
+            </div>
+          )}
+
+          {placedMilestones.map((placed) => {
+            const milestone = placed.milestone
             const meta = kindMeta[milestone.kind]
             return (
               <button
                 className={`map-node kind-${milestone.kind} ${milestone.achieved ? 'achieved' : 'future'} ${selected?.id === milestone.id ? 'active' : ''}`}
                 key={milestone.id}
-                style={{ left: milestone.x, top: milestone.y, '--node-color': meta.color, '--node-ring': meta.ring } as CSSProperties}
+                style={{ left: placed.x, top: placed.y, '--node-color': meta.color, '--node-ring': meta.ring } as CSSProperties}
                 onClick={() => focusMilestone(milestone)}
               >
                 <span className="map-node-dot">
@@ -218,30 +303,11 @@ export function EvolutionMapCanvas({ onClose }: { onClose: () => void }) {
                 <span className="map-node-label">
                   <em>{milestone.badge ?? meta.label}</em>
                   <strong>{milestone.title}</strong>
-                  <span>{milestone.date}{milestone.coreLevel ? ` · PiCore Lv.${milestone.coreLevel}` : ''}</span>
+                  <span>{milestone.dayLabel} · {laneLabel(milestone.lane)}{milestone.coreLevel ? ` · PiCore Lv.${milestone.coreLevel}` : ''}</span>
                 </span>
               </button>
             )
           })}
-
-          <div className="map-branch" style={{ left: branchPosition.x, top: branchPosition.y } as CSSProperties}>
-            <div className="map-branch-head">
-              <img className="cute-icon" src={`/cute-line-icons/${activeBranch.icon}.png`} alt="" />
-              <div>
-                <strong>{activeBranch.label}进化分支</strong>
-                <span>{activeBranch.desc}</span>
-              </div>
-            </div>
-            <div className="map-branch-nodes">
-              {activeBranch.nodes.map((node, index) => (
-                <article className="map-branch-node" key={node.title}>
-                  <span>{String(index + 1).padStart(2, '0')}</span>
-                  <strong>{node.title}</strong>
-                  <em>{node.hint}</em>
-                </article>
-              ))}
-            </div>
-          </div>
         </div>
       </div>
 
@@ -256,7 +322,10 @@ export function EvolutionMapCanvas({ onClose }: { onClose: () => void }) {
             <button
               className={profession === branch.id ? 'map-prof active' : 'map-prof'}
               key={branch.id}
-              onClick={() => setProfession(branch.id)}
+              onClick={() => {
+                setProfession(branch.id)
+                setBranchOpen(true)
+              }}
               title={branch.desc}
             >
               {branch.label}
@@ -271,6 +340,28 @@ export function EvolutionMapCanvas({ onClose }: { onClose: () => void }) {
         </div>
       </div>
 
+      <aside className={branchOpen ? 'map-branch-dock open' : 'map-branch-dock collapsed'}>
+        <button className="map-branch-toggle" onClick={() => setBranchOpen((value) => !value)}>
+          <img className="cute-icon" src={`/cute-line-icons/${activeBranch.icon}.png`} alt="" />
+          <span>{activeBranch.label}分支</span>
+          <em>{branchOpen ? '收起' : '展开'}</em>
+        </button>
+        {branchOpen && (
+          <div className="map-branch-dock-body">
+            <p>{activeBranch.desc}</p>
+            <div className="map-branch-nodes">
+              {activeBranch.nodes.map((node, index) => (
+                <article className="map-branch-node" key={node.title}>
+                  <span>{String(index + 1).padStart(2, '0')}</span>
+                  <strong>{node.title}</strong>
+                  <em>{node.hint}</em>
+                </article>
+              ))}
+            </div>
+          </div>
+        )}
+      </aside>
+
       <div className="map-hint">拖拽平移 · 滚轮缩放 · 点击里程碑查看交互记录 · Esc 返回</div>
       {selected && <RecordPanel milestone={selected} onClose={() => setSelected(null)} />}
     </div>
@@ -279,10 +370,93 @@ export function EvolutionMapCanvas({ onClose }: { onClose: () => void }) {
   return createPortal(map, document.body)
 }
 
-function journeyPath(current: Milestone, next: Milestone): string {
+function buildCalendarLayout(milestones: Milestone[]) {
+  const realMonthKeys = Array.from(new Set(
+    milestones
+      .filter((milestone) => milestone.dayKey !== 'future')
+      .map((milestone) => milestone.dayKey.slice(0, 7)),
+  )).sort()
+  const hasFuture = milestones.some((milestone) => milestone.dayKey === 'future')
+  const monthKeys = hasFuture ? [...realMonthKeys, 'future'] : realMonthKeys
+  const columnCount = Math.max(1, Math.min(CALENDAR.maxColumns, monthKeys.length))
+  const rowCount = Math.max(1, Math.ceil(monthKeys.length / columnCount))
+  const totalWidth = columnCount * CALENDAR.monthWidth + Math.max(0, columnCount - 1) * CALENDAR.monthGap
+  const totalHeight = rowCount * CALENDAR.monthHeight + Math.max(0, rowCount - 1) * CALENDAR.rowGap
+  const firstX = -totalWidth / 2
+  const firstY = -totalHeight / 2
+  const months = monthKeys.map((key, index) => ({
+    key,
+    isFuture: key === 'future',
+    label: key === 'future' ? '未来' : monthLabel(key),
+    x: firstX + (index % columnCount) * (CALENDAR.monthWidth + CALENDAR.monthGap),
+    y: firstY + Math.floor(index / columnCount) * (CALENDAR.monthHeight + CALENDAR.rowGap),
+  }))
+  const monthByKey = new Map(months.map((month) => [month.key, month]))
+  const laneOffset = (lane: EvolutionLane) => lane === 'user' ? -CALENDAR.laneOffset : CALENDAR.laneOffset
+  const milestonesInSameDay = new Map<string, number>()
+
+  const placed = milestones.map((milestone): PlacedMilestone => {
+    const monthKey = milestone.dayKey === 'future' ? 'future' : milestone.dayKey.slice(0, 7)
+    const month = monthByKey.get(monthKey) ?? months[0]
+    if (!month) {
+      return { milestone, x: milestone.x, y: milestone.y, dayY: milestone.y, monthKey }
+    }
+    if (milestone.dayKey === 'future') {
+      const laneY = milestone.lane === 'user' ? month.y + 320 : month.y + 570
+      return {
+        milestone,
+        x: month.x + CALENDAR.monthWidth / 2,
+        y: laneY,
+        dayY: laneY,
+        monthKey,
+      }
+    }
+
+    const date = parseDayKey(milestone.dayKey)
+    const firstDay = new Date(date.getFullYear(), date.getMonth(), 1)
+    const weekIndex = Math.floor((date.getDate() + firstDay.getDay() - 1) / 7)
+    const dayOfWeek = date.getDay()
+    const sameDayIndex = milestonesInSameDay.get(`${milestone.dayKey}-${milestone.lane}`) ?? 0
+    milestonesInSameDay.set(`${milestone.dayKey}-${milestone.lane}`, sameDayIndex + 1)
+    const dayY = month.y + 136 + dayOfWeek * CALENDAR.dayStep
+    return {
+      milestone,
+      x: month.x + 74 + weekIndex * CALENDAR.weekStep + sameDayIndex * 12,
+      y: dayY + laneOffset(milestone.lane),
+      dayY,
+      monthKey,
+    }
+  })
+
+  return {
+    months,
+    milestones: placed,
+    bounds: {
+      left: firstX - 52,
+      right: firstX + totalWidth + 52,
+      bottom: firstY + totalHeight,
+    },
+  }
+}
+
+function parseDayKey(dayKey: string): Date {
+  const [year, month, day] = dayKey.split('-').map(Number)
+  return new Date(year, month - 1, day)
+}
+
+function monthLabel(monthKey: string): string {
+  const [year, month] = monthKey.split('-')
+  return `${year}年${Number(month)}月`
+}
+
+function journeyPath(current: PlacedMilestone, next: PlacedMilestone): string {
   const midX = (current.x + next.x) / 2
-  const lift = current.y > next.y ? -90 : 90
+  const lift = current.milestone.lane === next.milestone.lane ? (current.milestone.lane === 'user' ? -58 : 58) : (current.y > next.y ? -90 : 90)
   return `M ${current.x} ${current.y} C ${midX} ${current.y + lift}, ${midX} ${next.y - lift}, ${next.x} ${next.y}`
+}
+
+function laneLabel(lane: EvolutionLane): string {
+  return lane === 'user' ? '用户进化' : 'Agent 进化'
 }
 
 function RecordPanel({ milestone, onClose }: { milestone: Milestone; onClose: () => void }) {
@@ -293,11 +467,23 @@ function RecordPanel({ milestone, onClose }: { milestone: Milestone; onClose: ()
         <div>
           <span className="map-record-kind">{meta.label}</span>
           <strong>{milestone.title}</strong>
-          <span className="map-record-date">{milestone.date}{milestone.coreLevel ? ` · PiCore Lv.${milestone.coreLevel}` : ''}</span>
+          <span className="map-record-date">{milestone.evolutionDate} · {laneLabel(milestone.lane)}{milestone.coreLevel ? ` · PiCore Lv.${milestone.coreLevel}` : ''}</span>
         </div>
         <button className="map-record-close" onClick={onClose} aria-label="关闭记录面板">关闭</button>
       </div>
       {milestone.desc && <p className="map-record-desc">{milestone.desc}</p>}
+      {milestone.diary && (
+        <div className="map-diary">
+          <article className="map-diary-card user">
+            <span>用户日记</span>
+            <p>{milestone.diary.user}</p>
+          </article>
+          <article className="map-diary-card agent">
+            <span>Agent 日记</span>
+            <p>{milestone.diary.agent}</p>
+          </article>
+        </div>
+      )}
       <div className="map-record-metrics">
         {milestone.petLevel && <span>宠物 Lv.{milestone.petLevel}</span>}
         {milestone.permissionLevel && <span>{milestone.permissionLevel}</span>}

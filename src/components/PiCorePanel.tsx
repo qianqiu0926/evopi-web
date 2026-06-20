@@ -1,10 +1,11 @@
 import { useState } from 'react'
 import { PetSprite } from './PetSprite'
 import { Integrations } from './Integrations'
-import { AgentTasks } from './AgentTasks'
-import { adoptablePets, piModules, petAnimations, type PetMood } from '../data'
+import { adoptablePets, petAnimations, type PetMood } from '../data'
 
 type PiCoreEmotion = 'calm' | 'happy' | 'waiting'
+
+const iconPath = (name: string) => `/cute-line-icons/${name}.png`
 
 /* ============================================================
    PiCorePanel · 右侧生命核面板
@@ -13,17 +14,23 @@ type PiCoreEmotion = 'calm' | 'happy' | 'waiting'
    ============================================================ */
 export function PiCorePanel({
   mood,
+  moodIsLive = false,
   emotion,
+  healthActive = false,
+  onOpenHealth,
 }: {
   mood: PetMood
+  moodIsLive?: boolean
   emotion: PiCoreEmotion
+  healthActive?: boolean
+  onOpenHealth?: () => void
 }) {
   const [petName, setPetName] = useState(adoptablePets[0].name)
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState('')
   const pet = adoptablePets[0]
   const anim = petAnimations.find((a) => a.mood === mood) ?? petAnimations[0]
-  const emotionLabel = emotion === 'happy' ? '开心奔跑' : emotion === 'waiting' ? '等你确认' : anim.label
+  const emotionLabel = moodIsLive ? anim.label : emotion === 'happy' ? '开心奔跑' : emotion === 'waiting' ? '等你确认' : anim.label
 
   const rename = () => {
     const n = draft.trim() || pet.name
@@ -32,11 +39,21 @@ export function PiCorePanel({
     setDraft('')
   }
 
-  const statusCopy = emotion === 'happy'
-    ? '你在推进任务或把事情交给 Pi，它正开心地跑起来。'
-    : emotion === 'waiting'
-      ? '有任务等你确认。你停太久了，它在提醒你回来动一动。'
-      : anim.desc
+  const liveStatusCopy: Record<PetMood, string> = {
+    idle: anim.desc,
+    happy: 'Pi 听到你确认或产生了新灵感，正在兴奋地回应你。',
+    feeding: 'Pi 感觉你在修正或卡住了，会先放慢节奏，把问题拆小。',
+    learning: 'Pi 正在理解你的表达、任务和语气，并准备接住下一步。',
+    sleeping: 'Pi 会进入低打扰状态，等你回来再继续确认。',
+  }
+
+  const statusCopy = moodIsLive
+    ? liveStatusCopy[mood]
+    : emotion === 'happy'
+      ? '你在推进任务或把事情交给 Pi，它正开心地跑起来。'
+      : emotion === 'waiting'
+        ? '有任务等你确认。你停太久了，它在提醒你回来动一动。'
+        : anim.desc
 
   return (
     <section className="picore-panel">
@@ -96,21 +113,40 @@ export function PiCorePanel({
         </div>
       )}
 
-      {/* 三个 Pi 模块（产品方案：最多 3 个） */}
-      <div className="pi-modules">
-        {piModules.map((m) => (
-          <div className="state-row pi-module" key={m.name}>
-            <img className="cute-icon" src={`/cute-line-icons/${m.icon}.png`} alt="" />
-            <div>
-              <span>{m.name}</span>
-              <strong>{m.value}</strong>
-            </div>
+      <section className={`pi-health-panel ${healthActive ? 'active' : ''}`}>
+        <div className="pi-health-preview">
+          <div className="pi-health-stick" aria-hidden="true">
+            <span className="head" />
+            <span className="body" />
+            <span className="arms" />
+            <span className="legs" />
           </div>
-        ))}
-      </div>
+          <div>
+            <strong>{healthActive ? '正在检测你的动作' : '身心健康检测'}</strong>
+            <span>{healthActive ? 'Pi 正在看肩、髋、膝、踝的动作线。' : '站到屏幕前，Pi 会用视频帮你调动作。'}</span>
+          </div>
+        </div>
 
-      {/* 系统外接：微信/飞书/邮件 转接 + 快捷键回 + 开代理 */}
-      <AgentTasks />
+        <div className="pi-health-metrics">
+          <article>
+            <span>识别协议</span>
+            <strong>OpenPose BODY_25</strong>
+          </article>
+          <article>
+            <span>视觉模型</span>
+            <strong>MiniMax</strong>
+          </article>
+          <article>
+            <span>语音教练</span>
+            <strong>豆包</strong>
+          </article>
+        </div>
+
+        <button className="primary-btn pi-health-start" onClick={onOpenHealth} type="button">
+          <img className="cute-icon" src={iconPath('soft-heart-favorite')} alt="" />
+          {healthActive ? '回到训练画面' : '开始身心检测'}
+        </button>
+      </section>
 
       <Integrations />
     </section>

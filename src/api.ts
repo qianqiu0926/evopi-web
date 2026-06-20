@@ -319,6 +319,14 @@ export type VolcengineRealtimeConfig = {
   notes: string[]
 }
 
+export type DoubaoSpeechResponse = {
+  provider: 'doubao-tts'
+  configured: boolean
+  audioMime: string
+  audioBase64: string
+  voiceType: string
+}
+
 export type ExternalAgentCallResult = {
   kind: ExternalAgentKind
   command: string[]
@@ -754,6 +762,18 @@ export async function runExternalAgentWithReceipt(input: {
 
 export async function getVolcengineRealtimeConfig() {
   return api<VolcengineRealtimeConfig>('/api/volcengine/realtime/config')
+}
+
+export async function synthesizeDoubaoSpeech(input: {
+  text: string
+  voiceType?: string
+  speedRatio?: number
+  pitchRatio?: number
+}) {
+  return api<DoubaoSpeechResponse>('/api/voice/doubao/tts', {
+    method: 'POST',
+    body: JSON.stringify(input),
+  })
 }
 
 export async function exportSkillToOpenClaw(skillId: string, input: { slug?: string; apply?: boolean } = {}) {

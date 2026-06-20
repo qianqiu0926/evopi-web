@@ -20,6 +20,10 @@ const minimaxModel = process.env.MINIMAX_MODEL ?? 'MiniMax-M3'
 const volcengineRtcAppId = process.env.VOLCENGINE_RTC_APP_ID ?? process.env.VOLCENGINE_APP_ID ?? ''
 const volcengineRtcAppKey = process.env.VOLCENGINE_RTC_APP_KEY ?? process.env.VOLCENGINE_APP_KEY ?? ''
 const volcengineRtcScene = process.env.VOLCENGINE_RTC_SCENE ?? 'evopi-workbench'
+const volcengineTtsAppId = process.env.VOLCENGINE_TTS_APP_ID ?? process.env.VOLCENGINE_APP_ID ?? volcengineRtcAppId
+const volcengineTtsToken = process.env.VOLCENGINE_TTS_TOKEN ?? process.env.VOLCENGINE_TTS_APP_KEY ?? process.env.VOLCENGINE_APP_KEY ?? volcengineRtcAppKey
+const volcengineTtsCluster = process.env.VOLCENGINE_TTS_CLUSTER ?? 'volcano_tts'
+const volcengineTtsVoiceType = process.env.VOLCENGINE_TTS_VOICE_TYPE ?? 'BV700_V2_streaming'
 
 ensureDir(path.dirname(statePath))
 
@@ -63,6 +67,12 @@ async function handle(req, res) {
 
   if (req.method === 'GET' && pathname === '/api/volcengine/realtime/config') {
     return sendJson(res, 200, volcengineRealtimeConfig())
+  }
+
+  if (req.method === 'POST' && pathname === '/api/voice/doubao/tts') {
+    const input = await readJson(req)
+    const result = await synthesizeDoubaoSpeech(input)
+    return sendJson(res, 200, result)
   }
 
   if (req.method === 'GET' && pathname === '/api/piroom/personas') {
@@ -1673,6 +1683,66 @@ function volcengineRealtimeConfig() {
       appIdLooksValid ? '当前值符合火山 RTC AppID 常见格式。' : '当前 AppID 格式未确认，请在火山控制台核对。',
       '不要把 AppKey 暴露给前端或提交到仓库。',
     ],
+  }
+}
+
+async function synthesizeDoubaoSpeech(input) {
+  const text = String(input?.text ?? '').replace(/\*/g, '').trim().slice(0, 180)
+  if (!text) throw new HttpError(400, 'invalid_request', 'text is required')
+  if (!volcengineTtsAppId || !volcengineTtsToken) {
+    throw new HttpError(503, 'doubao_tts_not_configured', 'VOLCENGINE_TTS_APP_ID and VOLCENGINE_TTS_TOKEN are required')
+  }
+  const speaker = String(input?.voiceType ?? volcengineTtsVoiceType).trim() || volcengineTtsVoiceType
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), 18_000)
+  try {
+    const response = await fetch('https://openspeech.bytedance.com/api/v1/tts', {
+      method: 'POST',
+      signal: controller.signal,
+      headers: {
+        Authorization: `Bearer;${volcengineTtsToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        app: {
+          appid: volcengineTtsAppId,
+          token: volcengineTtsToken,
+          cluster: String(input?.cluster ?? volcengineTtsCluster),
+        },
+        user: {
+          uid: String(input?.uid ?? 'evopi-health-coach'),
+        },
+        audio: {
+          voice_type: speaker,
+          encoding: 'mp3',
+          speed_ratio: Number(input?.speedRatio ?? 1.04),
+          volume_ratio: Number(input?.volumeRatio ?? 1),
+          pitch_ratio: Number(input?.pitchRatio ?? 1.08),
+        },
+        request: {
+          reqid: newId('tts'),
+          text,
+          text_type: 'plain',
+          operation: 'query',
+        },
+      }),
+    })
+    const body = await response.json().catch(() => null)
+    if (!response.ok || body?.code !== 3000) {
+      const message = body?.message ?? body?.msg ?? `Doubao TTS returned ${response.status}`
+      throw new HttpError(response.ok ? 502 : response.status, 'doubao_tts_failed', message, body)
+    }
+    const data = typeof body?.data === 'string' ? body.data : ''
+    if (!data) throw new HttpError(502, 'doubao_tts_empty', 'Doubao TTS response had no audio data')
+    return {
+      provider: 'doubao-tts',
+      configured: true,
+      audioMime: 'audio/mpeg',
+      audioBase64: data,
+      voiceType: speaker,
+    }
+  } finally {
+    clearTimeout(timeout)
   }
 }
 

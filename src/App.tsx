@@ -1,17 +1,15 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import type { ReactNode } from 'react'
 import './App.css'
 import {
   assetLibrary,
   clubCommunities,
   clubPosts,
-  coEvolutionLoop,
   collaborationLevels,
-  evolutionLogs,
   goals,
   goalSnippets,
   greeting,
   installedSkills,
-  journeyMilestones,
   memories,
   memoryCategories,
   navGroups,
@@ -33,11 +31,8 @@ import {
 import type { Asset, ChatMsg, Goal, GoalSnippet, ProductAsset, RoomPerson } from './data'
 import { GroupedNav } from './components/GroupedNav'
 import { PiCorePanel } from './components/PiCorePanel'
-import { PetSprite } from './components/PetSprite'
 import { InteractiveBg } from './components/InteractiveBg'
 import { AuthModal } from './components/AuthModal'
-import { EvolutionMindMap } from './components/EvolutionMindMap'
-import { EvolutionMapCanvas } from './components/EvolutionMapCanvas'
 import { Onboarding } from './components/Onboarding'
 import { IconThemeSwap } from './components/IconThemeSwap'
 import { TechCursor } from './components/TechCursor'
@@ -86,6 +81,7 @@ import {
   runExternalAgentWithReceipt,
   runPiAgent,
   searchEvoMapRecipes,
+  synthesizeDoubaoSpeech,
   syncSkillEvoMapReuse,
   syncExternalSkillsToEvoPi,
   syncExternalSkillToEvoPi,
@@ -191,7 +187,9 @@ function App() {
   const [onboardDepth, setOnboardDepth] = useState(2) // 预配置推导的初始介入深度
   const [piEmotion, setPiEmotion] = useState<PiCoreEmotion>('calm')
   const [piBoostUntil, setPiBoostUntil] = useState(0)
+  const [piDialogueMood, setPiDialogueMood] = useState<PetMood | null>(null)
   const [inactive, setInactive] = useState(false)
+  const piDialogueMoodTimerRef = useRef<number | null>(null)
 
   useEffect(() => { document.body.dataset.theme = theme }, [theme])
   useEffect(() => { document.body.dataset.piEmotion = piEmotion }, [piEmotion])
@@ -218,13 +216,30 @@ function App() {
   useEffect(() => {
     const boost = (duration = 6200) => setPiBoostUntil(Date.now() + duration)
     const onSignal = (event: Event) => {
-      const kind = (event as CustomEvent<{ kind?: PiCoreSignalKind }>).detail?.kind
+      const detail = (event as CustomEvent<{ kind?: PiCoreSignalKind; mood?: PetMood; duration?: number }>).detail
+      const kind = detail?.kind
+      if (detail?.mood) {
+        setPiDialogueMood(detail.mood)
+        if (piDialogueMoodTimerRef.current !== null) window.clearTimeout(piDialogueMoodTimerRef.current)
+        piDialogueMoodTimerRef.current = window.setTimeout(() => {
+          setPiDialogueMood(null)
+          piDialogueMoodTimerRef.current = null
+        }, detail.duration ?? 8600)
+        if (detail.mood !== 'happy') {
+          setPiBoostUntil(0)
+          setInactive(false)
+          return
+        }
+      }
       if (kind === 'delegate') boost(7800)
       else if (kind === 'work' || kind === 'confirm') boost(6200)
       else setInactive(false)
     }
     window.addEventListener('evopi:picore-signal', onSignal)
-    return () => window.removeEventListener('evopi:picore-signal', onSignal)
+    return () => {
+      window.removeEventListener('evopi:picore-signal', onSignal)
+      if (piDialogueMoodTimerRef.current !== null) window.clearTimeout(piDialogueMoodTimerRef.current)
+    }
   }, [])
 
   useEffect(() => {
@@ -239,12 +254,13 @@ function App() {
 
   // 由页面状态推断 PiCore 心情（产品方案语义）
   const mood: PetMood = useMemo(() => {
+    if (piDialogueMood) return piDialogueMood
     if (piEmotion === 'happy') return 'happy'
     if (piEmotion === 'waiting') return 'feeding'
     if (page === 'memory' || page === 'today') return pendingCount > 0 ? 'feeding' : 'idle'
     if (page === 'club') return 'happy'
     return 'idle'
-  }, [page, piEmotion])
+  }, [page, piDialogueMood, piEmotion])
 
   // 认证完成：新用户走 onboarding，老用户直接进入
   const handleAuthed = (u: AuthUser, isNew: boolean) => {
@@ -307,6 +323,7 @@ function App() {
       navCollapsed={navCollapsed}
       setNavCollapsed={setNavCollapsed}
       mood={mood}
+      moodIsLive={Boolean(piDialogueMood)}
       piEmotion={piEmotion}
       user={user}
       onboardDepth={onboardDepth}
@@ -408,7 +425,7 @@ function LaunchPage({
    ============================================================ */
 function AppShell({
   page, setPage, theme, setTheme, activePerson, setActivePerson,
-  navCollapsed, setNavCollapsed, mood, piEmotion, user, onboardDepth, onAuth, onLogout,
+  navCollapsed, setNavCollapsed, mood, moodIsLive, piEmotion, user, onboardDepth, onAuth, onLogout,
 }: {
   page: AppPage
   setPage: (p: AppPage) => void
@@ -419,6 +436,7 @@ function AppShell({
   navCollapsed: boolean
   setNavCollapsed: (v: boolean) => void
   mood: PetMood
+  moodIsLive: boolean
   piEmotion: PiCoreEmotion
   user: AuthUser | null
   onboardDepth: number
@@ -427,6 +445,7 @@ function AppShell({
 }) {
   const inRoomChat = page === 'room' && activePerson
   const [railCollapsed, setRailCollapsed] = useState(false)
+  const [healthModeActive, setHealthModeActive] = useState(false)
   const headerHint = useInlineHint(2400)
 
   const createPiReminder = async () => {
@@ -449,11 +468,20 @@ function AppShell({
   const selectPage = (key: string) => {
     setPage(key as AppPage)
     setActivePerson(null)
+    if (key !== 'today') setHealthModeActive(false)
     emitPiCoreSignal(key === 'goals' || key === 'club' ? 'work' : 'interaction')
   }
 
+  const openHealthMode = () => {
+    setPage('today')
+    setActivePerson(null)
+    setHealthModeActive(true)
+    setRailCollapsed(false)
+    emitPiCoreSignal('interaction', { mood: 'learning', duration: 9000 })
+  }
+
   return (
-    <main className={`app-shell ${inRoomChat ? 'wide-center' : ''} ${navCollapsed ? 'nav-collapsed' : ''} ${railCollapsed ? 'rail-collapsed' : ''}`}>
+    <main className={`app-shell ${inRoomChat ? 'wide-center' : ''} ${healthModeActive && page === 'today' ? 'health-mode' : ''} ${navCollapsed ? 'nav-collapsed' : ''} ${railCollapsed ? 'rail-collapsed' : ''}`}>
       <div className="doodle-bg" aria-hidden="true">
         <span className="blob blob-a" />
         <span className="blob blob-b" />
@@ -558,7 +586,8 @@ function AppShell({
         {page === 'today' && (
           <TodayPage
             goRoom={() => { setPage('room') }}
-            goGoals={() => { setPage('goals') }}
+            healthModeActive={healthModeActive}
+            onHealthModeChange={setHealthModeActive}
           />
         )}
         {page === 'goals' && <GoalsPage />}
@@ -583,7 +612,13 @@ function AppShell({
             <CuteIcon name="soft-arrow-right" />
             <span>收起</span>
           </button>
-          <PiCorePanel mood={mood} emotion={piEmotion} />
+          <PiCorePanel
+            mood={mood}
+            moodIsLive={moodIsLive}
+            emotion={piEmotion}
+            healthActive={healthModeActive && page === 'today'}
+            onOpenHealth={openHealthMode}
+          />
         </aside>
       )}
 
@@ -628,7 +663,50 @@ type SensingSignal = 'idle' | 'collecting' | 'modelPending' | 'attentive' | 'con
 type SensingSource = 'none' | 'vision' | 'voice' | 'multimodal'
 type AnalysisStatus = 'idle' | 'collecting' | 'analyzing' | 'ready' | 'error'
 type VoiceStatus = 'idle' | 'listening' | 'processing' | 'speaking' | 'error'
-type PiCallMode = 'text' | 'observe' | 'voice'
+type PiCallMode = 'text' | 'voice'
+type HealthSessionKind = 'burpee' | 'mobility' | 'neck'
+type HealthPoseStatus = 'idle' | 'warming' | 'tracking' | 'adjusting' | 'rest'
+type HealthAudioStatus = 'idle' | 'loading' | 'speaking' | 'fallback' | 'error'
+
+type HealthCoachPlan = {
+  id: HealthSessionKind
+  title: string
+  target: string
+  duration: string
+  intent: string
+  cue: string
+}
+
+type PoseKeypoint = {
+  name?: string
+  x: number
+  y: number
+  score?: number
+}
+
+type PoseDetectionRuntime = {
+  estimatePoses: (input: HTMLVideoElement, config?: Record<string, unknown>) => Promise<Array<{ keypoints?: PoseKeypoint[] }>>
+}
+
+const movenetKeypointNames = [
+  'nose',
+  'left_eye',
+  'right_eye',
+  'left_ear',
+  'right_ear',
+  'left_shoulder',
+  'right_shoulder',
+  'left_elbow',
+  'right_elbow',
+  'left_wrist',
+  'right_wrist',
+  'left_hip',
+  'right_hip',
+  'left_knee',
+  'right_knee',
+  'left_ankle',
+  'right_ankle',
+]
 
 type SpeechRecognitionEventLike = Event & {
   results: {
@@ -705,8 +783,8 @@ const sensingSignalMeta: Record<SensingSignal, { label: string; bubble: string; 
     mood: 'learning',
   },
   modelPending: {
-    label: '等待模型判定',
-    bubble: '页面已准备好自动感知入口，正式接入火山引擎后会由模型判断专注、疑虑、开心或离开。',
+    label: '正在观察',
+    bubble: '页面已准备好自动感知入口，模型服务会结合画面与语音判断专注、疑虑、开心或离开。',
     cue: '当前不做人工选择，也不冒充情绪识别结果。',
     mood: 'learning',
   },
@@ -788,7 +866,44 @@ const initialWorkbenchMessages: ChatMsg[] = [
   },
 ]
 
-function TodayPage({ goRoom, goGoals }: { goRoom: () => void; goGoals: () => void }) {
+const healthCoachPlans: HealthCoachPlan[] = [
+  {
+    id: 'burpee',
+    title: '12 个轻量波比跳',
+    target: '12 次',
+    duration: '约 90 秒',
+    intent: '唤醒腿部、腰背和核心，让久坐后的身体重新热起来。',
+    cue: '下蹲时膝盖对准脚尖，落地先稳住，再跳起。',
+  },
+  {
+    id: 'mobility',
+    title: '30 秒轻松体操',
+    target: '30 秒',
+    duration: '低强度',
+    intent: '放松肩颈和腰背，不追求出汗，只把身体从僵住的状态里带出来。',
+    cue: '动作慢一点，肩膀放松，呼吸不要憋住。',
+  },
+  {
+    id: 'neck',
+    title: '肩颈摇头晃脑',
+    target: '左右各 6 次',
+    duration: '约 45 秒',
+    intent: '缓解颈部紧绷和屏幕前前伸姿态。',
+    cue: '幅度小一点，不要甩头，感觉到拉伸就好。',
+  },
+]
+
+const defaultHealthCoach = '我先看你的站姿。把全身放进画面里，等肩、髋、膝都能看到，我们再开始。'
+
+function TodayPage({
+  goRoom,
+  healthModeActive,
+  onHealthModeChange,
+}: {
+  goRoom: () => void
+  healthModeActive: boolean
+  onHealthModeChange: (active: boolean) => void
+}) {
   const [text, setText] = useState('')
   const [messages, setMessages] = useState<ChatMsg[]>(initialWorkbenchMessages)
   const [activeContextId, setActiveContextId] = useState<string | null>(workbenchContexts[0]?.id ?? null)
@@ -802,12 +917,29 @@ function TodayPage({ goRoom, goGoals }: { goRoom: () => void; goGoals: () => voi
   const [voiceTranscript, setVoiceTranscript] = useState('')
   const [piCallMode, setPiCallMode] = useState<PiCallMode>('text')
   const [piVoiceEnabled, setPiVoiceEnabled] = useState(false)
+  const [livePetMood, setLivePetMood] = useState<PetMood>('idle')
   const [captureHint, setCaptureHint] = useState<'idle' | 'skill' | 'goal'>('idle')
+  const [healthPlanId, setHealthPlanId] = useState<HealthSessionKind>('mobility')
+  const [healthPoseStatus, setHealthPoseStatus] = useState<HealthPoseStatus>('idle')
+  const [healthCoachText, setHealthCoachText] = useState(defaultHealthCoach)
+  const [healthRepCount, setHealthRepCount] = useState(0)
+  const [healthAnalysisAt, setHealthAnalysisAt] = useState('')
+  const [healthAudioStatus, setHealthAudioStatus] = useState<HealthAudioStatus>('idle')
+  const [poseModelStatus, setPoseModelStatus] = useState<'idle' | 'loading' | 'ready' | 'error'>('idle')
+  const [poseKeypointCount, setPoseKeypointCount] = useState(0)
   const chatRef = useRef<HTMLDivElement>(null)
   const videoRef = useRef<HTMLVideoElement>(null)
+  const healthVideoRef = useRef<HTMLVideoElement>(null)
+  const poseCanvasRef = useRef<HTMLCanvasElement>(null)
   const streamRef = useRef<MediaStream | null>(null)
   const analysisTimerRef = useRef<number | null>(null)
+  const healthTimerRef = useRef<number | null>(null)
+  const poseFrameRef = useRef<number | null>(null)
+  const poseDetectorRef = useRef<PoseDetectionRuntime | null>(null)
+  const healthAudioRef = useRef<HTMLAudioElement | null>(null)
+  const lastSpokenCoachRef = useRef('')
   const recognitionRef = useRef<BrowserSpeechRecognition | null>(null)
+  const speechRunRef = useRef(0)
   // 发送：loading → 清空 + 提示
   const send = useActionState()
   const sendHint = useInlineHint(2600)
@@ -819,19 +951,25 @@ function TodayPage({ goRoom, goGoals }: { goRoom: () => void; goGoals: () => voi
 
   useEffect(() => {
     if (sensingSignal !== 'idle') document.body.dataset.piVision = sensingSignal
-    else delete document.body.dataset.piVision
-    return () => { delete document.body.dataset.piVision }
+    else document.body.removeAttribute('data-pi-vision')
+    return () => { document.body.removeAttribute('data-pi-vision') }
   }, [sensingSignal])
 
   useEffect(() => {
     if (cameraStatus === 'on' && videoRef.current && streamRef.current) {
       videoRef.current.srcObject = streamRef.current
     }
+    if (cameraStatus === 'on' && healthVideoRef.current && streamRef.current) {
+      healthVideoRef.current.srcObject = streamRef.current
+    }
   }, [cameraStatus])
 
   useEffect(() => {
     return () => {
       if (analysisTimerRef.current !== null) window.clearTimeout(analysisTimerRef.current)
+      if (healthTimerRef.current !== null) window.clearInterval(healthTimerRef.current)
+      if (poseFrameRef.current !== null) window.cancelAnimationFrame(poseFrameRef.current)
+      healthAudioRef.current?.pause()
       recognitionRef.current?.abort()
       streamRef.current?.getTracks().forEach((track) => track.stop())
       streamRef.current = null
@@ -839,11 +977,88 @@ function TodayPage({ goRoom, goGoals }: { goRoom: () => void; goGoals: () => voi
   }, [])
 
   const activeContext = workbenchContexts.find((item) => item.id === activeContextId) ?? workbenchContexts[0]
-  const sensingMeta = sensingSignalMeta[sensingSignal]
-  const callMood = voiceStatus === 'speaking' ? 'happy' : sensingMeta.mood
+  const activeHealthPlan = healthCoachPlans.find((plan) => plan.id === healthPlanId) ?? healthCoachPlans[0]
+  const videoWindowOpen = cameraStatus === 'on' || cameraStatus === 'requesting'
+  const callMood: PetMood = voiceStatus === 'speaking'
+    ? 'happy'
+    : voiceStatus === 'listening'
+      ? 'learning'
+      : send.status === 'loading'
+        ? 'feeding'
+        : livePetMood
 
-  const captureVideoFrame = () => {
-    const video = videoRef.current
+  const petMoodFromDialogue = (content: string, fallback: PetMood = 'idle'): PetMood => {
+    const value = content.toLowerCase()
+    if (/(开心|喜欢|太好了|很好|可以开始|开始执行|对，就是|灵感|完成|赞|yes|ok)/i.test(value)) return 'happy'
+    if (/(不对|不要|不是|困惑|疑虑|卡住|不明白|失败|焦虑|难受|no)/i.test(value)) return 'feeding'
+    if (/(暂停|等一下|离开|稍后|休息)/i.test(value)) return 'sleeping'
+    if (/(怎么|为什么|帮我|想做|产品|逻辑|方案|分析|整理|研究|继续)/i.test(value)) return 'learning'
+    return fallback
+  }
+
+  const pulseLivePetMood = (
+    mood: PetMood,
+    kind: PiCoreSignalKind = 'interaction',
+    duration = 8600,
+  ) => {
+    setLivePetMood(mood)
+    emitPiCoreSignal(kind, { mood, duration })
+  }
+
+  const unlockPiVoice = () => {
+    if ('speechSynthesis' in window) {
+      window.speechSynthesis.resume()
+    }
+  }
+
+  const cancelPiSpeech = useCallback((nextStatus: VoiceStatus = 'idle') => {
+    speechRunRef.current += 1
+    if ('speechSynthesis' in window) window.speechSynthesis.cancel()
+    setVoiceStatus(nextStatus)
+  }, [])
+
+  const pickPiVoice = useCallback(() => {
+    if (!('speechSynthesis' in window)) return undefined
+    const voices = window.speechSynthesis.getVoices()
+    const zhVoices = voices.filter((voice) => /zh|cmn|mandarin|chinese|普通话|中文/i.test(`${voice.lang} ${voice.name}`))
+    const candidates = zhVoices.length ? zhVoices : voices
+    const scoreVoice = (voice: SpeechSynthesisVoice) => {
+      const textValue = `${voice.lang} ${voice.name}`.toLowerCase()
+      let score = 0
+      if (/xiaoxiao|xiaoyi|xiaobei|xiaoni|tingting|meijia|mei-jia|hanhan|huihui|晓|小|婷婷|美佳/.test(textValue)) score += 6
+      if (/female|girl|young|child|woman|少女|女孩|女/.test(textValue)) score += 4
+      if (/zh-cn|cmn|mandarin|普通话|chinese/.test(textValue)) score += 3
+      if (/male|man|男|yunjian|yunxi|kangkang/.test(textValue)) score -= 5
+      return score
+    }
+    return [...candidates].sort((a, b) => scoreVoice(b) - scoreVoice(a))[0]
+  }, [])
+
+  const isVoiceConfirmText = (value: string) => (
+    /^(对|是|嗯|可以|ok|yes)/i.test(value.trim()) || /(就是这样|可以开始|开始执行|没错)/i.test(value)
+  )
+
+  const shortVoiceTask = (value: string) => {
+    const compact = value
+      .replace(/\*/g, '')
+      .replace(/\s+/g, ' ')
+      .replace(/^(我想|我需要|帮我|请你|就是|那个|嗯|呃|啊|可以|麻烦你)/, '')
+      .trim()
+    return compact.slice(0, 42) || '这件事'
+  }
+
+  const shapePiReplyForCurrentMode = (rawReply: string, userText: string) => {
+    const cleanReply = rawReply.replace(/\*/g, '').replace(/\s+/g, ' ').trim()
+    if (piCallMode !== 'voice') return cleanReply
+    if (isVoiceConfirmText(userText)) {
+      const title = activeContext?.title.replace(/[，,:：].*$/, '').slice(0, 18)
+      return title ? `好，我开始做。先处理${title}，完成后给你确认。` : '好，我开始做。先把第一步处理好，完成后给你确认。'
+    }
+    return `我理解是：${shortVoiceTask(userText)}。是这样吗？`
+  }
+
+  const captureVideoFrame = useCallback(() => {
+    const video = healthModeActive ? healthVideoRef.current ?? videoRef.current : videoRef.current
     if (!video || cameraStatus !== 'on' || video.videoWidth <= 0 || video.videoHeight <= 0) return ''
     const canvas = document.createElement('canvas')
     canvas.width = 640
@@ -854,7 +1069,283 @@ function TodayPage({ goRoom, goGoals }: { goRoom: () => void; goGoals: () => voi
     ctx.scale(-1, 1)
     ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
     return canvas.toDataURL('image/jpeg', 0.72)
+  }, [cameraStatus, healthModeActive])
+
+  const startHealthMode = async () => {
+    onHealthModeChange(true)
+    setPiCallMode('text')
+    setPiVoiceEnabled(false)
+    cancelPiSpeech('idle')
+    setHealthPoseStatus('warming')
+    setHealthCoachText(defaultHealthCoach)
+    setHealthRepCount(0)
+    pulseLivePetMood('learning', 'interaction', 9000)
+    if (cameraStatus !== 'on' && cameraStatus !== 'requesting') {
+      await startCamera('text')
+    }
   }
+
+  const stopHealthMode = () => {
+    onHealthModeChange(false)
+    if (healthTimerRef.current !== null) {
+      window.clearInterval(healthTimerRef.current)
+      healthTimerRef.current = null
+    }
+    healthAudioRef.current?.pause()
+    healthAudioRef.current = null
+    setHealthPoseStatus('idle')
+    setHealthCoachText(defaultHealthCoach)
+    setHealthAnalysisAt('')
+  }
+
+  const speakHealthCoach = useCallback(async (value: string) => {
+    const clean = value.replace(/\*/g, '').trim()
+    if (!clean || lastSpokenCoachRef.current === clean) return
+    lastSpokenCoachRef.current = clean
+    healthAudioRef.current?.pause()
+    healthAudioRef.current = null
+    cancelPiSpeech('idle')
+    setHealthAudioStatus('loading')
+    const speakWithBrowser = () => {
+      if (!('speechSynthesis' in window)) {
+        setHealthAudioStatus('error')
+        return
+      }
+      const utterance = new SpeechSynthesisUtterance(clean)
+      utterance.lang = 'zh-CN'
+      utterance.rate = 1.06
+      utterance.pitch = 1.32
+      const voice = pickPiVoice()
+      if (voice) {
+        try {
+          utterance.voice = voice
+        } catch {
+          // Ignore browser voice assignment differences.
+        }
+      }
+      utterance.onend = () => setHealthAudioStatus('idle')
+      utterance.onerror = () => setHealthAudioStatus('error')
+      setHealthAudioStatus('fallback')
+      window.speechSynthesis.cancel()
+      window.speechSynthesis.speak(utterance)
+    }
+    try {
+      const speech = await synthesizeDoubaoSpeech({
+        text: clean,
+        speedRatio: 1.04,
+        pitchRatio: 1.08,
+      })
+      const audio = new Audio(`data:${speech.audioMime};base64,${speech.audioBase64}`)
+      healthAudioRef.current = audio
+      setHealthAudioStatus('speaking')
+      audio.onended = () => setHealthAudioStatus('idle')
+      audio.onerror = speakWithBrowser
+      await audio.play()
+    } catch {
+      speakWithBrowser()
+    }
+  }, [cancelPiSpeech, pickPiVoice])
+
+  const analyzeHealthFrame = useCallback(async () => {
+    if (!healthModeActive || cameraStatus !== 'on') return
+    const visualFrameDataUrl = captureVideoFrame()
+    if (!visualFrameDataUrl) return
+    setHealthPoseStatus('tracking')
+    try {
+      const result = await runPiAgent({
+        workspaceTitle: 'EvoPi 身心健康检测',
+        goalName: '身心健康',
+        sessionKey: 'today-health-coach',
+        message: [
+          '你是 EvoPi 的身心健康教练，正在根据摄像头单帧做姿态教学。',
+          '请参考 OpenPose 的 BODY_25 关键点思路：头颈、肩、肘、腕、髋、膝、踝的相对位置。',
+          '不要诊断疾病，不要输出技术字段，不要提 API。',
+          '只回复一句轻松中文，最多 38 个字。先指出一个动作问题，再给一个可执行修正。',
+          `当前训练：${activeHealthPlan.title}。目标：${activeHealthPlan.target}。目的：${activeHealthPlan.intent}。标准提示：${activeHealthPlan.cue}`,
+        ].join('\n'),
+        visualFrameDataUrl,
+        timeoutSec: 18,
+      })
+      const reply = (externalAgentOutput(result.result) || activeHealthPlan.cue).replace(/\*/g, '').trim()
+      const shortReply = reply.length > 48 ? `${reply.slice(0, 46)}。` : reply
+      setHealthCoachText(shortReply)
+      setHealthPoseStatus(reply.includes('很好') || reply.includes('标准') ? 'tracking' : 'adjusting')
+      setHealthAnalysisAt(new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' }))
+      pulseLivePetMood(reply.includes('很好') ? 'happy' : 'learning', 'interaction', 7600)
+      void speakHealthCoach(shortReply)
+    } catch {
+      const fallback = '站远一点，让肩、髋、膝都进画面。'
+      setHealthCoachText(fallback)
+      setHealthPoseStatus('adjusting')
+      void speakHealthCoach(fallback)
+    }
+  }, [activeHealthPlan, cameraStatus, captureVideoFrame, healthModeActive, speakHealthCoach])
+
+  const drawPoseOverlay = useCallback((keypoints: PoseKeypoint[]) => {
+    const video = healthVideoRef.current
+    const canvas = poseCanvasRef.current
+    if (!video || !canvas || !video.videoWidth || !video.videoHeight) return
+    const rect = video.getBoundingClientRect()
+    const width = Math.max(1, Math.round(rect.width))
+    const height = Math.max(1, Math.round(rect.height))
+    if (canvas.width !== width) canvas.width = width
+    if (canvas.height !== height) canvas.height = height
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return
+    ctx.clearRect(0, 0, width, height)
+    const scale = Math.max(width / video.videoWidth, height / video.videoHeight)
+    const renderedWidth = video.videoWidth * scale
+    const renderedHeight = video.videoHeight * scale
+    const offsetX = (width - renderedWidth) / 2
+    const offsetY = (height - renderedHeight) / 2
+    const point = (name: string) => keypoints.find((item) => item.name === name && (item.score ?? 0) > 0.26)
+    const toCanvas = (item: PoseKeypoint) => ({
+      x: width - (item.x * scale + offsetX),
+      y: item.y * scale + offsetY,
+    })
+    const pairs = [
+      ['left_shoulder', 'right_shoulder'],
+      ['left_shoulder', 'left_elbow'],
+      ['left_elbow', 'left_wrist'],
+      ['right_shoulder', 'right_elbow'],
+      ['right_elbow', 'right_wrist'],
+      ['left_shoulder', 'left_hip'],
+      ['right_shoulder', 'right_hip'],
+      ['left_hip', 'right_hip'],
+      ['left_hip', 'left_knee'],
+      ['left_knee', 'left_ankle'],
+      ['right_hip', 'right_knee'],
+      ['right_knee', 'right_ankle'],
+    ]
+    ctx.lineWidth = 5
+    ctx.lineCap = 'round'
+    ctx.strokeStyle = 'rgba(255, 221, 95, 0.95)'
+    pairs.forEach(([from, to]) => {
+      const a = point(from)
+      const b = point(to)
+      if (!a || !b) return
+      const pa = toCanvas(a)
+      const pb = toCanvas(b)
+      ctx.beginPath()
+      ctx.moveTo(pa.x, pa.y)
+      ctx.lineTo(pb.x, pb.y)
+      ctx.stroke()
+    })
+    keypoints.filter((item) => (item.score ?? 0) > 0.26).forEach((item) => {
+      const p = toCanvas(item)
+      ctx.beginPath()
+      ctx.fillStyle = 'rgba(70, 240, 171, 0.96)'
+      ctx.arc(p.x, p.y, 7, 0, Math.PI * 2)
+      ctx.fill()
+      ctx.lineWidth = 2
+      ctx.strokeStyle = 'rgba(31, 35, 40, 0.95)'
+      ctx.stroke()
+    })
+    setPoseKeypointCount(keypoints.filter((item) => (item.score ?? 0) > 0.26).length)
+  }, [])
+
+  const ensurePoseDetector = useCallback(async () => {
+    if (poseDetectorRef.current) return poseDetectorRef.current
+    setPoseModelStatus('loading')
+    try {
+      const tf = await import('@tensorflow/tfjs-core')
+      await import('@tensorflow/tfjs-backend-webgl')
+      await import('@tensorflow/tfjs-converter')
+      await tf.setBackend('webgl')
+      await tf.ready()
+      const converter = await import('@tensorflow/tfjs-converter')
+      const model = await converter.loadGraphModel(
+        'https://tfhub.dev/google/tfjs-model/movenet/singlepose/lightning/4',
+        { fromTFHub: true },
+      )
+      poseDetectorRef.current = {
+        estimatePoses: async (video) => {
+          const image = tf.browser.fromPixels(video)
+          const resized = tf.image.resizeBilinear(image, [192, 192])
+          const input = tf.expandDims(tf.cast(resized, 'int32'), 0)
+          const output = model.predict(input) as import('@tensorflow/tfjs-core').Tensor
+          const values = Array.from(await output.data())
+          image.dispose()
+          resized.dispose()
+          input.dispose()
+          output.dispose()
+          const keypoints = movenetKeypointNames.map((name, index) => {
+            const offset = index * 3
+            return {
+              name,
+              y: values[offset] * video.videoHeight,
+              x: values[offset + 1] * video.videoWidth,
+              score: values[offset + 2],
+            }
+          })
+          return [{ keypoints }]
+        },
+      }
+      setPoseModelStatus('ready')
+      return poseDetectorRef.current
+    } catch {
+      setPoseModelStatus('error')
+      return null
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!healthModeActive || cameraStatus !== 'on') {
+      if (poseFrameRef.current !== null) {
+        window.cancelAnimationFrame(poseFrameRef.current)
+        poseFrameRef.current = null
+      }
+      return
+    }
+    let stopped = false
+    const tick = async () => {
+      const detector = await ensurePoseDetector()
+      const video = healthVideoRef.current
+      if (!stopped && detector && video && video.readyState >= 2) {
+        const poses = await detector.estimatePoses(video, { flipHorizontal: true })
+        drawPoseOverlay(poses[0]?.keypoints ?? [])
+      }
+      if (!stopped) poseFrameRef.current = window.requestAnimationFrame(tick)
+    }
+    poseFrameRef.current = window.requestAnimationFrame(tick)
+    return () => {
+      stopped = true
+      if (poseFrameRef.current !== null) {
+        window.cancelAnimationFrame(poseFrameRef.current)
+        poseFrameRef.current = null
+      }
+    }
+  }, [cameraStatus, drawPoseOverlay, ensurePoseDetector, healthModeActive])
+
+  useEffect(() => {
+    if (!healthModeActive) {
+      if (healthTimerRef.current !== null) {
+        window.clearInterval(healthTimerRef.current)
+        healthTimerRef.current = null
+      }
+      return
+    }
+    if (cameraStatus === 'on') {
+      if (healthTimerRef.current !== null) window.clearInterval(healthTimerRef.current)
+      window.setTimeout(() => {
+        void analyzeHealthFrame()
+      }, 0)
+      healthTimerRef.current = window.setInterval(() => {
+        void analyzeHealthFrame()
+        setHealthRepCount((count) => count + (healthPlanId === 'burpee' ? 1 : 0))
+      }, healthPlanId === 'burpee' ? 5200 : 6800)
+    }
+    return () => {
+      if (healthTimerRef.current !== null) {
+        window.clearInterval(healthTimerRef.current)
+        healthTimerRef.current = null
+      }
+    }
+  }, [analyzeHealthFrame, cameraStatus, healthModeActive, healthPlanId])
+
+  const visibleHealthPoseStatus = healthModeActive && cameraStatus !== 'on' && healthPoseStatus === 'idle'
+    ? 'warming'
+    : healthPoseStatus
 
   const applyCallMode = (mode: PiCallMode) => {
     setPiCallMode(mode)
@@ -862,21 +1353,16 @@ function TodayPage({ goRoom, goGoals }: { goRoom: () => void; goGoals: () => voi
     if (mode === 'text') {
       if (cameraStatus === 'on' || cameraStatus === 'requesting') stopCamera()
       recognitionRef.current?.abort()
-      window.speechSynthesis?.cancel()
-      setVoiceStatus('idle')
+      cancelPiSpeech('idle')
       setVoiceTranscript('')
     }
-    if (mode === 'observe') {
-      if (cameraStatus === 'on') {
-        stopCamera()
-        void startCamera('observe')
-      }
-      setSensingSource(cameraStatus === 'on' ? 'vision' : 'none')
-      setPiVoiceEnabled(false)
-    }
     if (mode === 'voice') {
+      unlockPiVoice()
+      pulseLivePetMood('learning', 'interaction')
       if (cameraStatus === 'on') {
         stopCamera()
+        void startCamera('voice')
+      } else if (cameraStatus !== 'requesting') {
         void startCamera('voice')
       }
       setSensingSource(cameraStatus === 'on' ? 'multimodal' : 'none')
@@ -925,6 +1411,14 @@ function TodayPage({ goRoom, goGoals }: { goRoom: () => void; goGoals: () => voi
     }
   }
 
+  const toggleVideoWindow = () => {
+    if (cameraStatus === 'on' || cameraStatus === 'requesting') {
+      stopCamera()
+      return
+    }
+    void startCamera(piCallMode)
+  }
+
   const stopCamera = () => {
     if (analysisTimerRef.current !== null) {
       window.clearTimeout(analysisTimerRef.current)
@@ -938,11 +1432,13 @@ function TodayPage({ goRoom, goGoals }: { goRoom: () => void; goGoals: () => voi
     setSensingSignal('idle')
     setSensingSource(voiceStatus === 'idle' ? 'none' : 'voice')
     setSensingConfidence(0)
-    delete document.body.dataset.piVision
+    document.body.removeAttribute('data-pi-vision')
   }
 
   const startVoiceInput = () => {
     emitPiCoreSignal('interaction')
+    unlockPiVoice()
+    if (voiceStatus === 'speaking') cancelPiSpeech('idle')
     if (piCallMode !== 'voice') {
       setPiCallMode('voice')
       setPiVoiceEnabled(true)
@@ -966,6 +1462,7 @@ function TodayPage({ goRoom, goGoals }: { goRoom: () => void; goGoals: () => voi
     recognition.lang = 'zh-CN'
     recognition.interimResults = true
     recognition.continuous = false
+    let submittedFinalTranscript = false
     setVoiceTranscript('')
     setVoiceStatus('listening')
     setSensingSource(cameraStatus === 'on' ? 'multimodal' : 'voice')
@@ -982,12 +1479,17 @@ function TodayPage({ goRoom, goGoals }: { goRoom: () => void; goGoals: () => voi
       }
       const transcript = (finalText || interimText).trim()
       setVoiceTranscript(transcript)
-      if (transcript) setText((current) => current.trim() ? current : transcript)
+      if (transcript && piCallMode !== 'voice') setText((current) => current.trim() ? current : transcript)
       if (finalText.trim()) {
+        const finalTranscript = finalText.trim()
         setVoiceStatus('processing')
         setAnalysisStatus('ready')
         setSensingSignal('modelPending')
         setSensingConfidence(58)
+        if (!submittedFinalTranscript) {
+          submittedFinalTranscript = true
+          sendWorkbenchMessage(finalTranscript, finalTranscript)
+        }
       }
     }
     recognition.onerror = (event) => {
@@ -1009,58 +1511,85 @@ function TodayPage({ goRoom, goGoals }: { goRoom: () => void; goGoals: () => voi
     }
   }
 
-  const continueContext = (context: WorkbenchContextCard) => {
+  const pickContext = (context: WorkbenchContextCard) => {
     emitPiCoreSignal(context.kind === 'goal' ? 'work' : 'interaction')
     setActiveContextId(context.id)
-    if (context.kind === 'goal') {
-      setMessages((current) => [
-        ...current,
-        {
-          from: 'them',
-          text: `这件事属于目标舱。我可以带你回「职业成长」继续推进，也可以先在这里帮你把问题拆成小票。`,
-          time: '现在',
-          attached: ['目标舱', context.title],
-        },
-      ])
-      return
-    }
     setText(context.seed)
-    setMessages((current) => [
-      ...current,
-      {
-        from: 'them',
-        text: `我把上次上下文放进来了。你可以直接发送，我会接着这个方向继续问你关键问题。`,
-        time: '现在',
-        attached: [context.meta],
-      },
-    ])
   }
 
   const speakPiReply = (reply: string) => {
-    if (piCallMode !== 'voice' || !piVoiceEnabled) return
-    if (!('speechSynthesis' in window)) return
-    const utterance = new SpeechSynthesisUtterance(reply.replace(/\*/g, ''))
-    utterance.lang = 'zh-CN'
-    utterance.rate = 1
-    utterance.pitch = 1.04
-    utterance.onend = () => setVoiceStatus('idle')
-    utterance.onerror = () => setVoiceStatus('idle')
+    if (piCallMode !== 'voice' || !piVoiceEnabled) {
+      setVoiceStatus('idle')
+      return
+    }
+    if (!('speechSynthesis' in window)) {
+      setVoiceStatus('idle')
+      voiceHint.show('当前浏览器不支持语音播放，Pi 的回复已放进聊天记录。')
+      return
+    }
+    const cleanReply = reply.replace(/\*/g, '').trim()
+    if (!cleanReply) return
+    speechRunRef.current += 1
+    const currentRun = speechRunRef.current
+    const zhVoice = pickPiVoice()
+    const chunks = cleanReply
+      .split(/(?<=[。！？!?；;])\s*/)
+      .map((item) => item.trim())
+      .filter(Boolean)
+      .flatMap((item) => item.length > 44 ? item.match(/.{1,44}/g) ?? [item] : [item])
     window.speechSynthesis.cancel()
     setVoiceStatus('speaking')
-    window.speechSynthesis.speak(utterance)
+    chunks.forEach((chunk, index) => {
+      const utterance = new SpeechSynthesisUtterance(chunk)
+      utterance.lang = 'zh-CN'
+      utterance.rate = 1.08
+      utterance.pitch = 1.38
+      if (zhVoice) {
+        try {
+          utterance.voice = zhVoice
+        } catch {
+          // Some browser mocks expose voice-like objects that cannot be assigned.
+        }
+      }
+      utterance.onend = () => {
+        if (currentRun === speechRunRef.current && index === chunks.length - 1) setVoiceStatus('idle')
+      }
+      utterance.onerror = (event) => {
+        if (currentRun !== speechRunRef.current) return
+        setVoiceStatus('idle')
+        if (event.error !== 'canceled' && event.error !== 'interrupted') {
+          voiceHint.show('Pi 的语音播放被浏览器拦截了，回复已放进聊天记录。')
+        }
+      }
+      try {
+        window.speechSynthesis.speak(utterance)
+      } catch {
+        if (currentRun === speechRunRef.current) {
+          setVoiceStatus('idle')
+          voiceHint.show('Pi 的语音播放暂时不可用，回复已放进聊天记录。')
+        }
+      }
+    })
   }
 
-  const onSend = () => {
-    const clean = text.trim()
+  const sendWorkbenchMessage = (rawText: string, transcript = voiceTranscript) => {
+    const clean = rawText.trim()
     if (!clean) return
-    emitPiCoreSignal(activeContext?.kind === 'goal' ? 'work' : 'delegate')
+    const userMood = petMoodFromDialogue(clean, 'learning')
+    pulseLivePetMood(userMood, activeContext?.kind === 'goal' ? 'work' : 'delegate')
     const contextText = activeContext ? `当前续接上下文：${activeContext.title}。${activeContext.desc}` : '没有选择历史上下文。'
-    const sensingText = sensingPromptCue(analysisStatus, sensingSource, sensingSignal, sensingConfidence, voiceTranscript)
+    const sensingText = sensingPromptCue(analysisStatus, sensingSource, sensingSignal, sensingConfidence, transcript)
     const visualFrameDataUrl = cameraStatus === 'on' ? captureVideoFrame() : ''
     const modeText = piCallMode === 'voice'
-      ? '当前是视频对话模式。用户可能通过语音或文字表达任务，你需要像 1V1 导师一样先复述任务，再推进下一步。只有用户明确确认后，才说开始执行。'
-      : piCallMode === 'observe'
-        ? '当前是开视频观察 + 手写对话模式。请结合画面判断用户是否在电脑前、是否疑惑、疲惫、专注或兴奋，但不要输出技术字段，不要声称百分百准确。Pi 默认不说话，只在文字里温和提示观察到的协作节奏。'
+      ? [
+          '当前是视频对话模式。请像真人轻松聊天，不要报告腔，不要机械化。',
+          '每次最多 50 个中文字，最多 2 句，不要列清单，不要连续追问多个问题。',
+          isVoiceConfirmText(clean)
+            ? '用户刚确认“对”。这表示理解正确，请不要再确认，也不要再追问，直接说你开始执行和第一步动作。'
+            : '用户刚描述或修改任务。你只需要用一句话说“我理解是……”，然后问“是这样吗？”。确认前不要说开始执行。',
+        ].join('\n')
+      : cameraStatus === 'on'
+        ? '当前是文字协作 + 视频观察模式。请结合画面判断用户是否在电脑前、是否疑惑、疲惫、专注或兴奋，但不要输出技术字段，不要声称百分百准确。Pi 默认不说话，只在文字里温和提示观察到的协作节奏。'
         : '当前是文字协作模式。不要假装看到了画面或听到了语音。'
 
     setMessages((current) => [...current, { from: 'me', text: clean, time: '现在' }])
@@ -1084,21 +1613,45 @@ function TodayPage({ goRoom, goGoals }: { goRoom: () => void; goGoals: () => voi
           visualFrameDataUrl: visualFrameDataUrl || undefined,
           timeoutSec: 30,
         })
-        const reply = externalAgentOutput(result.result) || '我收到你的想法了。我们先把目标、约束和下一步动作拆清楚。'
+        const rawReply = externalAgentOutput(result.result) || '我收到你的想法了。我们先把目标、约束和下一步动作拆清楚。'
+        const reply = shapePiReplyForCurrentMode(rawReply, clean)
+        const replyMood = petMoodFromDialogue(reply, 'happy')
         setMessages((current) => [...current, { from: 'them', text: reply, time: '现在' }])
+        pulseLivePetMood(replyMood, replyMood === 'happy' ? 'delegate' : 'interaction', 9800)
         if (piCallMode === 'voice' && piVoiceEnabled) speakPiReply(reply)
         setCaptureHint(activeContext?.kind === 'goal' ? 'goal' : 'skill')
       } catch (error) {
+        const fallbackReply = `我这边暂时连不上后端：${formatApiError(error)}。我先把你刚才说的记下来，等连接恢复后继续。`
         setMessages((current) => [
           ...current,
           {
             from: 'them',
-            text: `后端暂时没有回复：${formatApiError(error)}。我先在本地帮你记下这件事，等连接恢复后继续处理。`,
+            text: fallbackReply,
             time: '现在',
           },
         ])
+        pulseLivePetMood('feeding', 'interaction', 9800)
+        if (piCallMode === 'voice' && piVoiceEnabled) speakPiReply(fallbackReply)
       }
     }, { duration: 0 })
+  }
+
+  const onSend = () => {
+    sendWorkbenchMessage(text)
+  }
+
+  const sendCallReply = (reply: 'yes' | 'no') => {
+    cancelPiSpeech('idle')
+    recognitionRef.current?.abort()
+    setVoiceTranscript('')
+    if (reply === 'no') {
+      setMessages((current) => [...current, { from: 'me', text: '不对，我再补充。', time: '现在' }])
+      pulseLivePetMood('feeding', 'interaction', 7600)
+      voiceHint.show('好，我停下。你继续说，我来改。')
+      startVoiceInput()
+      return
+    }
+    sendWorkbenchMessage('对，就是这样，可以开始执行。')
   }
 
   const captureAsSkill = () => {
@@ -1131,6 +1684,110 @@ function TodayPage({ goRoom, goGoals }: { goRoom: () => void; goGoals: () => voi
     sendHint.show('已准备归纳到目标舱')
   }
 
+  if (healthModeActive) {
+    return (
+      <div className="health-coach-page">
+        <section className="health-stage-card">
+          <div className="health-stage-head">
+            <div>
+              <span className="tag mint">PiHealth</span>
+              <h2>身心健康检测</h2>
+              <p>{activeHealthPlan.intent}</p>
+            </div>
+            <div className="health-stage-actions">
+              <button className="ghost-btn sm" onClick={() => void analyzeHealthFrame()} type="button">
+                <CuteIcon name="soft-refresh-loop" />校准
+              </button>
+              <button className="ghost-btn sm" onClick={stopHealthMode} type="button">
+                <CuteIcon name="soft-success-check" />结束训练
+              </button>
+            </div>
+          </div>
+
+          <div className={`health-video-stage status-${visibleHealthPoseStatus}`}>
+            {cameraStatus === 'on' ? (
+              <video ref={healthVideoRef} autoPlay playsInline muted />
+            ) : (
+              <div className="health-video-empty">
+                <CuteIcon name="soft-privacy-eye" />
+                <strong>{cameraStatus === 'requesting' ? '等待摄像头授权' : '站到屏幕前，准备开始'}</strong>
+                <button className="primary-btn sm" onClick={() => void startHealthMode()} type="button">
+                  打开检测
+                </button>
+              </div>
+            )}
+            <canvas className="pose-keypoint-canvas" ref={poseCanvasRef} />
+            <div className="pose-guide-overlay" aria-hidden="true">
+              <span className="pose-head" />
+              <span className="pose-shoulder" />
+              <span className="pose-spine" />
+              <span className="pose-hip" />
+              <span className="pose-arm left" />
+              <span className="pose-arm right" />
+              <span className="pose-leg left" />
+              <span className="pose-leg right" />
+            </div>
+            <div className="health-camera-badge">
+              <span>{visibleHealthPoseStatus === 'adjusting' ? '动作修正中' : visibleHealthPoseStatus === 'tracking' ? '关节追踪中' : '准备中'}</span>
+              <strong>{poseModelStatus === 'ready' ? `${poseKeypointCount} 个关节点` : poseModelStatus === 'loading' ? '加载姿态模型' : healthAnalysisAt || '实时检测'}</strong>
+            </div>
+          </div>
+        </section>
+
+        <aside className="health-coach-side">
+          <div className="health-coach-card">
+            <div className="health-coach-head">
+              <CuteIcon name="soft-heart-favorite" />
+              <div>
+                <strong>Pi 实时教学</strong>
+                <span>{activeHealthPlan.title} · {healthAudioStatus === 'speaking' ? '豆包语音播报中' : healthAudioStatus === 'loading' ? '正在生成语音' : healthAudioStatus === 'fallback' ? '本地语音播报中' : '语音待命'}</span>
+              </div>
+            </div>
+            <p>{healthCoachText}</p>
+            <div className="health-metric-grid">
+              <article>
+                <span>目标</span>
+                <strong>{activeHealthPlan.target}</strong>
+              </article>
+              <article>
+                <span>节奏</span>
+                <strong>{activeHealthPlan.duration}</strong>
+              </article>
+              <article>
+                <span>已跟练</span>
+                <strong>{healthPlanId === 'burpee' ? `${Math.min(12, healthRepCount)} 次` : healthAnalysisAt ? '进行中' : '待开始'}</strong>
+              </article>
+            </div>
+          </div>
+
+          <div className="health-plan-list" aria-label="训练计划">
+            {healthCoachPlans.map((plan) => (
+              <button
+                className={healthPlanId === plan.id ? 'active' : ''}
+                key={plan.id}
+                onClick={() => {
+                  setHealthPlanId(plan.id)
+                  setHealthRepCount(0)
+                  setHealthCoachText(plan.cue)
+                  void analyzeHealthFrame()
+                }}
+                type="button"
+              >
+                <strong>{plan.title}</strong>
+                <span>{plan.target} · {plan.duration}</span>
+              </button>
+            ))}
+          </div>
+
+          <div className="health-protocol-note">
+            <CuteIcon name="soft-sparkle-twinkle" />
+            <span>OpenPose BODY_25 关键点协议适配，当前由 MiniMax 视觉帧分析驱动；语音回话沿用豆包配置入口。</span>
+          </div>
+        </aside>
+      </div>
+    )
+  }
+
   return (
     <div className="today-workbench">
       <section className="eve-workbench-panel">
@@ -1140,144 +1797,193 @@ function TodayPage({ goRoom, goGoals }: { goRoom: () => void; goGoals: () => voi
           <p>先在这里对话协作。属于长期目标的事会回到目标舱，不属于目标舱的事先做完，再决定是否沉淀成 Skill 或长期维护目标。</p>
         </div>
 
-        <div className="pi-call-mode-switch" aria-label="选择协作方式">
-          {([
-            ['text', '文字协作', 'soft-chat-bubble'],
-            ['observe', '开视频观察', 'soft-privacy-eye'],
-            ['voice', '视频对话', 'soft-microphone-voice'],
-          ] as Array<[PiCallMode, string, CuteIconName]>).map(([mode, label, icon]) => (
-            <button
-              className={piCallMode === mode ? 'active' : ''}
-              key={mode}
-              onClick={() => applyCallMode(mode)}
-              type="button"
-            >
-              <CuteIcon name={icon} />
-              {label}
+        <div className="pi-call-mode-bar">
+          <div className="pi-call-mode-switch" aria-label="选择协作方式">
+            {([
+              ['text', '文字协作', 'soft-chat-bubble'],
+              ['voice', '视频通话', 'soft-microphone-voice'],
+            ] as Array<[PiCallMode, string, CuteIconName]>).map(([mode, label, icon]) => (
+              <button
+                className={piCallMode === mode ? 'active' : ''}
+                key={mode}
+                onClick={() => applyCallMode(mode)}
+                type="button"
+              >
+                <CuteIcon name={icon} />
+                {label}
+              </button>
+            ))}
+          </div>
+          <div className="pi-call-controls">
+            <button className="ghost-btn sm" onClick={() => void startHealthMode()} type="button">
+              <CuteIcon name="soft-heart-favorite" />
+              身心检测
             </button>
-          ))}
+            {piCallMode === 'text' ? (
+              <button className="ghost-btn sm" onClick={toggleVideoWindow} type="button">
+                <CuteIcon name={videoWindowOpen ? 'soft-success-check' : 'soft-privacy-eye'} />
+                {videoWindowOpen ? '收起视频窗口' : '打开视频窗口'}
+              </button>
+            ) : (
+              <button className="ghost-btn sm" onClick={() => applyCallMode('text')} type="button">
+                <CuteIcon name="soft-success-check" />
+                结束视频通话
+              </button>
+            )}
+          </div>
         </div>
 
         <div className="eve-workbench-grid">
-          <div className="eve-chat-card">
+          <div className={`eve-chat-card ${videoWindowOpen ? 'has-live-window' : ''} ${piCallMode === 'voice' ? 'in-call' : ''}`}>
+            {videoWindowOpen && (
+              <div className={`eve-live-window ${cameraStatus === 'on' ? 'is-live' : ''}`}>
+                <div className="eve-live-window-head">
+                  <strong>{piCallMode === 'voice' ? '视频对话' : '视频观察'}</strong>
+                  <button aria-label="收起视频窗口" onClick={toggleVideoWindow} type="button">
+                    <CuteIcon name="soft-success-check" />
+                  </button>
+                </div>
+                <div className="eve-live-window-body">
+                  {cameraStatus === 'on' ? (
+                    <div className="eve-live-video-wrap">
+                      <video ref={videoRef} autoPlay playsInline muted />
+                    </div>
+                  ) : (
+                    <div className="eve-live-waiting">
+                      <CuteIcon name="soft-privacy-eye" />
+                      <span>等待授权</span>
+                    </div>
+                  )}
+                </div>
+                <div className="eve-live-window-foot">
+                  <span>{piCallMode === 'voice' ? voiceStatusLabel[voiceStatus] : '视频观察中'}</span>
+                  {piCallMode === 'voice' && (
+                    <button
+                      className={piVoiceEnabled ? 'active' : ''}
+                      onClick={() => {
+                        if (piVoiceEnabled) cancelPiSpeech('idle')
+                        else unlockPiVoice()
+                        setPiVoiceEnabled((current) => !current)
+                      }}
+                      type="button"
+                    >
+                      {piVoiceEnabled ? '关闭声音' : '开启声音'}
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
             <div className="eve-chat-stream" ref={chatRef}>
-              {messages.map((msg, index) => (
-                <article className={`eve-message ${msg.from === 'me' ? 'from-me' : 'from-pi'}`} key={`${msg.time}-${index}`}>
-                  <div className="eve-message-avatar">
-                    <CuteIcon name={msg.from === 'me' ? 'soft-role-users' : 'soft-sparkle-twinkle'} />
+              {piCallMode === 'voice' ? (
+                <div className={`eve-call-stage mood-${callMood}`}>
+                  <div className="eve-call-signal" aria-hidden="true">
+                    <span />
+                    <span />
+                    <span />
                   </div>
-                  <div className="eve-message-body">
-                    <p>{msg.text}</p>
-                    {msg.attached && (
-                      <div className="eve-message-tags">
-                        {msg.attached.map((item) => <span key={item}>{item}</span>)}
+                  <strong>{voiceStatus === 'listening' ? 'Pi 正在听你说' : voiceStatus === 'speaking' ? 'Pi 正在回应你' : '正在和 Pi 视频通话'}</strong>
+                  <span>{send.status === 'loading' ? 'Pi 正在整理你的表达' : '说完后会直接发送到聊天记录，通话中不显示转写文字。'}</span>
+                </div>
+              ) : (
+                <>
+                  {messages.map((msg, index) => (
+                    <article className={`eve-message ${msg.from === 'me' ? 'from-me' : 'from-pi'}`} key={`${msg.time}-${index}`}>
+                      <div className="eve-message-avatar">
+                        <CuteIcon name={msg.from === 'me' ? 'soft-role-users' : 'soft-sparkle-twinkle'} />
                       </div>
-                    )}
-                    <em>{msg.time}</em>
-                  </div>
-                </article>
-              ))}
-              {captureHint !== 'idle' && (
-                <article className="eve-capture-bubble">
-                  <CuteIcon name={captureHint === 'skill' ? 'soft-settings-gear' : 'soft-goal-flag'} />
-                  <div>
-                    <strong>{captureHint === 'skill' ? '是否整理成 Skill？' : '是否归纳到目标舱？'}</strong>
-                    <span>{captureHint === 'skill' ? '这次协作里有可复用流程，可以确认后安装到技能中心。' : '这件事已经像长期事项，可以进入目标舱做里程碑维护。'}</span>
-                  </div>
-                </article>
+                      <div className="eve-message-body">
+                        <p>{msg.text}</p>
+                        {msg.attached && (
+                          <div className="eve-message-tags">
+                            {msg.attached.map((item) => <span key={item}>{item}</span>)}
+                          </div>
+                        )}
+                        <em>{msg.time}</em>
+                      </div>
+                    </article>
+                  ))}
+                  {captureHint !== 'idle' && (
+                    <article className="eve-capture-bubble">
+                      <CuteIcon name={captureHint === 'skill' ? 'soft-settings-gear' : 'soft-goal-flag'} />
+                      <div>
+                        <strong>{captureHint === 'skill' ? '是否整理成 Skill？' : '是否归纳到目标舱？'}</strong>
+                        <span>{captureHint === 'skill' ? '这次协作里有可复用流程，可以确认后安装到技能中心。' : '这件事已经像长期事项，可以进入目标舱做里程碑维护。'}</span>
+                      </div>
+                    </article>
+                  )}
+                </>
               )}
             </div>
 
-            <div className="eve-chat-input">
-              <CuteIcon name="soft-sparkle-twinkle" />
-              <textarea
-                placeholder="比如：我现在想做一个用户访谈洞察看板，帮我先想清楚产品逻辑。"
-                value={text}
-                rows={2}
-                onChange={(e) => setText(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' && !e.shiftKey) {
-                    e.preventDefault()
-                    onSend()
-                  }
-                }}
-              />
-              <button
-                className={`send-button ${statusCls(send.status)}`}
-                aria-label="发送"
-                onClick={onSend}
-                disabled={send.status === 'loading' || !text.trim()}
-              >
-                {send.status === 'loading' ? <span className="btn-spinner" /> : <CuteIcon name="soft-send-plane" />}
-              </button>
+            {piCallMode === 'voice' ? (
+              <div className="eve-call-keypad" aria-label="视频通话输入">
+                <button className="call-choice yes" onClick={() => sendCallReply('yes')} disabled={send.status === 'loading'} type="button">
+                  对
+                </button>
+                <button className="call-choice no" onClick={() => sendCallReply('no')} disabled={send.status === 'loading'} type="button">
+                  否
+                </button>
+                <button
+                  className={`call-voice ${voiceStatus === 'listening' ? 'btn-loading' : ''}`}
+                  onClick={startVoiceInput}
+                  disabled={send.status === 'loading'}
+                  type="button"
+                >
+                  {voiceStatus === 'listening' ? <span className="btn-spinner" /> : <CuteIcon name="soft-microphone-voice" />}
+                  语音输入
+                </button>
+              </div>
+            ) : (
+              <div className="eve-chat-input">
+                <CuteIcon name="soft-sparkle-twinkle" />
+                <textarea
+                  placeholder="比如：我现在想做一个用户访谈洞察看板，帮我先想清楚产品逻辑。"
+                  value={text}
+                  rows={2}
+                  onChange={(e) => setText(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                      e.preventDefault()
+                      onSend()
+                    }
+                  }}
+                />
+                <button
+                  className={`send-button ${statusCls(send.status)}`}
+                  aria-label="发送"
+                  onClick={onSend}
+                  disabled={send.status === 'loading' || !text.trim()}
+                >
+                  {send.status === 'loading' ? <span className="btn-spinner" /> : <CuteIcon name="soft-send-plane" />}
+                </button>
+              </div>
+            )}
+            <div className="context-chip-shelf" aria-label="可跟进的上下文">
+              <div className="context-chip-head">
+                <CuteIcon name="soft-bookmark-study" />
+                <span>可跟进上下文</span>
+              </div>
+              <div className="context-chip-list">
+                {workbenchContexts.map((context) => (
+                  <button
+                    className={`context-chip ${activeContextId === context.id ? 'active' : ''}`}
+                    key={context.id}
+                    onClick={() => pickContext(context)}
+                    title={`${context.meta} · ${context.desc}`}
+                    type="button"
+                  >
+                    <em>{context.meta}</em>
+                    <span>{context.title}</span>
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
 
-          <aside className={`eve-vision-card ${cameraStatus === 'on' ? 'is-live' : ''}`}>
-            <div className="eve-vision-head">
-              <strong>和小狗 Pi 1V1</strong>
-              <span>{piCallMode === 'voice' ? '说清任务，Pi 复述确认后再开始做。' : piCallMode === 'observe' ? '开着视频写字聊，Pi 只观察节奏不抢话。' : '安静文字协作，需要时再开启视频。'}</span>
-            </div>
-            <div className="eve-vision-preview">
-              {cameraStatus === 'on' ? (
-                <>
-                  <video ref={videoRef} autoPlay playsInline muted />
-                  <div className="pet-video-avatar">
-                    <PetSprite mood={callMood} size={86} />
-                    <span>{piCallMode === 'voice' ? voiceStatusLabel[voiceStatus] : '陪你看着'}</span>
-                  </div>
-                </>
-              ) : (
-                <div className="eve-camera-placeholder">
-                  <PetSprite mood={callMood} size={82} />
-                  <strong>{cameraStatus === 'requesting' ? '等待授权' : 'Pi 在这里陪你'}</strong>
-                  <span>{piCallMode === 'voice' ? '开启后直接说任务。' : piCallMode === 'observe' ? '开启后用文字聊，Pi 会参考画面。' : '先从文字开始也可以。'}</span>
-                </div>
-              )}
-            </div>
-            <div className="eve-vision-actions">
-              <button
-                className="primary-btn sm"
-                onClick={() => {
-                  const nextMode = piCallMode === 'text' ? 'observe' : piCallMode
-                  if (cameraStatus === 'on') stopCamera()
-                  else {
-                    setPiCallMode(nextMode)
-                    void startCamera(nextMode)
-                  }
-                }}
-              >
-                <CuteIcon name={cameraStatus === 'on' ? 'soft-success-check' : 'soft-privacy-eye'} />
-                {cameraStatus === 'on' ? '结束视频' : cameraStatus === 'requesting' ? '请求中' : '开启视频'}
-              </button>
-              {piCallMode === 'voice' && (
-                <button className={`ghost-btn sm ${voiceStatus === 'listening' ? 'btn-loading' : ''}`} onClick={startVoiceInput}>
-                  <CuteIcon name="soft-microphone-voice" />
-                  {voiceStatus === 'listening' ? '停止听我说' : '开始说话'}
-                </button>
-              )}
-              {piCallMode !== 'text' && (
-                <button
-                  className={`ghost-btn sm ${piVoiceEnabled ? 'active' : ''}`}
-                  onClick={() => setPiVoiceEnabled((current) => !current)}
-                  type="button"
-                >
-                  <CuteIcon name={piVoiceEnabled ? 'soft-waveform-audio' : 'soft-privacy-eye'} />
-                  {piVoiceEnabled ? 'Pi 说话' : '静音观察'}
-                </button>
-              )}
-            </div>
-            {voiceTranscript && piCallMode === 'voice' && (
-              <div className="voice-transcript compact">
-                <CuteIcon name="soft-microphone-voice" />
-                <span>{voiceTranscript}</span>
-              </div>
-            )}
-            {cameraStatus === 'error' && (
-              <div className="inline-hint"><CuteIcon name="soft-warning-triangle" />{cameraError || '摄像头暂不可用'}</div>
-            )}
-          </aside>
         </div>
+        {cameraStatus === 'error' && (
+          <div className="inline-hint"><CuteIcon name="soft-warning-triangle" />{cameraError || '摄像头暂不可用'}</div>
+        )}
       </section>
 
       {voiceHint.hint && (
@@ -1286,45 +1992,6 @@ function TodayPage({ goRoom, goGoals }: { goRoom: () => void; goGoals: () => voi
       {sendHint.hint && (
         <div className="inline-hint"><CuteIcon name="soft-success-check" />{sendHint.hint}</div>
       )}
-
-      <section className="context-continuation">
-        <div className="section-title">
-          <CuteIcon name="soft-bookmark-study" />
-          <strong>你可能想继续这些上下文</strong>
-          <span>按任务归路由，不再只是今日聚焦</span>
-        </div>
-        <div className="context-card-grid">
-          {workbenchContexts.map((context) => (
-            <article className={`context-card ${activeContextId === context.id ? 'active' : ''}`} key={context.id}>
-              <div>
-                <em>{context.meta}</em>
-                <strong>{context.title}</strong>
-                <p>{context.desc}</p>
-              </div>
-              <div className="context-actions">
-                {context.kind === 'goal' ? (
-                  <button className="primary-btn sm" onClick={() => {
-                    emitPiCoreSignal('work')
-                    goGoals()
-                  }}>
-                    <CuteIcon name="soft-goal-flag" />{context.cta}
-                  </button>
-                ) : (
-                  <button className="primary-btn sm" onClick={() => continueContext(context)}>
-                    <CuteIcon name="soft-chat-bubble" />{context.cta}
-                  </button>
-                )}
-                <button className="ghost-btn sm" onClick={() => {
-                  setActiveContextId(context.id)
-                  setText(context.seed)
-                }}>
-                  放到输入框
-                </button>
-              </div>
-            </article>
-          ))}
-        </div>
-      </section>
 
       <section className="eve-capture-actions">
         <button className="ghost-btn sm" onClick={captureAsSkill}>
@@ -1462,7 +2129,7 @@ function GoalsPage() {
   )
 }
 
-/* —— 目标专属工作窗口：补一版小票 + 大对话 + 模板库联动 —— */
+/* —— 目标专属工作窗口：任务分流 + 补充确认 + 资料引用 —— */
 function GoalWorkspace({
   goal,
   snippets,
@@ -1512,6 +2179,7 @@ function GoalWorkspace({
   const [showRuntime, setShowRuntime] = useState(false)
   const [showSkillTools, setShowSkillTools] = useState(false)
   const scrollRef = useRef<HTMLDivElement>(null)
+  const inputRef = useRef<HTMLTextAreaElement>(null)
   const snippetFilters: Array<{ key: GoalSnippetFilter; label: string }> = [
     { key: 'all', label: '全部' },
     { key: 'template', label: '模板' },
@@ -2026,7 +2694,20 @@ function GoalWorkspace({
     }
   }
 
+  const autoTasks = receipt.filter((task) => task.done)
+  const userTasks = receipt.filter((task) => !task.done)
   const receiptProgress = receipt.length ? Math.round((visibleDone / receipt.length) * 100) : 0
+  const focusUserInput = () => {
+    if (!input.trim()) {
+      const taskTitle = userTasks[0]?.title ?? goal.workspace.title
+      setInput(`我来补充「${taskTitle}」：`)
+    }
+    window.setTimeout(() => inputRef.current?.focus(), 0)
+  }
+  const openReferenceTools = () => {
+    setShowEvoMap(true)
+    setSnippetFilter('all')
+  }
 
   return (
     <div className="workspace-surface ws-workspace">
@@ -2038,19 +2719,54 @@ function GoalWorkspace({
         </div>
       </div>
 
-      <section className="ws-receipt-panel">
+      <section className="ws-decision-board" aria-label="目标舱任务分流">
+        <article className="ws-decision-card ai">
+          <span className="tag mint">EvoPi 可代办</span>
+          <strong>{autoTasks.length} 项可以先让 EvoPi 做</strong>
+          <p>它会自动调取目标素材、记忆和模板，先把能处理的部分补出来。</p>
+          <div className="ws-decision-list">
+            {autoTasks.slice(0, 3).map((task) => <span key={task.title}>{task.title}</span>)}
+          </div>
+          <button className="primary-btn" onClick={runReceipt}>
+            <CuteIcon name="soft-idea-bulb" />让 EvoPi 先补
+          </button>
+        </article>
+
+        <article className="ws-decision-card user">
+          <span className="tag blue">需要你确认</span>
+          <strong>{userTasks.length ? `${userTasks.length} 项需要你来定` : '暂时没有必须你补的项'}</strong>
+          <p>这些通常涉及范围、判断、口径或敏感顺序，EvoPi 可以参考，但需要你的选择。</p>
+          <div className="ws-decision-list">
+            {(userTasks.length ? userTasks : [{ title: '继续补充你的判断' }]).slice(0, 3).map((task) => <span key={task.title}>{task.title}</span>)}
+          </div>
+          <button className="ghost-btn" onClick={focusUserInput}>
+            <CuteIcon name="soft-sparkle-edit" />我来补充
+          </button>
+        </article>
+
+        <article className="ws-decision-card reference">
+          <span className="tag pink">资料参考</span>
+          <strong>{snippets.length} 条模板和记忆可引用</strong>
+          <p>先插入已有模板、记忆或外部经验，再让 EvoPi 按这些资料继续推进。</p>
+          <div className="ws-decision-list">
+            {snippets.slice(0, 3).map((snippet) => <span key={snippet.id}>{snippet.title}</span>)}
+          </div>
+          <button className="ghost-btn" onClick={openReferenceTools}>
+            <CuteIcon name="soft-folder-tab" />找资料参考
+          </button>
+        </article>
+      </section>
+
+      <section className="ws-receipt-panel ws-receipt-panel-compact">
         <div className="ws-receipt-copy">
-          <span className="tag mint">主入口</span>
-          <h3>让 EvoPi 补一版</h3>
-          <p>自动调取当前目标的素材、记忆和模板，完成可先行处理的部分。</p>
+          <span className="tag mint">EvoPi 代办进度</span>
+          <strong>{receiptStarted ? `已完成 ${visibleDone} / ${autoTasks.length} 项` : `${autoTasks.length} 项可自动处理`}</strong>
+          <p>{userTasks.length ? `${userTasks.length} 项等你确认后继续。` : '当前小票没有阻塞项。'}</p>
         </div>
         <div className="ws-receipt-actions">
-          <button className="primary-btn" onClick={runReceipt}>
-            <CuteIcon name="soft-idea-bulb" />让 EvoPi 补一版
-          </button>
-          <span>{receiptStarted ? `${visibleDone} / ${receipt.length} 项` : '等待开始'}</span>
+          <span>{receiptStarted ? `${visibleDone} / ${receipt.length} 项` : '未开始'}</span>
         </div>
-        <div className="ws-progress" aria-label="补一版进度">
+        <div className="ws-progress" aria-label="EvoPi 代办进度">
           <span style={{ width: `${receiptProgress}%` }} />
         </div>
         <div className="ws-receipt">
@@ -2061,7 +2777,7 @@ function GoalWorkspace({
               <div className={`ws-task ${active ? 'done' : task.done ? 'queued' : 'pending'}`} key={task.title}>
                 <span>{active ? '✓' : index + 1}</span>
                 <strong>{task.title}</strong>
-                <em>{active ? '已完成' : task.done ? '排队中' : '待确认'}</em>
+                <em>{active ? 'EvoPi 已完成' : task.done ? 'EvoPi 可做' : '等你确认'}</em>
               </div>
             )
           })}
@@ -2070,8 +2786,8 @@ function GoalWorkspace({
 
       <section className="ws-compact-accordion">
         <button className="ws-accordion-head" onClick={() => setShowEvoMap((v) => !v)} aria-expanded={showEvoMap}>
-          <span className="tag pink">EvoMap</span>
-          <strong>可复用经验</strong>
+          <span className="tag pink">资料</span>
+          <strong>搜索外部经验和参考资料</strong>
           <span>{showEvoMap ? '收起' : '展开'}</span>
         </button>
         {showEvoMap && (
@@ -2084,7 +2800,7 @@ function GoalWorkspace({
                   onKeyDown={(e) => {
                     if (e.key === 'Enter') void runEvoMapSearch()
                   }}
-                  placeholder="搜索 EvoMap recipes"
+                  placeholder="搜索可参考的经验、模板或案例"
                 />
                 <button className="primary-btn sm" onClick={() => void runEvoMapSearch()} disabled={evomapStatus === 'loading'}>
                   <CuteIcon name="soft-search-spark" />{evomapStatus === 'loading' ? '搜索中' : '搜索'}
@@ -2152,8 +2868,8 @@ function GoalWorkspace({
 
       <section className="ws-compact-accordion">
         <button className="ws-accordion-head" onClick={() => setShowRuntime((v) => !v)} aria-expanded={showRuntime}>
-          <span className="tag blue">执行</span>
-          <strong>调用执行环境</strong>
+          <span className="tag blue">高级</span>
+          <strong>调用其他执行环境</strong>
           <span>{showRuntime ? '收起' : '展开'}</span>
         </button>
         {showRuntime && (
@@ -2186,7 +2902,7 @@ function GoalWorkspace({
                 onKeyDown={(e) => {
                   if (e.key === 'Enter') void runExternalAgent()
                 }}
-                placeholder="给 Agent runtime 的任务"
+                placeholder="交给外部工具处理的任务"
               />
               {externalKind === 'openclaw' && (
                 <input
@@ -2214,12 +2930,12 @@ function GoalWorkspace({
           <div className="chat-person">
             <div className="person-avatar sm"><CuteIcon name="soft-sparkle-twinkle" /></div>
             <div>
-              <strong>{goal.name} · 大对话</strong>
-              <span>缓存 {contextCache.length} 条 · 模板库 {snippets.length} 条</span>
+              <strong>{goal.name} · 我来补充</strong>
+              <span>手动确认、补充判断或继续追问 · 已暂存 {contextCache.length} 条</span>
             </div>
           </div>
           <button className="ghost-btn sm ws-skill-toggle" onClick={() => setShowSkillTools((value) => !value)} aria-expanded={showSkillTools}>
-            <CuteIcon name="soft-settings-gear" />{showSkillTools ? '收起高级' : skillSaved ? '沉淀已完成' : '高级沉淀'}
+            <CuteIcon name="soft-settings-gear" />{showSkillTools ? '收起沉淀' : skillSaved ? '沉淀已完成' : '沉淀为技能'}
           </button>
         </header>
 
@@ -2238,7 +2954,7 @@ function GoalWorkspace({
                   <CuteIcon name="soft-document-page" />{savedSkill.status === 'drafted' ? '已建 draft' : '创建 draft'}
                 </button>
                 <button className="primary-btn sm" disabled={skillSyncState === 'publishing'} onClick={() => void testPublish()}>
-                  <CuteIcon name="soft-sparkle-edit" />{savedSkill.status === 'test_published' ? '已测试发布' : 'Test publish'}
+                  <CuteIcon name="soft-sparkle-edit" />{savedSkill.status === 'test_published' ? '已测试发布' : '测试发布'}
                 </button>
                 {savedSkill.recipeLink && (
                   <button className="ghost-btn sm" disabled={skillSyncState === 'reuse'} onClick={() => void syncPublishedReuse()}>
@@ -2299,10 +3015,10 @@ function GoalWorkspace({
           <aside className="asset-rail ws-snippets">
             <div className="asset-head">
               <CuteIcon name="soft-folder-tab" />
-              <strong>目标模板库</strong>
+              <strong>可引用资料</strong>
               <span>{goal.name}</span>
             </div>
-            <div className="ws-snippet-tabs" aria-label="筛选目标模板库">
+            <div className="ws-snippet-tabs" aria-label="筛选可引用资料">
               {snippetFilters.map((filter) => (
                 <button
                   className={snippetFilter === filter.key ? 'active' : ''}
@@ -2338,7 +3054,7 @@ function GoalWorkspace({
               )}
             </div>
             <div className="asset-selected">
-              {contextCache.length > 0 ? `待确认缓存 ${contextCache.length} 条` : '对话后可沉淀为 Skill'}
+              {contextCache.length > 0 ? `待沉淀内容 ${contextCache.length} 条` : '点资料可插入到输入框'}
             </div>
           </aside>
         </div>
@@ -2358,7 +3074,8 @@ function GoalWorkspace({
             </div>
           )}
           <textarea
-            placeholder={`和 EvoPi 继续推进「${goal.workspace.title}」……`}
+            ref={inputRef}
+            placeholder={`补充你的判断，或继续问 EvoPi 如何推进「${goal.workspace.title}」……`}
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => {
@@ -3474,38 +4191,43 @@ function PiClubPage({ onExit }: { onExit: () => void }) {
         <button className="ghost-btn sm" onClick={onExit}><CuteIcon name="soft-arrow-left" />回工作台</button>
         <div>
           <strong>PiClub</strong>
-          <span>{state.posts.length} 条动态 · {state.communities.length} 个 Club · {products.length} 个子产品</span>
+          <span>{state.communities.length} 个 Club · {products.length} 个子产品 · {state.posts.length} 条动态</span>
         </div>
+        <button
+          className="piclub-create-chip"
+          onClick={() => setPostComposerOpen((value) => !value)}
+          aria-expanded={postComposerOpen}
+          aria-label={postComposerOpen ? '收起发动态' : '发动态'}
+          title={postComposerOpen ? '收起发动态' : '发动态'}
+        >
+          <CuteIcon name={postComposerOpen ? 'soft-arrow-up' : 'soft-add-plus'} />
+          <span>发动态</span>
+        </button>
       </div>
 
-      <section className="piclub-hero">
-        <div className="piclub-hero-copy">
-          <em className="tag mint">PiClub</em>
-          <h2>让你的 EvoPi 去社区里工作、表达和协作</h2>
-          <p>Pi 可以替你发朋友圈，加入学术组织做研究，也能把已经完成的子产品投到社区里收反馈。</p>
-          <div className="piclub-hero-actions">
-            <button className="primary-btn sm" onClick={() => setPostComposerOpen(true)}>
-              <CuteIcon name="soft-add-plus" />
-              发一条 Pi 朋友圈
-            </button>
-            <button className="ghost-btn sm" onClick={dropPhotos} disabled={photoAction.status === 'loading'}>
-              {photoAction.status === 'loading' ? <span className="btn-spinner" /> : <CuteIcon name="soft-image-landscape" />}
-              接 Apple 相册
+      {postComposerOpen && (
+        <section className="piclub-compose-drawer" aria-label="发 Pi 朋友圈">
+          <div className="piclub-panel-head">
+            <div className="skill-section-title"><CuteIcon name="soft-send-plane" />Pi 朋友圈</div>
+            <button className="ghost-btn sm" onClick={() => setPostComposerOpen(false)} aria-label="收起 Pi 朋友圈编辑器">
+              收起
             </button>
           </div>
-        </div>
-        <div className="piclub-camera-card">
-          <div className="piclub-camera-orbit">
-            <CuteIcon name="soft-image-landscape" />
+          <div className="piclub-compose-row">
+            <input className="text-input" value={postTitle} onChange={(e) => setPostTitle(e.target.value)} />
+            <select value={selectedCommunity} onChange={(e) => setSelectedCommunity(e.target.value)}>
+              {communityOptions.map((community) => (
+                <option key={community.id} value={community.name}>{community.name}</option>
+              ))}
+            </select>
           </div>
-          <strong>Apple 相册共享</strong>
-          <span>手机照片可通过 Apple Photos / AirDrop 进入 EvoPi，Pi 会生成朋友圈文案、研究证据或短视频脚本。</span>
-          <div className="piclub-camera-form">
-            <input className="text-input" value={photoTitle} onChange={(e) => setPhotoTitle(e.target.value)} />
-            <input className="text-input" type="number" min={1} max={99} value={photoCount} onChange={(e) => setPhotoCount(Number(e.target.value))} />
-          </div>
-        </div>
-      </section>
+          <textarea value={postText} onChange={(e) => setPostText(e.target.value)} rows={3} />
+          <button className="primary-btn" onClick={publishPost} disabled={postAction.status === 'loading'}>
+            {postAction.status === 'loading' ? <span className="btn-spinner" /> : <CuteIcon name="soft-send-plane" />}
+            让 Pi 发布
+          </button>
+        </section>
+      )}
 
       {actionHint.hint && (
         <div className="inline-hint"><CuteIcon name="soft-success-check" />{actionHint.hint}</div>
@@ -3513,49 +4235,6 @@ function PiClubPage({ onExit }: { onExit: () => void }) {
       {clubState === 'error' && (
         <div className="ws-evomap-error"><CuteIcon name="soft-warning-triangle" />PiClub 后端暂不可用，正在显示本地预置内容。</div>
       )}
-
-      <section className="piclub-grid">
-        {postComposerOpen ? (
-          <div className="piclub-panel piclub-post-composer is-open">
-            <div className="piclub-panel-head">
-              <div className="skill-section-title"><CuteIcon name="soft-send-plane" />Pi 朋友圈</div>
-              <button className="ghost-btn sm" onClick={() => setPostComposerOpen(false)} aria-label="收起 Pi 朋友圈编辑器">
-                <CuteIcon name="soft-arrow-left" />收起
-              </button>
-            </div>
-            <input className="text-input" value={postTitle} onChange={(e) => setPostTitle(e.target.value)} />
-            <textarea value={postText} onChange={(e) => setPostText(e.target.value)} rows={4} />
-            <select value={selectedCommunity} onChange={(e) => setSelectedCommunity(e.target.value)}>
-              {communityOptions.map((community) => (
-                <option key={community.id} value={community.name}>{community.name}</option>
-              ))}
-            </select>
-            <button className="primary-btn" onClick={publishPost} disabled={postAction.status === 'loading'}>
-              {postAction.status === 'loading' ? <span className="btn-spinner" /> : <CuteIcon name="soft-send-plane" />}
-              让 Pi 发布
-            </button>
-          </div>
-        ) : (
-          <button className="piclub-panel piclub-compose-launch" onClick={() => setPostComposerOpen(true)}>
-            <span className="piclub-compose-plus"><CuteIcon name="soft-add-plus" /></span>
-            <div>
-              <strong>发 Pi 朋友圈</strong>
-              <span>点击加号后再编辑标题、正文和投放的 Club，自习室不会被编辑框长期占住。</span>
-            </div>
-          </button>
-        )}
-
-        <div className="piclub-panel piclub-vibe">
-          <div className="skill-section-title"><CuteIcon name="soft-sparkle-edit" />VibeCoding</div>
-          <input className="text-input" value={vibeName} onChange={(e) => setVibeName(e.target.value)} />
-          <textarea value={vibeBrief} onChange={(e) => setVibeBrief(e.target.value)} rows={4} />
-          <p className="piclub-panel-note">产品先进入记忆资产库的「我的子产品」，部署完成后你再决定是否投放社区。</p>
-          <button className="primary-btn" onClick={buildProduct} disabled={vibeAction.status === 'loading'}>
-            {vibeAction.status === 'loading' ? <span className="btn-spinner" /> : <CuteIcon name="soft-sparkle-twinkle" />}
-            生成并部署子产品
-          </button>
-        </div>
-      </section>
 
       <section className="piclub-grid wide">
         <div className="piclub-panel">
@@ -3613,6 +4292,31 @@ function PiClubPage({ onExit }: { onExit: () => void }) {
             ))}
           </div>
         </div>
+      </section>
+
+      <section className="piclub-tools-row" aria-label="PiClub 创作工具">
+        <details className="piclub-tool-card">
+          <summary><CuteIcon name="soft-sparkle-edit" />VibeCoding 子产品</summary>
+          <input className="text-input" value={vibeName} onChange={(e) => setVibeName(e.target.value)} />
+          <textarea value={vibeBrief} onChange={(e) => setVibeBrief(e.target.value)} rows={3} />
+          <p className="piclub-panel-note">产品先进入「我的子产品」，部署完成后再决定是否投放社区。</p>
+          <button className="primary-btn" onClick={buildProduct} disabled={vibeAction.status === 'loading'}>
+            {vibeAction.status === 'loading' ? <span className="btn-spinner" /> : <CuteIcon name="soft-sparkle-twinkle" />}
+            生成子产品
+          </button>
+        </details>
+        <details className="piclub-tool-card">
+          <summary><CuteIcon name="soft-image-landscape" />Apple 相册</summary>
+          <div className="piclub-camera-form">
+            <input className="text-input" value={photoTitle} onChange={(e) => setPhotoTitle(e.target.value)} />
+            <input className="text-input" type="number" min={1} max={99} value={photoCount} onChange={(e) => setPhotoCount(Number(e.target.value))} />
+          </div>
+          <p className="piclub-panel-note">导入照片后会生成朋友圈草稿，不会直接发布。</p>
+          <button className="ghost-btn sm" onClick={dropPhotos} disabled={photoAction.status === 'loading'}>
+            {photoAction.status === 'loading' ? <span className="btn-spinner" /> : <CuteIcon name="soft-image-landscape" />}
+            生成草稿
+          </button>
+        </details>
       </section>
 
       <section className="piclub-feed">
@@ -4073,9 +4777,13 @@ function SkillCard({
 }) {
   const manageHint = useInlineHint(2400)
   const installAct = useActionState()
+  const [manageOpen, setManageOpen] = useState(false)
+  const [enabled, setEnabled] = useState(skill.status !== '已停用')
+  const [confirmBeforeRun, setConfirmBeforeRun] = useState(true)
+  const displayStatus = mode === 'install' && done ? '已启用' : enabled ? skill.status : '已暂停'
 
   return (
-    <article className="skill-card">
+    <article className={`skill-card ${manageOpen ? 'is-managing' : ''}`}>
       <CuteIcon name={skill.icon as CuteIconName} />
       <div>
         <h2>{skill.name}</h2>
@@ -4083,13 +4791,14 @@ function SkillCard({
         <span>范围：{skill.scope}</span>
       </div>
       <div>
-        <em className="tag">{mode === 'install' && done ? '已启用' : skill.status}</em>
+        <em className={`tag ${enabled ? '' : 'warn'}`}>{displayStatus}</em>
         {mode === 'manage' ? (
           <button
-            className={manageHint.hint ? 'btn-loading' : ''}
-            onClick={() => manageHint.show('技能配置面板准备中')}
+            className={manageOpen ? 'btn-done' : ''}
+            onClick={() => setManageOpen((value) => !value)}
+            aria-expanded={manageOpen}
           >
-            管理
+            {manageOpen ? '收起' : '管理'}
           </button>
         ) : (
           <button
@@ -4105,6 +4814,53 @@ function SkillCard({
           </button>
         )}
       </div>
+      {mode === 'manage' && manageOpen && (
+        <div className="skill-manage-panel">
+          <div className="skill-manage-grid">
+            <article>
+              <span>触发条件</span>
+              <strong>{skill.trigger}</strong>
+            </article>
+            <article>
+              <span>可用范围</span>
+              <strong>{skill.scope}</strong>
+            </article>
+            <article>
+              <span>运行方式</span>
+              <strong>{confirmBeforeRun ? '执行前先让你确认' : '低风险任务自动处理'}</strong>
+            </article>
+          </div>
+          <div className="skill-manage-controls">
+            <label className="skill-switch">
+              <input
+                checked={enabled}
+                onChange={(event) => setEnabled(event.target.checked)}
+                type="checkbox"
+              />
+              <span>{enabled ? '已启用自动触发' : '已暂停自动触发'}</span>
+            </label>
+            <label className="skill-switch">
+              <input
+                checked={confirmBeforeRun}
+                onChange={(event) => setConfirmBeforeRun(event.target.checked)}
+                type="checkbox"
+              />
+              <span>执行前提醒我确认</span>
+            </label>
+          </div>
+          <div className="skill-manage-actions">
+            <button className="ghost-btn sm" onClick={() => manageHint.show(`已为「${skill.name}」生成一次测试任务预览`)}>
+              <CuteIcon name="soft-search-spark" />测试一次
+            </button>
+            <button className="ghost-btn sm" onClick={() => manageHint.show(`「${skill.name}」的触发记录会在进化日志里展示`)}>
+              <CuteIcon name="soft-log-lines" />触发记录
+            </button>
+            <button className="ghost-btn sm" onClick={() => manageHint.show(`已准备调整「${skill.name}」的权限范围`)}>
+              <CuteIcon name="soft-shield-check" />权限范围
+            </button>
+          </div>
+        </div>
+      )}
       {manageHint.hint && (
         <div className="inline-hint"><CuteIcon name="soft-settings-gear" />{manageHint.hint}</div>
       )}
@@ -4112,11 +4868,17 @@ function SkillCard({
   )
 }
 
-function SkillSection({ icon, title, children }: { icon: CuteIconName; title: string; children: React.ReactNode }) {
+function SkillSection({ icon, title, children }: { icon: CuteIconName; title: string; children: ReactNode }) {
+  const [open, setOpen] = useState(false)
+
   return (
-    <div>
-      <div className="skill-section-title"><CuteIcon name={icon} />{title}</div>
-      {children}
+    <div className={`skill-section-collapse ${open ? 'is-open' : ''}`}>
+      <button className="skill-section-title collapsible-head" onClick={() => setOpen((value) => !value)} aria-expanded={open}>
+        <CuteIcon name={icon} />
+        <span>{title}</span>
+        <em>{open ? '收起' : '展开'}</em>
+      </button>
+      {open && <div className="skill-section-body">{children}</div>}
     </div>
   )
 }
@@ -4131,7 +4893,6 @@ function EvolutionPage() {
   const [expandedEventIds, setExpandedEventIds] = useState<Set<string>>(() => new Set())
   const [freshEventIds, setFreshEventIds] = useState<string[]>([])
   const [laneFilter, setLaneFilter] = useState<EvolutionLane>('all')
-  const [mapOpen, setMapOpen] = useState(false)
 
   useEffect(() => {
     let cancelled = false
@@ -4234,16 +4995,8 @@ function EvolutionPage() {
   const densityBars = useMemo(() => evolutionDensityBars(events), [events])
   const recentLiveEvents = useMemo(() => events.slice(0, 5), [events])
   const userSignalEvents = useMemo(() => events.filter(isUserFacingEvolutionEvent).slice(0, 8), [events])
-  const chainLanes = useMemo(() => evolutionLanes.filter((lane) => lane.key !== 'all'), [])
+  const recordFilterLanes = useMemo(() => evolutionLanes.filter((lane) => lane.key !== 'all'), [])
   const allFilteredExpanded = filteredEvents.length > 0 && filteredEvents.every((event) => expandedEventIds.has(event.id))
-  const journeySummary = useMemo(() => {
-    const achieved = journeyMilestones.filter((milestone) => milestone.achieved)
-    const current = [...achieved].reverse().find((milestone) => milestone.kind === 'current') ?? achieved.at(-1)
-    const coreLevel = Math.max(1, ...achieved.map((milestone) => milestone.coreLevel ?? 1))
-    const petLevel = Math.max(1, ...achieved.map((milestone) => milestone.petLevel ?? 1))
-    const permission = [...achieved].reverse().find((milestone) => milestone.permissionLevel)?.permissionLevel ?? 'L1'
-    return { achieved, current, coreLevel, petLevel, permission }
-  }, [])
 
   const toggleEventExpansion = (eventId: string) => {
     setExpandedEventIds((current) => {
@@ -4265,19 +5018,18 @@ function EvolutionPage() {
 
   return (
     <div className="evo-page">
-      {mapOpen && <EvolutionMapCanvas onClose={() => setMapOpen(false)} />}
       <section className="evo-hero">
         <div className="evo-hero-top">
           <div className="evo-hero-copy">
-            <span className="tag blue">EvoMAP Neural Hub</span>
-            <h2>进化中枢</h2>
-            <p>把资料、目标、权限、PiCore、宠物等级和关键交互折叠成一张可探索的进化神经网络。</p>
+            <span className="tag blue">EvoPi 工作记录</span>
+            <h2>进化日志</h2>
+            <p>只保留已经发生、需要确认、可以继续管理的内容，快速看清 EvoPi 最近帮你整理了什么。</p>
           </div>
           <div className="evo-live-panel">
             <span className={`evo-live-dot ${eventsState === 'error' ? 'error' : autoRefresh ? 'on' : ''}`} />
             <div>
-              <strong>{eventsState === 'error' ? '审计轨迹离线' : evolutionTransportTitle(autoRefresh, eventTransport)}</strong>
-              <span>{lastUpdatedAt ? `后台同步 ${formatEvolutionTime(lastUpdatedAt)}` : '等待第一次同步'}</span>
+              <strong>{eventsState === 'error' ? '记录暂不可用' : evolutionTransportTitle(autoRefresh, eventTransport)}</strong>
+              <span>{lastUpdatedAt ? `最近同步 ${formatEvolutionTime(lastUpdatedAt)}` : '等待第一次同步'}</span>
             </div>
             <button className="ghost-btn sm" onClick={() => setAutoRefresh((value) => !value)}>
               <CuteIcon name="soft-refresh-loop" />{autoRefresh ? '暂停' : '实时'}
@@ -4287,65 +5039,46 @@ function EvolutionPage() {
             </button>
           </div>
         </div>
-        <div className="evo-hero-progress">
-          <div className="evo-progress-head">
-            <span>PiCore 旅程完整度</span>
-            <strong>{journeySummary.achieved.length}/{journeyMilestones.length}</strong>
-          </div>
-          <div className="evo-progress-bar" aria-label="自进化闭环完成度">
-            <span style={{ width: `${Math.round((journeySummary.achieved.length / journeyMilestones.length) * 100)}%` }} />
-          </div>
-          <div className="evo-progress-nodes">
-            {journeyMilestones.slice(0, 6).map((milestone) => (
-              <span
-                className={milestone.achieved ? 'done' : ''}
-                key={milestone.id}
-              >
-                {milestone.badge ?? milestone.title}
-              </span>
-            ))}
-          </div>
-        </div>
         <div className="evo-hero-summary">
           <article>
-            <span>生命核等级</span>
-            <strong>Lv.{journeySummary.coreLevel}</strong>
-            <em>{journeySummary.permission}</em>
+            <span>已生效能力</span>
+            <strong>{stats.localSkills}</strong>
+            <em>可在技能中心管理</em>
           </article>
           <article>
-            <span>宠物养成</span>
-            <strong>Lv.{journeySummary.petLevel}</strong>
-            <em>目标完成会继续提升</em>
+            <span>最近新增</span>
+            <strong>{stats.recent}</strong>
+            <em>近 30 分钟记录</em>
           </article>
           <article>
-            <span>当前节点</span>
-            <strong>{journeySummary.current?.badge ?? '中枢'}</strong>
-            <em>{journeySummary.current?.title ?? '等待里程碑'}</em>
+            <span>资料引用</span>
+            <strong>{stats.reuseEvents}</strong>
+            <em>可复用资料与来源</em>
           </article>
         </div>
-        <div className="evo-live-strip evo-live-strip-compact" aria-label="后台审计轨迹">
+        <div className="evo-live-strip evo-live-strip-compact" aria-label="最近操作记录">
           {recentLiveEvents.length ? recentLiveEvents.map((event) => (
             <div className={`evo-live-strip-item ${freshEventIds.includes(event.id) ? 'is-live' : ''}`} key={event.id}>
               <CuteIcon name={eventIcon(event.type)} />
               <div>
                 <strong>{event.summary}</strong>
-                <span>审计轨迹 · {event.type} · {formatEvolutionAge(event.createdAt)}</span>
+                <span>{evolutionTypeLabel(event.type)} · {formatEvolutionAge(event.createdAt)}</span>
               </div>
             </div>
           )) : (
             <div className="evo-live-strip-item empty">
               <CuteIcon name="soft-log-lines" />
               <div>
-                <strong>等待第一条后台审计轨迹</strong>
-                <span>用户确认、Skill 固化、社区发布或 webhook 到达后会进入审计台。</span>
+                <strong>等待第一条记录</strong>
+                <span>确认技能、调用 Pi、同步资料后会出现在这里。</span>
               </div>
             </div>
           )}
         </div>
-        <div className="evo-density-panel" aria-label="进化事件密度">
+        <div className="evo-density-panel" aria-label="最近活跃记录">
           <div>
-            <strong>事件密度</strong>
-            <span>{stats.recent} 条最近 30 分钟 · {events.length} 条总日志</span>
+            <strong>最近活跃</strong>
+            <span>{stats.recent} 条最近 30 分钟 · {events.length} 条总记录</span>
           </div>
           <div className="evo-density-bars">
             {densityBars.map((bar) => (
@@ -4360,49 +5093,31 @@ function EvolutionPage() {
         </div>
       </section>
 
-      <section className="co-evo-loop evo-loop-polished">
-        <div className="co-evo-side user">
-          <CuteIcon name={coEvolutionLoop[0].icon} />
-          <strong>{coEvolutionLoop[0].title}</strong>
-          <p>{coEvolutionLoop[0].desc}</p>
-        </div>
-        <div className="co-evo-arrow">
-          <span className="arrow-line" />
-          <span className="arrow-cap">互相促进</span>
-          <span className="arrow-line" />
-        </div>
-        <div className="co-evo-side agent">
-          <CuteIcon name={coEvolutionLoop[1].icon} />
-          <strong>{coEvolutionLoop[1].title}</strong>
-          <p>{coEvolutionLoop[1].desc}</p>
-        </div>
-      </section>
-
       <div className="evo-tabs">
         <button className={tab === 'agent' ? 'tab-btn active' : 'tab-btn'} onClick={() => setTab('agent')}>
-          Agent 进化历程
+          EvoPi 工作记录
         </button>
         <button className={tab === 'user' ? 'tab-btn active' : 'tab-btn'} onClick={() => setTab('user')}>
-          用户进化记录
+          我的使用记录
         </button>
       </div>
 
       {tab === 'agent' ? (
         <div className="evo-agent">
           <section className="evo-metrics-grid">
-            <EvolutionMetric icon="soft-log-lines" label="事件总数" value={stats.total} note={`${stats.recent} 条最近 30 分钟`} tone="mint" />
-            <EvolutionMetric icon="soft-settings-gear" label="本地 Skill" value={stats.localSkills} note="用户确认后的可复用经验" tone="pink" />
-            <EvolutionMetric icon="soft-document-page" label="Recipe 链路" value={stats.recipeEvents} note="draft / publish / webhook" tone="yellow" />
-            <EvolutionMetric icon="soft-refresh-loop" label="EvoMap 图谱" value={stats.reuseEvents} note="recipe / gene / reuse 引用" tone="blue" />
+            <EvolutionMetric icon="soft-log-lines" label="全部记录" value={stats.total} note={`${stats.recent} 条最近 30 分钟`} tone="mint" />
+            <EvolutionMetric icon="soft-settings-gear" label="已生效能力" value={stats.localSkills} note="确认后可在技能中心管理" tone="pink" />
+            <EvolutionMetric icon="soft-document-page" label="待处理内容" value={stats.recipeEvents} note="草稿、发布、同步记录" tone="yellow" />
+            <EvolutionMetric icon="soft-refresh-loop" label="资料引用" value={stats.reuseEvents} note="可复用素材和来源" tone="blue" />
           </section>
 
           <section className="evo-chain-board">
             <div className="skill-section-title">
               <CuteIcon name="soft-refresh-loop" />
-              自进化链路
+              按类型查看
             </div>
             <div className="evo-chain-track">
-              {chainLanes.map((lane, index) => {
+              {recordFilterLanes.map((lane, index) => {
                 const laneEvents = events.filter((event) => evolutionEventLane(event) === lane.key)
                 const latest = laneEvents[0]
                 const freshness = latest ? evolutionFreshness(latest.createdAt) : undefined
@@ -4415,8 +5130,8 @@ function EvolutionPage() {
                     <span className="evo-chain-index">{index + 1}</span>
                     <CuteIcon name={lane.icon} />
                     <strong>{lane.label}</strong>
-                    <em>{laneEvents.length} events</em>
-                    <span className={`evo-chain-state ${freshness?.tone ?? 'idle'}`}>{freshness?.label ?? '未触发'}</span>
+                    <em>{laneEvents.length} 条记录</em>
+                    <span className={`evo-chain-state ${freshness?.tone ?? 'idle'}`}>{freshness?.label ?? '暂无记录'}</span>
                     <small>{latest ? latest.summary.slice(0, 54) : lane.empty}</small>
                   </button>
                 )
@@ -4424,57 +5139,12 @@ function EvolutionPage() {
             </div>
           </section>
 
-          <section className="evo-visual-grid">
-            <div className="evo-map-panel">
-              <div className="skill-section-title">
-                <CuteIcon name="soft-sparkle-twinkle" />
-                进化中枢
-              </div>
-              {/* 进化中枢入口：点击进入全屏进化旅程地图 */}
-              <button className="evo-hub-entry" onClick={() => setMapOpen(true)}>
-                <span className="evo-hub-core" aria-hidden="true">
-                  <span className="evo-hub-ring" />
-                  <CuteIcon name="soft-sparkle-twinkle" />
-                </span>
-                <div className="evo-hub-text">
-                  <strong>全屏打开 EvoMAP 进化神经网络</strong>
-                  <span>查看从起点、资料、目标、权限到 PiClub 的整张大画布；关键里程碑点开后才显示交互记录。</span>
-                </div>
-                <span className="evo-hub-cta">
-                  展开 <CuteIcon name="soft-arrow-right" />
-                </span>
-              </button>
-              {/* 保留旧思维导图作为缩略预览（折叠态） */}
-              <details className="evo-map-legacy">
-                <summary>查看分支速览</summary>
-                <EvolutionMindMap events={events} />
-              </details>
-            </div>
-            <aside className="evo-current-panel">
-              <div className="skill-section-title">
-                <CuteIcon name="soft-role-users" />
-                当前进化画像
-              </div>
-              <div className="evo-current-card evo-profile-card">
-                <span className="evo-lane-pill lane-reuse">老板 / 管理者分支</span>
-                <strong>从个人助理升级为组织智能中枢</strong>
-                <p>Pi 正在把你的资料、管理任务、产品想法和社区反馈沉淀成可复用的管理思维，而不是把每一次操作都当作一条朋友圈动态。</p>
-                <div className="evo-profile-grid">
-                  <span>组织任务中枢</span>
-                  <span>管理思维进化</span>
-                  <span>子产品投放台</span>
-                  <span>宠物 Lv.{journeySummary.petLevel}</span>
-                </div>
-              </div>
-            </aside>
-          </section>
-
           <section className="evo-event-console">
             <div className="evo-console-head">
               <div>
-                <span className="tag mint">Audit Trail</span>
-                <strong>{laneFilter === 'all' ? '全部进化事件' : evolutionLaneLabel(laneFilter)}</strong>
-                <small>{filteredEvents.length} / {events.length} 条事件</small>
+                <span className="tag mint">操作记录</span>
+                <strong>{laneFilter === 'all' ? '全部记录' : evolutionLaneLabel(laneFilter)}</strong>
+                <small>{filteredEvents.length} / {events.length} 条记录</small>
               </div>
               <div className="evo-console-tools">
                 <div className="evo-filter-tabs">
@@ -4516,34 +5186,17 @@ function EvolutionPage() {
             )}
           </section>
 
-          <div className="evo-gep">
-            <div className="skill-section-title">
-              <CuteIcon name="soft-log-lines" />
-              一条行为是怎么变成的
-            </div>
-            <div className="evo-gep-grid">
-              {evolutionLogs.map((log, i) => (
-                <article className="evo-gep-step" key={log.label}>
-                  <span>{i + 1}</span>
-                  <CuteIcon name={log.icon} />
-                  <strong>{log.label}</strong>
-                  <em>{log.en}</em>
-                  <p>{log.text}</p>
-                </article>
-              ))}
-            </div>
-          </div>
         </div>
       ) : (
         <div className="evo-user">
           <div className="room-notice">
-            <strong>你每一次点 Enter，EvoPi 都在记录</strong>
-            下面是你最近几次提交时，EvoPi 帮你记录的内容，以及它认为你可以在哪些方面改进的小建议。
+            <strong>你的使用记录</strong>
+            这里保留你最近的确认、修改和忽略，方便回看哪些内容已经被 EvoPi 采用。
           </div>
           <section className="user-evo-realtime">
             <div className="skill-section-title">
               <CuteIcon name="soft-sparkle-twinkle" />
-              真实反馈信号流
+              最近反馈
             </div>
             <div className="user-signal-grid">
               {userSignalEvents.length ? userSignalEvents.map((event) => (
@@ -4552,7 +5205,7 @@ function EvolutionPage() {
                     <CuteIcon name={eventIcon(event.type)} />
                     <div>
                       <strong>{evolutionSignalKind(event)}</strong>
-                      <span>{formatEvolutionAge(event.createdAt)} · {event.type}</span>
+                      <span>{formatEvolutionAge(event.createdAt)} · {evolutionTypeLabel(event.type)}</span>
                     </div>
                   </div>
                   <p>{event.summary}</p>
@@ -4564,7 +5217,7 @@ function EvolutionPage() {
                 <article className="user-signal-card empty">
                   <CuteIcon name="soft-log-lines" />
                   <strong>等待来自你的下一次反馈</strong>
-                  <p>采纳、纠正、忽略、微信入站、Skill 确认都会进入这里，再被蒸馏成 Gene 与 Capsule。</p>
+                  <p>采纳、纠正、忽略、微信入站、Skill 确认都会进入这里，方便你之后回看和管理。</p>
                 </article>
               )}
             </div>
@@ -4580,7 +5233,7 @@ function EvolutionPage() {
                   </div>
                 </div>
                 <div className="user-evo-row">
-                  <em className="tag mint">Agent 记录</em>
+                  <em className="tag mint">EvoPi 记录</em>
                   <span>{e.recorded}</span>
                 </div>
                 <div className="user-evo-row">
@@ -4605,13 +5258,13 @@ const evolutionLanes: Array<{
   icon: CuteIconName
   empty: string
 }> = [
-  { key: 'all', label: '全部', icon: 'soft-log-lines', empty: '等待事件' },
-  { key: 'signal', label: 'Signal', icon: 'soft-search-spark', empty: '等待外部信号' },
-  { key: 'local', label: 'Local Skill', icon: 'soft-settings-gear', empty: '等待本地沉淀' },
-  { key: 'draft', label: 'Recipe Draft', icon: 'soft-document-page', empty: '等待 draft' },
-  { key: 'publish', label: 'Test Publish', icon: 'soft-success-check', empty: '等待发布' },
-  { key: 'reuse', label: 'Reuse Graph', icon: 'soft-refresh-loop', empty: '等待图谱' },
-  { key: 'event', label: 'EvolutionEvent', icon: 'soft-sparkle-twinkle', empty: '等待事件回执' },
+  { key: 'all', label: '全部', icon: 'soft-log-lines', empty: '等待记录' },
+  { key: 'signal', label: '待确认', icon: 'soft-search-spark', empty: '暂无待确认内容' },
+  { key: 'local', label: '已生效能力', icon: 'soft-settings-gear', empty: '暂无已生效能力' },
+  { key: 'draft', label: '草稿内容', icon: 'soft-document-page', empty: '暂无草稿' },
+  { key: 'publish', label: '发布同步', icon: 'soft-success-check', empty: '暂无发布记录' },
+  { key: 'reuse', label: '资料引用', icon: 'soft-refresh-loop', empty: '暂无资料引用' },
+  { key: 'event', label: '其他记录', icon: 'soft-sparkle-twinkle', empty: '暂无其他记录' },
 ]
 
 function evolutionEventLane(event: EvolutionEvent): EvolutionLane {
@@ -4625,7 +5278,20 @@ function evolutionEventLane(event: EvolutionEvent): EvolutionLane {
 }
 
 function evolutionLaneLabel(lane: EvolutionLane): string {
-  return evolutionLanes.find((item) => item.key === lane)?.label ?? 'EvolutionEvent'
+  return evolutionLanes.find((item) => item.key === lane)?.label ?? '其他记录'
+}
+
+function evolutionTypeLabel(type: string): string {
+  if (type.includes('wechat')) return '微信入站'
+  if (type.includes('receipt')) return '小票整理'
+  if (type.includes('skill')) return '技能更新'
+  if (type.includes('draft')) return '草稿准备'
+  if (type.includes('published') || type.includes('webhook')) return '发布同步'
+  if (type.includes('reuse') || type.includes('reference')) return '资料引用'
+  if (type.includes('agent_run') || type.includes('external_agent')) return '代理执行'
+  if (type.includes('connector') || type.includes('connected')) return '连接状态'
+  if (type.startsWith('evomap.')) return '资料检索'
+  return '普通记录'
 }
 
 function evolutionStats(events: EvolutionEvent[]) {
@@ -4751,10 +5417,10 @@ function EvolutionMetric({ icon, label, value, note, tone }: {
 
 function EvolutionPlaceholder({ type }: { type: 'loading' | 'error' | 'empty' | 'filtered-empty' }) {
   const copy = {
-    loading: ['soft-loading-loop', '正在同步事件流', '后端 EvolutionEvent 读取中。'],
-    error: ['soft-warning-triangle', '事件流暂不可用', '确认 evopi-api 正在运行后刷新。'],
-    empty: ['soft-log-lines', '等待第一条进化', '搜索 EvoMap、调用 Pi、确认 Skill 后会写入这里。'],
-    'filtered-empty': ['soft-search-spark', '当前分支暂无事件', '切回全部可以查看其他进化记录。'],
+    loading: ['soft-loading-loop', '正在同步记录', '正在读取最近的 EvoPi 工作记录。'],
+    error: ['soft-warning-triangle', '记录暂不可用', '确认 evopi-api 正在运行后刷新。'],
+    empty: ['soft-log-lines', '等待第一条记录', '调用 Pi、确认 Skill、同步资料后会写入这里。'],
+    'filtered-empty': ['soft-search-spark', '当前分类暂无记录', '切回全部可以查看其他记录。'],
   } as const
   const [icon, title, desc] = copy[type]
   return (
@@ -4784,14 +5450,14 @@ function EvolutionEventCard({ event, index, expanded, fresh, onToggle }: {
         <div className="evo-event-body">
           <div className="evo-event-title">
             <span className={`evo-lane-pill lane-${lane}`}>{evolutionLaneLabel(lane)}</span>
-            <strong>{event.type}</strong>
+            <strong>{evolutionTypeLabel(event.type)}</strong>
             <em>{formatEvolutionTime(event.createdAt)}</em>
           </div>
           <p>{event.summary}</p>
           <div className="evo-event-meta-row">
             <span>#{String(index + 1).padStart(2, '0')}</span>
             <span>{formatEvolutionAge(event.createdAt)}</span>
-            <span>{chips.length} evidence</span>
+            <span>{chips.length ? `${chips.length} 条细节` : '暂无细节'}</span>
           </div>
           <div className="evo-evidence-chips">
             {chips.slice(0, 4).map((chip) => <em key={chip}>{chip}</em>)}
@@ -4803,11 +5469,18 @@ function EvolutionEventCard({ event, index, expanded, fresh, onToggle }: {
       {expanded && (
         <div className="evo-event-detail">
           <dl>
-            <div><dt>eventId</dt><dd>{shortIdentifier(event.id)}</dd></div>
-            {event.subjectId && <div><dt>subject</dt><dd>{shortIdentifier(event.subjectId)}</dd></div>}
-            <div><dt>createdAt</dt><dd>{new Date(event.createdAt).toISOString()}</dd></div>
+            <div><dt>编号</dt><dd>{shortIdentifier(event.id)}</dd></div>
+            {event.subjectId && <div><dt>对象</dt><dd>{shortIdentifier(event.subjectId)}</dd></div>}
+            <div><dt>类型</dt><dd>{evolutionTypeLabel(event.type)}</dd></div>
+            <div><dt>时间</dt><dd>{formatEvolutionTime(event.createdAt)}</dd></div>
           </dl>
-          <pre>{JSON.stringify(event.evidence ?? {}, null, 2)}</pre>
+          {chips.length ? (
+            <div className="evo-detail-chip-list">
+              {chips.map((chip) => <span key={chip}>{chip}</span>)}
+            </div>
+          ) : (
+            <p className="evo-detail-empty">暂无更多细节。</p>
+          )}
         </div>
       )}
     </article>
@@ -4845,26 +5518,55 @@ function evidenceChips(event: EvolutionEvent): string[] {
     'errorCode',
     'chatId',
   ]
+  const evidenceLabels: Record<string, string> = {
+    operationId: '操作编号',
+    runId: '运行编号',
+    skillId: '技能编号',
+    recipeId: '流程编号',
+    recipeInputTitle: '输入标题',
+    stepCount: '步骤数',
+    source: '来源',
+    stage: '阶段',
+    privacyPolicy: '隐私策略',
+    publishPolicy: '发布策略',
+    deliveryId: '投递编号',
+    eventType: '记录类型',
+    kind: '类型',
+    skillName: '技能',
+    workflowId: '工作流',
+    mode: '模式',
+    status: '状态',
+    capabilityCount: '能力数',
+    workflowCount: '工作流数',
+    resultCount: '结果数',
+    runtimeReason: '运行原因',
+    provider: '服务',
+    model: '模型',
+    modelOverride: '指定模型',
+    fallback: '兜底',
+    errorCode: '错误码',
+    chatId: '会话',
+  }
   const chips = priorityKeys.flatMap((key) => {
     const value = evidence[key]
     if (value === undefined || value === null || value === '') return []
-    return [`${key}: ${formatEvidenceValue(value)}`]
+    return [`${evidenceLabels[key] ?? key}：${formatEvidenceValue(value)}`]
   })
   if (typeof evidence.outputPreview === 'string' && evidence.outputPreview.trim()) {
-    chips.push(`out: ${shortIdentifier(evidence.outputPreview.trim())}`)
+    chips.push(`输出：${shortIdentifier(evidence.outputPreview.trim())}`)
   }
   if (typeof evidence.stderrPreview === 'string' && evidence.stderrPreview.trim()) {
-    chips.push(`err: ${shortIdentifier(evidence.stderrPreview.trim())}`)
+    chips.push(`错误：${shortIdentifier(evidence.stderrPreview.trim())}`)
   }
   const referenced = evidence.referencedEvoMapIds
-  if (Array.isArray(referenced) && referenced.length) chips.push(`refs: ${referenced.length}`)
-  if (event.subjectId) chips.push(`subject: ${shortIdentifier(event.subjectId)}`)
+  if (Array.isArray(referenced) && referenced.length) chips.push(`引用资料：${referenced.length}`)
+  if (event.subjectId) chips.push(`对象：${shortIdentifier(event.subjectId)}`)
   return chips
 }
 
 function formatEvidenceValue(value: unknown): string {
-  if (Array.isArray(value)) return `${value.length} items`
-  if (typeof value === 'object' && value) return 'object'
+  if (Array.isArray(value)) return `${value.length} 项`
+  if (typeof value === 'object' && value) return '已记录'
   return shortIdentifier(String(value))
 }
 
