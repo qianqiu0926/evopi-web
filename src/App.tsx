@@ -2312,6 +2312,89 @@ function piPersonaToRoomPerson(persona: PiRoomPersona): RoomPerson {
   }
 }
 
+type InspirationNote = {
+  id: string
+  text: string
+  source: 'me' | 'them' | 'research'
+  time: string
+}
+
+type ResearchItem = {
+  id: string
+  title: string
+  source: string
+  angle: string
+  quote: string
+  tag: string
+}
+
+const inspirationSeed: InspirationNote[] = [
+  {
+    id: 'seed-purpose',
+    text: '考研是手段不是目的，真正要判断的是我是否要换到更看好的赛道继续做产品。',
+    source: 'them',
+    time: '14:06',
+  },
+]
+
+const researchSuggestions: ResearchItem[] = [
+  {
+    id: 'r-product-career',
+    title: '产品经理转赛道时，复用能力比学历标签更快产生迁移价值',
+    source: '职业访谈摘录',
+    angle: '支持“先换赛道再评估读研”的论据',
+    quote: '需求拆解、用户访谈、跨团队推进通常能直接迁移到新行业。',
+    tag: '迁移能力',
+  },
+  {
+    id: 'r-grad-cost',
+    title: '两到三年的收入下降需要被量化成机会成本，而不是只看录取概率',
+    source: '教育投资分析',
+    angle: '反驳“读研天然更稳”的观点',
+    quote: '决策应同时比较现金流、行业入口、个人学习曲线和未来岗位密度。',
+    tag: '机会成本',
+  },
+  {
+    id: 'r-sector-fit',
+    title: '换方向前先做 3 个低成本行业实验，可以避免把焦虑误判成志向',
+    source: '创业者复盘',
+    angle: '把观点落成行动验证',
+    quote: '访谈、兼职项目、公开作品是验证行业真实吸引力的低风险路径。',
+    tag: '实验验证',
+  },
+]
+
+function buildInspirationTitle(notes: InspirationNote[]) {
+  if (!notes.length) return '等待你挑一句值得留下的话'
+  const text = notes.map((note) => note.text).join(' ')
+  if (text.includes('赛道') || text.includes('产品')) return '职业选择：先校准赛道，再决定是否读研'
+  if (text.includes('成本') || text.includes('收入')) return '决策成本：把情绪判断换成可比较账本'
+  return '这一轮 PiRoom 对话的思想沉淀'
+}
+
+function buildInspirationPoints(notes: InspirationNote[]) {
+  if (!notes.length) return ['从对话中选中关键句，Pi 会把它们串成可写入记忆库的主题。']
+  const points = [
+    '核心问题不是“要不要换方向”，而是“什么路径能把现有产品能力迁移到更看好的赛道”。',
+  ]
+  if (notes.some((note) => note.text.includes('成本') || note.text.includes('收入'))) {
+    points.push('读研的价值需要和机会成本一起算，避免只被身份标签或安全感牵引。')
+  }
+  if (notes.some((note) => note.source === 'research')) {
+    points.push('外部资料补上了论据：先做低成本行业实验，再决定是否投入长期路径。')
+  }
+  if (notes.length >= 3) {
+    points.push('下一步可以把这组洞察写成“赛道验证清单”，沉入职业成长目标舱。')
+  }
+  return points
+}
+
+function noteSourceLabel(source: InspirationNote['source']) {
+  if (source === 'me') return '我的表达'
+  if (source === 'them') return '对方观点'
+  return '资料论据'
+}
+
 function RoomChat({ person, onBack }: { person: RoomPerson; onBack: () => void }) {
   const initial: ChatMsg[] = sampleChat[person.id] ?? [
     { from: 'them', text: `你好，我是基于「${person.basis}」生成的${person.name}模拟视角。你想聊什么？`, time: '现在' },
@@ -2321,7 +2404,23 @@ function RoomChat({ person, onBack }: { person: RoomPerson; onBack: () => void }
   const [selectedAssets, setSelectedAssets] = useState<Set<string>>(new Set())
   const [showAssets, setShowAssets] = useState(true)
   const [sending, setSending] = useState(false)
+  const [searchQuery, setSearchQuery] = useState('职业转赛道 读研 机会成本')
+  const [selectedResearch, setSelectedResearch] = useState<Set<string>>(new Set(['r-product-career']))
+  const [inspirations, setInspirations] = useState<InspirationNote[]>(inspirationSeed)
+  const [memorySaved, setMemorySaved] = useState(false)
   const scrollRef = useRef<HTMLDivElement>(null)
+
+  const filteredResearch = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase()
+    if (!query) return researchSuggestions
+    return researchSuggestions.filter((item) => {
+      const haystack = `${item.title} ${item.source} ${item.angle} ${item.quote} ${item.tag}`.toLowerCase()
+      return query.split(/\s+/).some((word) => haystack.includes(word))
+    })
+  }, [searchQuery])
+
+  const inspirationTitle = useMemo(() => buildInspirationTitle(inspirations), [inspirations])
+  const inspirationPoints = useMemo(() => buildInspirationPoints(inspirations), [inspirations])
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' })
@@ -2333,6 +2432,34 @@ function RoomChat({ person, onBack }: { person: RoomPerson; onBack: () => void }
       if (next.has(id)) next.delete(id)
       else next.add(id)
       return next
+    })
+  }
+
+  const collectMessage = (msg: ChatMsg, index: number) => {
+    const id = `msg-${index}`
+    setMemorySaved(false)
+    setInspirations((prev) => {
+      if (prev.some((item) => item.id === id)) return prev
+      return [...prev, { id, text: msg.text, source: msg.from, time: msg.time }]
+    })
+  }
+
+  const toggleResearch = (id: string) => {
+    setSelectedResearch((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  const collectResearch = (item: ResearchItem) => {
+    setMemorySaved(false)
+    setSelectedResearch((prev) => new Set(prev).add(item.id))
+    setInspirations((prev) => {
+      const id = `research-${item.id}`
+      if (prev.some((note) => note.id === id)) return prev
+      return [...prev, { id, text: `${item.title}：${item.quote}`, source: 'research', time: item.source }]
     })
   }
 
@@ -2407,7 +2534,7 @@ function RoomChat({ person, onBack }: { person: RoomPerson; onBack: () => void }
               {msg.from === 'them' && (
                 <div className="msg-avatar sm"><CuteIcon name={person.avatar as CuteIconName} /></div>
               )}
-              <div className="msg-bubble">
+          <div className="msg-bubble">
                 <p>{msg.text}</p>
                 {msg.attached && (
                   <div className="msg-attached">
@@ -2418,36 +2545,111 @@ function RoomChat({ person, onBack }: { person: RoomPerson; onBack: () => void }
                 )}
                 <span className="msg-time">{msg.time}</span>
               </div>
+              <button
+                className="capture-arrow"
+                onClick={() => collectMessage(msg, i)}
+                aria-label="沉淀到右侧灵感专题"
+                title="沉淀到右侧灵感专题"
+              >
+                <CuteIcon name="soft-arrow-right" />
+              </button>
             </div>
           ))}
         </div>
 
         {showAssets && (
-          <aside className="asset-rail">
-            <div className="asset-head">
-              <CuteIcon name="soft-folder-tab" />
-              <strong>我的资料库</strong>
-              <span>勾选后加入对话</span>
-            </div>
-            <div className="asset-list">
-              {assetLibrary.map((a) => (
-                <button
-                  className={`asset-row ${selectedAssets.has(a.id) ? 'selected' : ''}`}
-                  key={a.id}
-                  onClick={() => toggleAsset(a.id)}
-                >
-                  <CuteIcon name={assetIcon(a.kind)} />
-                  <div className="asset-meta">
-                    <strong>{a.name}</strong>
-                    <span>{a.source} · {a.meta}</span>
-                  </div>
-                  <span className="asset-check">{selectedAssets.has(a.id) ? '✓' : ''}</span>
-                </button>
-              ))}
-            </div>
-            {selectedAssets.size > 0 && (
-              <div className="asset-selected">已选 {selectedAssets.size} 份加入下条消息</div>
-            )}
+          <aside className="thinking-rail">
+            <section className="research-desk">
+              <div className="rail-section-head">
+                <div>
+                  <span className="rail-eyebrow">找论据</span>
+                  <strong>资料借鉴窗</strong>
+                </div>
+                <em className="tag blue">{selectedResearch.size} 条可引用</em>
+              </div>
+              <label className="research-search">
+                <CuteIcon name="soft-search-spark" />
+                <input
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="搜论据、案例或反驳资料"
+                />
+              </label>
+              <div className="research-list">
+                {filteredResearch.map((item) => (
+                  <article className={`research-card ${selectedResearch.has(item.id) ? 'selected' : ''}`} key={item.id}>
+                    <button className="research-check" onClick={() => toggleResearch(item.id)} aria-label="选中资料">
+                      {selectedResearch.has(item.id) ? '✓' : '+'}
+                    </button>
+                    <div>
+                      <span>{item.source} · {item.tag}</span>
+                      <strong>{item.title}</strong>
+                      <p>{item.angle}</p>
+                      <button className="mini-link" onClick={() => collectResearch(item)}>
+                        <CuteIcon name="soft-arrow-right" />收进沉淀
+                      </button>
+                    </div>
+                  </article>
+                ))}
+              </div>
+              <div className="asset-mini-panel">
+                <div className="asset-mini-head">
+                  <CuteIcon name="soft-folder-tab" />
+                  <strong>带入当前对话</strong>
+                  <span>{selectedAssets.size} 份</span>
+                </div>
+                <div className="asset-chip-list">
+                  {assetLibrary.slice(0, 5).map((a) => (
+                    <button
+                      className={`asset-chip ${selectedAssets.has(a.id) ? 'selected' : ''}`}
+                      key={a.id}
+                      onClick={() => toggleAsset(a.id)}
+                    >
+                      <CuteIcon name={assetIcon(a.kind)} />
+                      {a.name}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </section>
+
+            <section className="inspiration-desk">
+              <div className="rail-section-head">
+                <div>
+                  <span className="rail-eyebrow">沉淀成专题</span>
+                  <strong>Pi 思想沉淀</strong>
+                </div>
+                <CuteIcon name="soft-idea-bulb" />
+              </div>
+              <div className="memory-topic">
+                <span>本轮灵感专题</span>
+                <h3>{inspirationTitle}</h3>
+                <p>Pi 会把你收进来的句子和资料串联成一条可复用记忆，而不是只存原文。</p>
+              </div>
+              <div className="inspiration-thread">
+                {inspirations.map((note, index) => (
+                  <article className="inspiration-note" key={note.id}>
+                    <span className="note-index">{String(index + 1).padStart(2, '0')}</span>
+                    <div>
+                      <em>{noteSourceLabel(note.source)} · {note.time}</em>
+                      <p>{note.text}</p>
+                    </div>
+                  </article>
+                ))}
+              </div>
+              <div className="pi-organizer">
+                <strong><CuteIcon name="soft-sparkle-edit" />Pi 自动整理</strong>
+                <ul>
+                  {inspirationPoints.map((point) => (
+                    <li key={point}>{point}</li>
+                  ))}
+                </ul>
+              </div>
+              <button className={`save-memory-btn ${memorySaved ? 'saved' : ''}`} onClick={() => setMemorySaved(true)}>
+                <CuteIcon name={memorySaved ? 'soft-success-check' : 'soft-database-stack'} />
+                {memorySaved ? '已写入 Pi 记忆库' : '写入 Pi 记忆库'}
+              </button>
+            </section>
           </aside>
         )}
       </div>

@@ -37,6 +37,14 @@
   grid-template-columns: 78px minmax(0, 1fr);
 }
 
+.app-shell.wide-center {
+  grid-template-columns: 244px minmax(0, 1fr);
+}
+
+.app-shell.wide-center.nav-collapsed {
+  grid-template-columns: 78px minmax(0, 1fr);
+}
+
 .app-shell.focus-page {
   min-height: 100svh;
   grid-template-columns: minmax(0, 1fr);
@@ -4321,7 +4329,7 @@ body[data-theme="glass"] .focus-hero {
 }
 
 .chat-body.with-assets {
-  grid-template-columns: minmax(0, 1fr) 280px;
+  grid-template-columns: minmax(0, 1fr) minmax(340px, 38%);
 }
 
 .chat-stream {
@@ -4335,7 +4343,9 @@ body[data-theme="glass"] .focus-hero {
 }
 
 .msg {
+  position: relative;
   display: flex;
+  align-items: flex-end;
   gap: 10px;
   max-width: 78%;
   animation: fadeUp var(--dur-mid) var(--ease-smooth) both;
@@ -4390,36 +4400,404 @@ body[data-theme="glass"] .focus-hero {
   font-size: 10.5px;
 }
 
-/* —— 资产资料库侧栏 —— */
-.asset-rail {
-  border-left: var(--border-w) solid var(--line);
-  background: var(--surface);
+.capture-arrow {
   display: grid;
-  grid-template-rows: auto 1fr auto;
-  min-height: 0;
+  flex: 0 0 auto;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  border: var(--border-w) solid var(--line);
+  border-radius: 50%;
+  background: var(--cute-yellow);
+  box-shadow: 2px 2px 0 var(--line-soft);
+  opacity: 0;
+  transform: translateX(-4px) scale(0.9);
+  transition:
+    opacity var(--dur-fast) var(--ease-smooth),
+    transform var(--dur-fast) var(--ease-press),
+    box-shadow var(--dur-fast) var(--ease-smooth);
 }
 
-.asset-head {
+.msg.me .capture-arrow {
+  transform: translateX(4px) scale(0.9) rotate(180deg);
+}
+
+.msg:hover .capture-arrow,
+.msg:focus-within .capture-arrow {
+  opacity: 1;
+  transform: translateX(0) scale(1);
+}
+
+.msg.me:hover .capture-arrow,
+.msg.me:focus-within .capture-arrow {
+  transform: translateX(0) scale(1) rotate(180deg);
+}
+
+.capture-arrow:hover {
+  box-shadow: 4px 4px 0 var(--line-soft);
+}
+
+.capture-arrow .cute-icon {
+  width: 19px;
+  height: 19px;
+}
+
+/* —— 右侧资料检索 + 思想沉淀 —— */
+.thinking-rail {
+  border-left: var(--border-w) solid var(--line);
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--cute-blue) 22%, transparent), transparent 34%),
+    var(--surface);
+  display: grid;
+  grid-template-rows: minmax(0, 0.95fr) minmax(0, 1.05fr);
+  gap: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.research-desk,
+.inspiration-desk {
+  display: grid;
+  min-height: 0;
+  align-content: start;
+  gap: 12px;
+  padding: 14px;
+}
+
+.research-desk {
+  border-bottom: var(--border-w) solid var(--line);
+}
+
+.inspiration-desk {
+  background:
+    radial-gradient(circle at 14% 8%, color-mix(in srgb, var(--cute-yellow) 55%, transparent), transparent 30%),
+    var(--surface-soft);
+}
+
+.rail-section-head {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 8px;
-  padding: 14px 16px;
-  border-bottom: 1.5px dashed var(--line-soft);
 }
 
-.asset-head .cute-icon {
+.rail-section-head .cute-icon {
   width: 22px;
   height: 22px;
 }
 
-.asset-head strong {
+.rail-section-head strong {
+  display: block;
   font-size: 14px;
+  line-height: 1.25;
 }
 
-.asset-head span {
+.rail-eyebrow {
+  display: block;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 850;
+}
+
+.research-search {
+  display: grid;
+  grid-template-columns: 26px minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  border: var(--border-w) solid var(--line);
+  border-radius: var(--r-sm);
+  padding: 8px 10px;
+  background: var(--surface-soft);
+  box-shadow: 2px 2px 0 var(--line-soft);
+}
+
+.research-search .cute-icon {
+  width: 22px;
+  height: 22px;
+}
+
+.research-search input {
+  width: 100%;
+  min-width: 0;
+  border: 0;
+  outline: none;
+  background: transparent;
+  color: var(--text);
+  font-size: 12.5px;
+}
+
+.research-list {
+  display: grid;
+  gap: 8px;
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: 3px;
+  scrollbar-width: thin;
+}
+
+.research-card {
+  position: relative;
+  display: grid;
+  grid-template-columns: 30px minmax(0, 1fr);
+  gap: 9px;
+  border: 1.5px solid var(--line-soft);
+  border-radius: var(--r-sm);
+  padding: 10px;
+  background: var(--surface);
+  transition:
+    border-color var(--dur-fast) var(--ease-smooth),
+    background var(--dur-fast) var(--ease-smooth),
+    transform var(--dur-fast) var(--ease-press);
+}
+
+.research-card:hover {
+  transform: translateY(-1px);
+  border-color: var(--line);
+}
+
+.research-card.selected {
+  border-color: var(--line);
+  background: color-mix(in srgb, var(--cute-mint) 58%, var(--surface));
+  box-shadow: 2px 2px 0 var(--line-soft);
+}
+
+.research-check {
+  display: grid;
+  width: 28px;
+  height: 28px;
+  place-items: center;
+  border: 1.5px solid var(--line);
+  border-radius: 50%;
+  background: var(--cute-yellow);
+  font-weight: 950;
+  line-height: 1;
+}
+
+.research-card span,
+.memory-topic span,
+.inspiration-note em {
+  display: block;
+  color: var(--muted);
+  font-size: 10.8px;
+  font-style: normal;
+  font-weight: 850;
+  line-height: 1.35;
+}
+
+.research-card strong {
+  display: block;
+  margin-top: 3px;
+  font-size: 12.4px;
+  line-height: 1.35;
+}
+
+.research-card p {
+  margin-top: 5px;
+  color: var(--muted);
+  font-size: 11.5px;
+  line-height: 1.45;
+}
+
+.mini-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 28px;
+  margin-top: 8px;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: var(--text);
+  font-size: 11.5px;
+  font-weight: 900;
+}
+
+.mini-link .cute-icon {
+  width: 16px;
+  height: 16px;
+}
+
+.asset-mini-panel {
+  border: 1.5px dashed var(--line-soft);
+  border-radius: var(--r-sm);
+  padding: 10px;
+  background: color-mix(in srgb, var(--cute-yellow) 35%, var(--surface));
+}
+
+.asset-mini-head {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-bottom: 8px;
+}
+
+.asset-mini-head .cute-icon {
+  width: 18px;
+  height: 18px;
+}
+
+.asset-mini-head strong {
+  font-size: 12px;
+}
+
+.asset-mini-head span {
   margin-left: auto;
   color: var(--muted);
   font-size: 11px;
+  font-weight: 850;
+}
+
+.asset-chip-list {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  padding-bottom: 2px;
+  scrollbar-width: none;
+}
+
+.asset-chip-list::-webkit-scrollbar {
+  display: none;
+}
+
+.asset-chip {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 5px;
+  max-width: 168px;
+  min-height: 30px;
+  border: 1.5px solid var(--line-soft);
+  border-radius: 999px;
+  padding: 0 10px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 11px;
+  font-weight: 850;
+  white-space: nowrap;
+}
+
+.asset-chip.selected {
+  border-color: var(--line);
+  background: var(--cute-mint);
+}
+
+.asset-chip .cute-icon {
+  width: 16px;
+  height: 16px;
+}
+
+.memory-topic {
+  border: var(--border-w) solid var(--line);
+  border-radius: var(--r-md);
+  padding: 12px;
+  background: var(--surface);
+  box-shadow: 3px 3px 0 var(--line-soft);
+}
+
+.memory-topic h3 {
+  margin-top: 4px;
+  font-size: 15px;
+  line-height: 1.32;
+}
+
+.memory-topic p {
+  margin-top: 7px;
+  color: var(--muted);
+  font-size: 11.5px;
+  line-height: 1.48;
+}
+
+.inspiration-thread {
+  display: grid;
+  gap: 8px;
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: 3px;
+  scrollbar-width: thin;
+}
+
+.inspiration-note {
+  display: grid;
+  grid-template-columns: 32px minmax(0, 1fr);
+  gap: 9px;
+  border: 1.5px solid var(--line-soft);
+  border-radius: var(--r-sm);
+  padding: 9px;
+  background: rgba(255, 255, 255, 0.72);
+}
+
+.note-index {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  place-items: center;
+  border: 1.5px solid var(--line);
+  border-radius: 50%;
+  background: var(--cute-blue);
+  font-size: 11px;
+  font-weight: 950;
+}
+
+.inspiration-note p {
+  margin-top: 3px;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.pi-organizer {
+  border: 1.5px dashed var(--line);
+  border-radius: var(--r-md);
+  padding: 11px 12px;
+  background: color-mix(in srgb, var(--cute-mint) 48%, var(--surface));
+}
+
+.pi-organizer strong {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
+}
+
+.pi-organizer .cute-icon {
+  width: 18px;
+  height: 18px;
+}
+
+.pi-organizer ul {
+  display: grid;
+  gap: 6px;
+  margin: 8px 0 0;
+  padding-left: 17px;
+}
+
+.pi-organizer li {
+  color: var(--muted);
+  font-size: 11.8px;
+  line-height: 1.45;
+}
+
+.save-memory-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 42px;
+  border: var(--border-w) solid var(--line);
+  border-radius: var(--r-sm);
+  background: var(--cute-yellow);
+  box-shadow: 3px 3px 0 var(--line-soft);
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 950;
+}
+
+.save-memory-btn.saved {
+  background: var(--cute-mint);
+}
+
+.save-memory-btn .cute-icon {
+  width: 21px;
+  height: 21px;
 }
 
 .asset-list {
@@ -8763,12 +9141,12 @@ body[data-theme="glass"] .map-core-body {
 }
 
 /* ============================================================
-   Notion 科技风 · 深度视觉覆盖
-   与 cute 暖白风完全区分：深色玻璃卡 + 青绿紫荧光边 + 发光阴影
+   Notion 纯科技风 · 深度视觉覆盖
+   原则：单一青色强调、高对比文字、无图标、无杂色、统一光感
    仅覆盖外观，不改功能与排布
    ============================================================ */
 
-/* —— 卡片表面：深色玻璃 + 荧光描边 —— */
+/* —— 卡片表面：纯深色实心 + 极淡描边，不用玻璃模糊 —— */
 body[data-theme="notion"] .hero-card,
 body[data-theme="notion"] .compose-card,
 body[data-theme="notion"] .soft-panel,
@@ -8790,11 +9168,11 @@ body[data-theme="notion"] .quick-card,
 body[data-theme="notion"] .import-panel,
 body[data-theme="notion"] .adopt-box,
 body[data-theme="notion"] .agent-task {
-  background: rgba(20, 28, 48, 0.72) !important;
-  border: 1px solid rgba(0, 229, 255, 0.28) !important;
-  box-shadow: 0 0 24px rgba(0, 229, 255, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.04) !important;
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
+  background: #121826 !important;
+  border: 1px solid rgba(95, 180, 255, 0.16) !important;
+  box-shadow: none !important;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
 }
 
 body[data-theme="notion"] .hero-card:hover,
@@ -8802,116 +9180,113 @@ body[data-theme="notion"] .goal-card:hover,
 body[data-theme="notion"] .quick-card:hover,
 body[data-theme="notion"] .person-card:hover,
 body[data-theme="notion"] .skill-card:hover {
-  border-color: rgba(0, 229, 255, 0.6) !important;
-  box-shadow: 0 0 32px rgba(0, 229, 255, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.06) !important;
+  border-color: rgba(95, 180, 255, 0.4) !important;
+  box-shadow: none !important;
 }
 
-/* —— 三栏容器：导航/内容/状态栏 —— */
+/* focus-hero 用纯青色实底（不再多彩渐变） */
+body[data-theme="notion"] .focus-hero {
+  background: #121826 !important;
+  border: 1px solid rgba(95, 180, 255, 0.3) !important;
+}
+
+/* —— 三栏容器：纯深色实心 —— */
 body[data-theme="notion"] .app-nav,
 body[data-theme="notion"] .page-area,
 body[data-theme="notion"] .state-rail {
-  background: rgba(13, 18, 36, 0.7) !important;
-  border: 1px solid rgba(0, 229, 255, 0.22) !important;
-  box-shadow: 0 0 40px rgba(0, 229, 255, 0.05), inset 0 1px 0 rgba(255, 255, 255, 0.03) !important;
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
+  background: #0f1422 !important;
+  border: 1px solid rgba(95, 180, 255, 0.14) !important;
+  box-shadow: none !important;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
 }
 
-/* —— 品牌 mark —— */
-body[data-theme="notion"] .brand-mark {
-  background: linear-gradient(135deg, var(--tech-cyan), var(--tech-purple)) !important;
-  color: #0a0e1a !important;
-  box-shadow: 0 0 20px var(--tech-glow) !important;
-  border-color: var(--tech-cyan) !important;
-}
-
-/* —— 页面标题 —— */
+/* —— 页面标题：纯白色高对比，不用渐变 —— */
 body[data-theme="notion"] .page-header h1 {
-  background: linear-gradient(90deg, var(--tech-cyan), var(--tech-green));
-  -webkit-background-clip: text;
-  background-clip: text;
-  -webkit-text-fill-color: transparent;
+  background: none;
+  -webkit-text-fill-color: #f0f4ff;
+  color: #f0f4ff;
 }
 
-body[data-theme="notion"] .page-head-icon {
-  background: rgba(0, 229, 255, 0.12) !important;
-  border-color: var(--tech-cyan) !important;
-  box-shadow: 0 0 16px rgba(0, 229, 255, 0.3) !important;
+body[data-theme="notion"] .page-head-desc {
+  color: #9aabc8 !important;
 }
 
 body[data-theme="notion"] .page-kicker {
-  background: rgba(167, 139, 250, 0.2) !important;
-  border-color: var(--tech-purple) !important;
-  color: var(--tech-purple) !important;
+  background: rgba(95, 180, 255, 0.1) !important;
+  border-color: rgba(95, 180, 255, 0.3) !important;
+  color: var(--tech-cyan) !important;
 }
 
-/* —— 导航按钮 —— */
+/* —— 导航按钮：扁平、高对比 —— */
 body[data-theme="notion"] .nav-button {
   background: transparent !important;
-  border-color: transparent !important;
-  color: var(--cute-muted) !important;
+  border: 1px solid transparent !important;
+  color: #c8d4e8 !important;
 }
 
 body[data-theme="notion"] .nav-button:hover {
-  background: rgba(0, 229, 255, 0.08) !important;
-  border-color: rgba(0, 229, 255, 0.3) !important;
+  background: rgba(95, 180, 255, 0.08) !important;
+  border-color: rgba(95, 180, 255, 0.2) !important;
   color: var(--tech-cyan) !important;
 }
 
 body[data-theme="notion"] .nav-button.active {
-  background: linear-gradient(90deg, rgba(0, 229, 255, 0.18), rgba(167, 139, 250, 0.12)) !important;
-  border: 1px solid var(--tech-cyan) !important;
+  background: rgba(95, 180, 255, 0.12) !important;
+  border: 1px solid rgba(95, 180, 255, 0.4) !important;
   color: var(--tech-cyan) !important;
-  box-shadow: 0 0 20px rgba(0, 229, 255, 0.25) !important;
+  box-shadow: none !important;
 }
 
 body[data-theme="notion"] .nav-button.active::before {
   background: var(--tech-cyan) !important;
-  box-shadow: 0 0 8px var(--tech-cyan);
+  box-shadow: none;
 }
 
 /* —— 分组标题 —— */
 body[data-theme="notion"] .nav-group-head {
-  color: rgba(0, 229, 255, 0.6) !important;
+  color: #6a7a96 !important;
   text-transform: uppercase;
-  letter-spacing: 0.12em;
+  letter-spacing: 0.1em;
 }
 
-/* —— 按钮：荧光描边 + 悬停发光 —— */
+/* —— 按钮：扁平单色，不再发光阴影 —— */
 body[data-theme="notion"] .primary-btn {
-  background: linear-gradient(135deg, var(--tech-cyan), var(--tech-green)) !important;
-  color: #0a0e1a !important;
-  border-color: var(--tech-cyan) !important;
-  box-shadow: 0 0 20px rgba(0, 229, 255, 0.4) !important;
+  background: var(--tech-cyan) !important;
+  color: #0b0f1a !important;
+  border: 1px solid var(--tech-cyan) !important;
+  box-shadow: none !important;
 }
 
 body[data-theme="notion"] .primary-btn:hover {
-  box-shadow: 0 0 32px rgba(0, 229, 255, 0.6) !important;
+  background: #7ac2ff !important;
+  box-shadow: none !important;
 }
 
 body[data-theme="notion"] .ghost-btn,
 body[data-theme="notion"] .soft-button,
 body[data-theme="notion"] .round-action {
-  background: rgba(0, 229, 255, 0.06) !important;
-  border-color: rgba(0, 229, 255, 0.35) !important;
+  background: transparent !important;
+  border: 1px solid rgba(95, 180, 255, 0.35) !important;
   color: var(--tech-cyan) !important;
+  box-shadow: none !important;
 }
 
 body[data-theme="notion"] .ghost-btn:hover,
 body[data-theme="notion"] .soft-button:hover,
 body[data-theme="notion"] .round-action:hover {
-  background: rgba(0, 229, 255, 0.14) !important;
+  background: rgba(95, 180, 255, 0.1) !important;
   border-color: var(--tech-cyan) !important;
-  box-shadow: 0 0 18px rgba(0, 229, 255, 0.3) !important;
+  box-shadow: none !important;
 }
 
-/* —— 输入框：荧光聚焦 —— */
+/* —— 输入框：扁平 + 聚焦青边 —— */
 body[data-theme="notion"] .compose-box,
 body[data-theme="notion"] .library-search,
 body[data-theme="notion"] .text-input,
 body[data-theme="notion"] .today-compose {
-  background: rgba(10, 14, 26, 0.6) !important;
-  border-color: rgba(0, 229, 255, 0.25) !important;
+  background: #0b0f1a !important;
+  border-color: rgba(95, 180, 255, 0.2) !important;
 }
 
 body[data-theme="notion"] .compose-box:focus-within,
@@ -8919,143 +9294,141 @@ body[data-theme="notion"] .library-search:focus-within,
 body[data-theme="notion"] .text-input:focus,
 body[data-theme="notion"] .today-compose:focus-within {
   border-color: var(--tech-cyan) !important;
-  box-shadow: 0 0 0 2px rgba(0, 229, 255, 0.2), 0 0 20px rgba(0, 229, 255, 0.2) !important;
+  box-shadow: none !important;
 }
 
-/* —— 进度条：青绿渐变发光 —— */
+/* —— 进度条：纯青色 —— */
 body[data-theme="notion"] .progress-line,
 body[data-theme="notion"] .growth-bar {
-  background: rgba(10, 14, 26, 0.8) !important;
-  border-color: rgba(0, 229, 255, 0.2) !important;
+  background: #0b0f1a !important;
+  border-color: rgba(95, 180, 255, 0.2) !important;
 }
 
-body[data-theme="notion"] .progress-line span {
-  background: linear-gradient(90deg, var(--tech-green), var(--tech-cyan)) !important;
-  box-shadow: 0 0 12px var(--tech-cyan);
-}
-
+body[data-theme="notion"] .progress-line span,
 body[data-theme="notion"] .growth-bar span {
-  background: linear-gradient(90deg, var(--tech-purple), var(--tech-pink)) !important;
-  box-shadow: 0 0 12px var(--tech-pink);
+  background: var(--tech-cyan) !important;
+  box-shadow: none;
 }
 
-/* —— 标签 tag —— */
-body[data-theme="notion"] .tag {
-  background: rgba(0, 229, 255, 0.12) !important;
-  border-color: rgba(0, 229, 255, 0.4) !important;
+/* —— 标签 tag：统一青色 —— */
+body[data-theme="notion"] .tag,
+body[data-theme="notion"] .tag.pink,
+body[data-theme="notion"] .tag.mint {
+  background: rgba(95, 180, 255, 0.1) !important;
+  border-color: rgba(95, 180, 255, 0.3) !important;
   color: var(--tech-cyan) !important;
 }
 
-body[data-theme="notion"] .tag.pink {
-  background: rgba(255, 87, 184, 0.14) !important;
-  border-color: rgba(255, 87, 184, 0.4) !important;
-  color: var(--tech-pink) !important;
-}
-
-body[data-theme="notion"] .tag.mint {
-  background: rgba(0, 255, 157, 0.14) !important;
-  border-color: rgba(0, 255, 157, 0.4) !important;
-  color: var(--tech-green) !important;
-}
-
-/* —— 状态行 / 任务行 —— */
+/* —— 状态行 / 任务行：扁平深色 —— */
 body[data-theme="notion"] .state-row,
 body[data-theme="notion"] .task-row,
 body[data-theme="notion"] .recent-row,
 body[data-theme="notion"] .memory-item,
 body[data-theme="notion"] .privacy-row,
 body[data-theme="notion"] .skill-card {
-  background: rgba(15, 22, 40, 0.6) !important;
-  border-color: rgba(0, 229, 255, 0.15) !important;
+  background: #0f1422 !important;
+  border-color: rgba(95, 180, 255, 0.12) !important;
+  box-shadow: none !important;
 }
 
 body[data-theme="notion"] .recent-row:hover,
 body[data-theme="notion"] .memory-item:hover {
-  background: rgba(0, 229, 255, 0.08) !important;
-  border-color: rgba(0, 229, 255, 0.3) !important;
+  background: rgba(95, 180, 255, 0.06) !important;
+  border-color: rgba(95, 180, 255, 0.25) !important;
 }
 
-body[data-theme="notion"] .task-row.mint { background: rgba(0, 255, 157, 0.1) !important; border-color: rgba(0, 255, 157, 0.3) !important; }
-body[data-theme="notion"] .task-row.blue { background: rgba(0, 229, 255, 0.1) !important; border-color: rgba(0, 229, 255, 0.3) !important; }
-body[data-theme="notion"] .task-row.yellow { background: rgba(255, 214, 10, 0.1) !important; border-color: rgba(255, 214, 10, 0.3) !important; }
-
-/* —— 图标提亮（深底上要够亮） —— */
-body[data-theme="notion"] .cute-icon {
-  filter: brightness(1.8) saturate(2) drop-shadow(0 0 6px rgba(0, 229, 255, 0.6));
+/* task-row 的色块统一降为青色微调 */
+body[data-theme="notion"] .task-row.mint,
+body[data-theme="notion"] .task-row.blue,
+body[data-theme="notion"] .task-row.yellow {
+  background: rgba(95, 180, 255, 0.06) !important;
+  border-color: rgba(95, 180, 255, 0.2) !important;
 }
 
-/* —— 分隔虚线用荧光 —— */
+/* —— muted 文字提亮（解决"灰色看不清"） —— */
+body[data-theme="notion"] .muted,
+body[data-theme="notion"] .goal-status,
+body[data-theme="notion"] .recent-body span,
+body[data-theme="notion"] .memory-item span,
+body[data-theme="notion"] .privacy-row span,
+body[data-theme="notion"] .skill-card span,
+body[data-theme="notion"] .setting-desc,
+body[data-theme="notion"] .person-basis,
+body[data-theme="notion"] .person-desc,
+body[data-theme="notion"] .evo-hub-text span,
+body[data-theme="notion"] .agent-note,
+body[data-theme="notion"] .adopt-desc {
+  color: #9aabc8 !important;
+}
+
+/* 分隔线用统一青灰 */
 body[data-theme="notion"] .nav-note,
 body[data-theme="notion"] .goal-meta-row,
 body[data-theme="notion"] .pi-modules,
 body[data-theme="notion"] .agent-tasks,
 body[data-theme="notion"] .integrations {
-  border-color: rgba(0, 229, 255, 0.18) !important;
+  border-color: rgba(95, 180, 255, 0.14) !important;
 }
 
 body[data-theme="notion"] .nav-note {
-  background: rgba(0, 229, 255, 0.08) !important;
+  background: rgba(95, 180, 255, 0.05) !important;
 }
 
 /* —— 主题切换器 dot —— */
 body[data-theme="notion"] .theme-switcher {
-  background: rgba(13, 18, 36, 0.85) !important;
-  border-color: rgba(0, 229, 255, 0.3) !important;
-  box-shadow: 0 0 20px rgba(0, 229, 255, 0.2) !important;
+  background: #0f1422 !important;
+  border-color: rgba(95, 180, 255, 0.25) !important;
+  box-shadow: none !important;
 }
 
-/* —— PiCore 核心 / 地图中枢：青紫发光 —— */
+/* —— PiCore 核心 / 地图中枢：纯青色光晕（柔和不刺眼） —— */
 body[data-theme="notion"] .picore-core,
 body[data-theme="notion"] .map-core-body,
 body[data-theme="notion"] .evo-hub-core {
-  background: radial-gradient(circle at 35% 30%, rgba(0, 229, 255, 0.5), rgba(167, 139, 250, 0.5)) !important;
-  border-color: var(--tech-cyan) !important;
-  box-shadow: 0 0 0 4px rgba(0, 229, 255, 0.15), 0 0 40px rgba(0, 229, 255, 0.5) !important;
+  background: radial-gradient(circle at 35% 30%, rgba(95, 180, 255, 0.3), rgba(95, 180, 255, 0.1)) !important;
+  border-color: rgba(95, 180, 255, 0.5) !important;
+  box-shadow: 0 0 24px rgba(95, 180, 255, 0.25) !important;
 }
 
 body[data-theme="notion"] .picore-core::after,
 body[data-theme="notion"] .map-core-ring {
-  border-color: var(--tech-cyan) !important;
+  border-color: rgba(95, 180, 255, 0.4) !important;
 }
 
 /* —— 弹窗（auth / 地图面板） —— */
 body[data-theme="notion"] .auth-card,
 body[data-theme="notion"] .map-record-panel,
 body[data-theme="notion"] .auth-overlay {
-  background: rgba(13, 18, 36, 0.92) !important;
+  background: #0f1422 !important;
 }
 
 body[data-theme="notion"] .auth-card {
-  border-color: rgba(0, 229, 255, 0.35) !important;
-  box-shadow: 0 0 60px rgba(0, 229, 255, 0.2) !important;
+  border-color: rgba(95, 180, 255, 0.3) !important;
+  box-shadow: none !important;
 }
 
-/* —— 思维导图 / 地图节点：荧光 —— */
+/* —— 思维导图 / 地图节点 —— */
 body[data-theme="notion"] .mm-core,
 body[data-theme="notion"] .map-node-label strong,
 body[data-theme="notion"] .map-branch-head,
 body[data-theme="notion"] .mm-head {
-  border-color: rgba(0, 229, 255, 0.4) !important;
+  border-color: rgba(95, 180, 255, 0.3) !important;
 }
 
 body[data-theme="notion"] .map-link,
 body[data-theme="notion"] .map-nerve-line {
-  stroke: var(--tech-cyan) !important;
+  stroke: rgba(95, 180, 255, 0.5) !important;
   opacity: 0.4;
 }
 
-/* —— 进化日志卡片 / 共进化循环 —— */
-body[data-theme="notion"] .co-evo-side.user {
-  background: rgba(255, 87, 184, 0.1) !important;
-  border-color: rgba(255, 87, 184, 0.3) !important;
-}
-
+/* —— 进化日志 / 共进化循环：统一青色 —— */
+body[data-theme="notion"] .co-evo-side.user,
 body[data-theme="notion"] .co-evo-side.agent {
-  background: rgba(0, 229, 255, 0.1) !important;
-  border-color: rgba(0, 229, 255, 0.3) !important;
+  background: #121826 !important;
+  border-color: rgba(95, 180, 255, 0.2) !important;
 }
 
-/* —— 滚动条：荧光细条 —— */
+/* —— 滚动条 —— */
 body[data-theme="notion"] ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
@@ -9066,54 +9439,61 @@ body[data-theme="notion"] ::-webkit-scrollbar-track {
 }
 
 body[data-theme="notion"] ::-webkit-scrollbar-thumb {
-  background: rgba(0, 229, 255, 0.3);
+  background: rgba(95, 180, 255, 0.25);
   border-radius: 3px;
 }
 
 body[data-theme="notion"] ::-webkit-scrollbar-thumb:hover {
-  background: rgba(0, 229, 255, 0.6);
+  background: rgba(95, 180, 255, 0.5);
 }
 
-/* —— 背景动画 blob 在深色上改成荧光 + 降低透明度 —— */
+/* —— 背景动画 blob：极淡青色，或直接隐藏 —— */
 body[data-theme="notion"] .blob {
-  opacity: 0.18 !important;
+  opacity: 0.08 !important;
   border-color: transparent !important;
-  filter: blur(40px);
+  filter: blur(60px);
 }
 
-body[data-theme="notion"] .blob-a { background: var(--tech-cyan) !important; }
-body[data-theme="notion"] .blob-b { background: var(--tech-purple) !important; }
-body[data-theme="notion"] .blob-c { background: var(--tech-green) !important; }
-body[data-theme="notion"] .blob-d { background: var(--tech-pink) !important; }
+body[data-theme="notion"] .blob-a,
+body[data-theme="notion"] .blob-b,
+body[data-theme="notion"] .blob-c,
+body[data-theme="notion"] .blob-d { background: var(--tech-cyan) !important; }
 
 /* —— 发送按钮 / mini-action —— */
 body[data-theme="notion"] .send-button,
 body[data-theme="notion"] .mini-action {
-  background: rgba(0, 229, 255, 0.15) !important;
-  border-color: rgba(0, 229, 255, 0.4) !important;
+  background: rgba(95, 180, 255, 0.12) !important;
+  border-color: rgba(95, 180, 255, 0.35) !important;
 }
 
 /* —— tab 按钮 —— */
 body[data-theme="notion"] .tab-btn {
-  background: rgba(15, 22, 40, 0.6) !important;
-  border-color: rgba(0, 229, 255, 0.2) !important;
-  color: var(--cute-muted) !important;
+  background: transparent !important;
+  border-color: rgba(95, 180, 255, 0.18) !important;
+  color: #9aabc8 !important;
 }
 
 body[data-theme="notion"] .tab-btn.active {
-  background: rgba(0, 229, 255, 0.15) !important;
+  background: rgba(95, 180, 255, 0.12) !important;
   border-color: var(--tech-cyan) !important;
   color: var(--tech-cyan) !important;
-  box-shadow: 0 0 16px rgba(0, 229, 255, 0.3) !important;
+  box-shadow: none !important;
 }
 
-/* —— pending banner / room-notice：荧光提示 —— */
+/* —— pending banner / room-notice —— */
 body[data-theme="notion"] .pending-banner,
 body[data-theme="notion"] .room-notice {
-  background: rgba(255, 214, 10, 0.1) !important;
-  border-color: rgba(255, 214, 10, 0.35) !important;
-  color: #ffd60a !important;
+  background: rgba(95, 180, 255, 0.08) !important;
+  border-color: rgba(95, 180, 255, 0.3) !important;
+  color: var(--tech-cyan) !important;
 }
+
+/* ============================================================
+   原 Notion 覆盖块（已并入上方统一块）
+   ============================================================ */
+
+/* —— 占位：保留原注释锚点 —— */
+/* placeholder for removed multi-color notion block */
 
 /* ============================================================
    科技炫彩光标（仅 notion 主题，由 TechCursor 组件渲染）
