@@ -36,6 +36,7 @@ import { AuthModal } from './components/AuthModal'
 import { Onboarding } from './components/Onboarding'
 import { IconThemeSwap } from './components/IconThemeSwap'
 import { TechCursor } from './components/TechCursor'
+import { EvolutionMapCanvas } from './components/EvolutionMapCanvas'
 import { emitPiCoreSignal, type PiCoreSignalKind } from './piCoreSignals'
 import {
   ApiError,
@@ -5966,6 +5967,7 @@ function SkillSection({ icon, title, children }: { icon: CuteIconName; title: st
 
 function EvolutionPage() {
   const [tab, setTab] = useState<'agent' | 'user'>('agent')
+  const [mapFullscreen, setMapFullscreen] = useState(false)
   const [events, setEvents] = useState<EvolutionEvent[]>([])
   const [eventsState, setEventsState] = useState<'loading' | 'ready' | 'error'>('loading')
   const [autoRefresh, setAutoRefresh] = useState(true)
@@ -6099,12 +6101,30 @@ function EvolutionPage() {
 
   return (
     <div className="evo-page">
+      <section className="evo-map-home">
+        <div className="evo-map-home-head">
+          <div>
+            <span className="tag mint">EvoMAP</span>
+            <h2>进化地图</h2>
+            <p>按日历密度展示用户进化线和 Agent 进化线，记录关键日期、里程碑和两条成长日记。</p>
+          </div>
+          <button className="primary-btn sm" onClick={() => setMapFullscreen(true)}>
+            <CuteIcon name="soft-search-spark" />全屏探索
+          </button>
+        </div>
+        <div className="evo-map-home-canvas">
+          <EvolutionMapCanvas embedded onClose={() => setMapFullscreen(true)} />
+        </div>
+      </section>
+
+      {mapFullscreen && <EvolutionMapCanvas onClose={() => setMapFullscreen(false)} />}
+
       <section className="evo-hero">
         <div className="evo-hero-top">
           <div className="evo-hero-copy">
             <span className="tag blue">EvoPi 工作记录</span>
-            <h2>进化日志</h2>
-            <p>只保留已经发生、需要确认、可以继续管理的内容，快速看清 EvoPi 最近帮你整理了什么。</p>
+            <h2>工作记录</h2>
+            <p>地图记录成长，下面保留已经发生、需要确认、可以继续管理的操作记录。</p>
           </div>
           <div className="evo-live-panel">
             <span className={`evo-live-dot ${eventsState === 'error' ? 'error' : autoRefresh ? 'on' : ''}`} />

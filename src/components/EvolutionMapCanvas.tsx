@@ -62,7 +62,7 @@ const kindMeta: Record<MilestoneKind, { color: string; ring: string; label: stri
   current: { color: 'var(--cute-blue)', ring: '#4f9df7', label: '当前', icon: 'soft-sparkle-edit' },
 }
 
-export function EvolutionMapCanvas({ onClose }: { onClose: () => void }) {
+export function EvolutionMapCanvas({ onClose, embedded = false }: { onClose: () => void; embedded?: boolean }) {
   const [transform, setTransform] = useState({ x: 0, y: 24, scale: 0.4 })
   const [selected, setSelected] = useState<Milestone | null>(null)
   const [profession, setProfession] = useState<Profession>('manager')
@@ -180,7 +180,7 @@ export function EvolutionMapCanvas({ onClose }: { onClose: () => void }) {
   }, [onClose, selected])
 
   const map = (
-    <div className="map-overlay map-calendar-overlay" role="dialog" aria-modal="true" aria-label="EvoMAP 进化中枢">
+    <div className={`map-overlay map-calendar-overlay ${embedded ? 'embedded' : ''}`} role="dialog" aria-modal={!embedded} aria-label="EvoMAP 进化中枢">
       <div
         className="map-viewport"
         ref={wrapRef}
@@ -336,7 +336,7 @@ export function EvolutionMapCanvas({ onClose }: { onClose: () => void }) {
           <button onClick={() => zoomBy(0.14)} aria-label="放大">+</button>
           <button onClick={() => zoomBy(-0.14)} aria-label="缩小">-</button>
           <button onClick={fitOverview} aria-label="全览">全览</button>
-          <button onClick={onClose} aria-label="关闭进化中枢">返回</button>
+          <button onClick={onClose} aria-label={embedded ? '打开全屏进化中枢' : '关闭进化中枢'}>{embedded ? '全屏' : '返回'}</button>
         </div>
       </div>
 
@@ -362,12 +362,12 @@ export function EvolutionMapCanvas({ onClose }: { onClose: () => void }) {
         )}
       </aside>
 
-      <div className="map-hint">拖拽平移 · 滚轮缩放 · 点击里程碑查看交互记录 · Esc 返回</div>
+      <div className="map-hint">拖拽平移 · 滚轮缩放 · 点击里程碑查看交互记录{embedded ? '' : ' · Esc 返回'}</div>
       {selected && <RecordPanel milestone={selected} onClose={() => setSelected(null)} />}
     </div>
   )
 
-  return createPortal(map, document.body)
+  return embedded ? map : createPortal(map, document.body)
 }
 
 function buildCalendarLayout(milestones: Milestone[]) {
