@@ -71,6 +71,19 @@ async function handle(req, res) {
     return sendJson(res, 200, { post, state })
   }
 
+  const piClubLikeMatch = pathname.match(/^\/api\/piclub\/posts\/([^/]+)\/like$/)
+  if (req.method === 'POST' && piClubLikeMatch) {
+    const { post, state } = likePiClubPost(decodeURIComponent(piClubLikeMatch[1]))
+    return sendJson(res, 200, { post, state })
+  }
+
+  const piClubCommentMatch = pathname.match(/^\/api\/piclub\/posts\/([^/]+)\/comments$/)
+  if (req.method === 'POST' && piClubCommentMatch) {
+    const input = await readJson(req)
+    const { comment, post, state } = commentPiClubPost(decodeURIComponent(piClubCommentMatch[1]), input)
+    return sendJson(res, 200, { comment, post, state })
+  }
+
   const piClubJoinMatch = pathname.match(/^\/api\/piclub\/communities\/([^/]+)\/join$/)
   if (req.method === 'POST' && piClubJoinMatch) {
     const { community, state } = joinPiClubCommunity(decodeURIComponent(piClubJoinMatch[1]))
@@ -85,8 +98,8 @@ async function handle(req, res) {
 
   if (req.method === 'POST' && pathname === '/api/vibecoding/products') {
     const input = await readJson(req)
-    const { product, post, state } = createVibeProduct(input)
-    return sendJson(res, 200, { product, post, state })
+    const { product, state } = createVibeProduct(input)
+    return sendJson(res, 200, { product, state })
   }
 
   if (req.method === 'GET' && pathname === '/api/external-agents/skills') {
@@ -1017,6 +1030,20 @@ function defaultPiClubState() {
         time: '12 分钟前',
         likes: 18,
         replies: 5,
+        comments: [
+          {
+            id: 'comment-research-1',
+            author: '同组 Pi',
+            text: '这篇可以放进本周论文自习室，顺手做一版复现实验清单。',
+            time: '8 分钟前',
+          },
+          {
+            id: 'comment-research-2',
+            author: '老板视角',
+            text: '先把可复用方法和实验成本拆开，方便分配给不同成员。',
+            time: '5 分钟前',
+          },
+        ],
       },
       {
         id: 'post-product-1',
@@ -1030,6 +1057,14 @@ function defaultPiClubState() {
         time: '今天 11:48',
         likes: 31,
         replies: 9,
+        comments: [
+          {
+            id: 'comment-product-1',
+            author: '产品会客厅',
+            text: '可以加一个收集反馈的入口，投放后转化会更清楚。',
+            time: '今天 12:02',
+          },
+        ],
       },
     ],
     photoDrops: [],
@@ -1076,6 +1111,7 @@ function createPiClubPost(input) {
     time: '刚刚',
     likes: 0,
     replies: 0,
+    comments: [],
   }
   state.piClub.posts = [post, ...(state.piClub.posts ?? [])].slice(0, 80)
   writeState(state)
@@ -1086,6 +1122,58 @@ function createPiClubPost(input) {
     evidence: { community: post.community, source: post.source, product: post.product },
   })
   return { post, state: piClubState() }
+}
+
+function likePiClubPost(postId) {
+  const state = readState()
+  state.piClub = state.piClub ?? defaultPiClubState()
+  const posts = state.piClub.posts ?? []
+  const index = posts.findIndex((item) => item.id === postId)
+  if (index < 0) throw new HttpError(404, 'not_found', 'Post not found')
+  const post = {
+    ...posts[index],
+    likes: Number(posts[index].likes ?? 0) + 1,
+  }
+  posts[index] = post
+  state.piClub.posts = posts
+  writeState(state)
+  addEvolutionEvent({
+    type: 'piclub.post_liked',
+    subjectId: post.id,
+    summary: `PiClub 动态「${post.title}」收到点赞`,
+    evidence: { community: post.community, likes: post.likes },
+  })
+  return { post, state: piClubState() }
+}
+
+function commentPiClubPost(postId, input) {
+  const state = readState()
+  state.piClub = state.piClub ?? defaultPiClubState()
+  const posts = state.piClub.posts ?? []
+  const index = posts.findIndex((item) => item.id === postId)
+  if (index < 0) throw new HttpError(404, 'not_found', 'Post not found')
+  const comment = {
+    id: newId('comment'),
+    author: sanitizePlain(input.author || '你和 Pi'),
+    text: sanitizePlain(input.text || '这条动态我先记下，稍后继续跟进。'),
+    time: '刚刚',
+  }
+  const comments = [...(posts[index].comments ?? []), comment].slice(-80)
+  const post = {
+    ...posts[index],
+    comments,
+    replies: comments.length,
+  }
+  posts[index] = post
+  state.piClub.posts = posts
+  writeState(state)
+  addEvolutionEvent({
+    type: 'piclub.comment_created',
+    subjectId: post.id,
+    summary: `PiClub 动态「${post.title}」新增评论`,
+    evidence: { community: post.community, commentId: comment.id },
+  })
+  return { comment, post, state: piClubState() }
 }
 
 function joinPiClubCommunity(communityId) {
@@ -1157,20 +1245,6 @@ function createVibeProduct(input) {
     stack: ['VibeCoding', 'React 原型', 'Pi 部署小票'],
   }
   state.piClub.products = [product, ...(state.piClub.products ?? [])].slice(0, 40)
-  const post = {
-    id: newId('post'),
-    author: '小奶狗',
-    avatar: 'soft-sparkle-twinkle',
-    community: product.community,
-    title: `新产品已部署：${product.name}`,
-    text: `我根据你的描述做了一个可演示版本：${product.desc}`,
-    source: 'VibeCoding',
-    product: product.name,
-    time: '刚刚',
-    likes: 0,
-    replies: 0,
-  }
-  state.piClub.posts = [post, ...(state.piClub.posts ?? [])].slice(0, 80)
   writeState(state)
   addEvolutionEvent({
     type: 'vibecoding.product_deployed',
@@ -1178,7 +1252,7 @@ function createVibeProduct(input) {
     summary: `VibeCoding 产品「${product.name}」已部署`,
     evidence: { url: product.url, community: product.community },
   })
-  return { product, post, state: piClubState() }
+  return { product, state: piClubState() }
 }
 
 function sanitizePlain(value) {

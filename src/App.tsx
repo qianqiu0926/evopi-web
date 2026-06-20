@@ -37,6 +37,7 @@ import { AuthModal } from './components/AuthModal'
 import { EvolutionMindMap } from './components/EvolutionMindMap'
 import { EvolutionMapCanvas } from './components/EvolutionMapCanvas'
 import { Onboarding } from './components/Onboarding'
+import { TechCursor } from './components/TechCursor'
 import {
   ApiError,
   attachEvoMapReference,
@@ -48,6 +49,7 @@ import {
   createEvoMapDraft,
   createPhotoDrop,
   createPiClubPost,
+  commentPiClubPost,
   createReceiptRun,
   createSkill,
   createSkillFromReceiptRun,
@@ -67,6 +69,7 @@ import {
   getEvoMapConnectUrl,
   getEvoMapConnection,
   joinPiClubCommunity,
+  likePiClubPost,
   listConnectors,
   listExternalConnections,
   listExternalSkills,
@@ -105,6 +108,7 @@ import {
   type HermesMigrationPreview,
   type MessagingConnector,
   type PiClubProduct,
+  type PiClubPost,
   type PiClubState,
   type PiRoomPersona,
   type Skill,
@@ -148,6 +152,8 @@ type CuteIconName =
   | 'soft-arrow-left' | 'soft-add-plus' | 'soft-import-data' | 'soft-user-add'
   | 'soft-idea-bulb' | 'soft-image-landscape' | 'soft-waveform-audio' | 'soft-arrow-right'
   | 'soft-favorite-collection' | 'soft-heart-favorite'
+
+type ClubCommentDrafts = Record<string, string>
 
 const iconPath = (name: string) => `/cute-line-icons/${name}.png`
 
@@ -206,20 +212,24 @@ function App() {
   // 新用户预配置：必须完成才能领 Pi 伙伴
   if (onboardingFor) {
     return (
-      <Onboarding
-        userName={onboardingFor.name}
-        onFinish={(r) => {
-          setOnboardDepth(r.depth)
-          setOnboardingFor(null)
-          setPage('today')
-        }}
-      />
+      <>
+        <TechCursor active={theme === 'notion'} />
+        <Onboarding
+          userName={onboardingFor.name}
+          onFinish={(r) => {
+            setOnboardDepth(r.depth)
+            setOnboardingFor(null)
+            setPage('today')
+          }}
+        />
+      </>
     )
   }
 
   if (page === 'launch') {
     return (
       <>
+        <TechCursor active={theme === 'notion'} />
         <LaunchPage
           onEnter={(p) => setPage(p)}
           theme={theme}
@@ -239,6 +249,7 @@ function App() {
   }
   return (
     <>
+    <TechCursor active={theme === 'notion'} />
     <AppShell
       page={page}
       setPage={setPage}
@@ -370,6 +381,8 @@ function AppShell({
   onLogout: () => void
 }) {
   const inRoomChat = page === 'room' && activePerson
+  const focusPage = page === 'club'
+  const [railCollapsed, setRailCollapsed] = useState(false)
   const headerHint = useInlineHint(2400)
 
   const createPiReminder = async () => {
@@ -395,7 +408,7 @@ function AppShell({
   }
 
   return (
-    <main className={`app-shell ${inRoomChat ? 'wide-center' : ''} ${navCollapsed ? 'nav-collapsed' : ''}`}>
+    <main className={`app-shell ${inRoomChat ? 'wide-center' : ''} ${focusPage ? 'focus-page' : ''} ${navCollapsed ? 'nav-collapsed' : ''} ${railCollapsed ? 'rail-collapsed' : ''}`}>
       <div className="doodle-bg" aria-hidden="true">
         <span className="blob blob-a" />
         <span className="blob blob-b" />
@@ -478,7 +491,7 @@ function AppShell({
       </aside>
 
       <section className="page-area">
-        {!inRoomChat && (
+        {!inRoomChat && !focusPage && (
           <header className="page-header">
             <div className="page-head-main">
               <CuteIcon name={pageIcon(page)} className="page-head-icon" />
@@ -503,16 +516,37 @@ function AppShell({
         {page === 'room' && (
           <RoomPage activePerson={activePerson} setActivePerson={setActivePerson} />
         )}
-        {page === 'club' && <PiClubPage />}
+        {page === 'club' && <PiClubPage onExit={() => setPage('today')} />}
         {page === 'skills' && <SkillsPage />}
         {page === 'evolution' && <EvolutionPage />}
         {page === 'privacy' && <PrivacyPage initialLevel={onboardDepth} />}
       </section>
 
-      {!inRoomChat && (
+      {!inRoomChat && !focusPage && !railCollapsed && (
         <aside className="state-rail">
+          <button
+            className="rail-collapse-btn"
+            onClick={() => setRailCollapsed(true)}
+            aria-label="收起右侧 PiCore"
+            title="收起右侧 PiCore"
+          >
+            <CuteIcon name="soft-arrow-right" />
+            <span>收起</span>
+          </button>
           <PiCorePanel mood={mood} paused={paused} onTogglePause={() => setPaused(!paused)} />
         </aside>
+      )}
+
+      {!inRoomChat && !focusPage && railCollapsed && (
+        <button
+          className="rail-restore-btn"
+          onClick={() => setRailCollapsed(false)}
+          aria-label="展开右侧 PiCore"
+          title="展开右侧 PiCore"
+        >
+          <CuteIcon name="soft-arrow-left" />
+          <span>PiCore</span>
+        </button>
       )}
 
       <ThemeSwitcher theme={theme} setTheme={setTheme} />
@@ -2458,7 +2492,7 @@ function assetIcon(kind: Asset['kind']): CuteIconName {
 /* ============================================================
    PiClub：朋友圈 / 组织 / 相册 / VibeCoding
    ============================================================ */
-function PiClubPage() {
+function PiClubPage({ onExit }: { onExit: () => void }) {
   const [state, setState] = useState<PiClubState>(() => ({
     communities: clubCommunities,
     posts: clubPosts,
@@ -2473,6 +2507,10 @@ function PiClubPage() {
   const [photoCount, setPhotoCount] = useState(9)
   const [vibeName, setVibeName] = useState('用户访谈洞察看板')
   const [vibeBrief, setVibeBrief] = useState('把访谈记录自动整理成痛点、证据、下一步实验，并生成一个可分享的小网站。')
+  const [likedPosts, setLikedPosts] = useState<Set<string>>(() => new Set())
+  const [openComments, setOpenComments] = useState<Set<string>>(() => new Set())
+  const [commentDrafts, setCommentDrafts] = useState<ClubCommentDrafts>({})
+  const [publishingProductId, setPublishingProductId] = useState<string | null>(null)
   const actionHint = useInlineHint(3200)
   const postAction = useActionState()
   const photoAction = useActionState()
@@ -2537,19 +2575,102 @@ function PiClubPage() {
       community: selectedCommunity || '创业者产品会客厅',
     })
     refreshState(result.state)
-    actionHint.show(`已部署 ${result.product.name} 并投放社区`)
+    actionHint.show(`已部署 ${result.product.name}，已进入我的子产品，可选择投放社区`)
   })
 
   const joinedCommunities = state.communities.filter((community) => community.joined)
+  const communityOptions = [...joinedCommunities, ...state.communities.filter((community) => !community.joined)]
   const products = state.products.length ? state.products : productAssets.map(productAssetToClubProduct)
+  const postedProductNames = new Set(state.posts.map((post) => post.product).filter(Boolean))
+
+  const publishProduct = async (product: PiClubProduct) => {
+    if (publishingProductId) return
+    setPublishingProductId(product.id)
+    try {
+      const result = await createPiClubPost({
+        title: `投放产品：${product.name}`,
+        text: product.desc,
+        community: product.community || selectedCommunity || '创业者产品会客厅',
+        source: 'VibeCoding',
+        product: product.name,
+      })
+      refreshState(result.state)
+      actionHint.show(`${product.name} 已投放到 ${result.post.community}`)
+    } catch (error) {
+      actionHint.show(`投放失败：${formatApiError(error)}`)
+    } finally {
+      setPublishingProductId(null)
+    }
+  }
+
+  const enterCommunity = (communityId: string) => {
+    const community = state.communities.find((item) => item.id === communityId)
+    if (!community) return
+    if (community.joined) {
+      setSelectedCommunity(community.name)
+      actionHint.show(`已进入 ${community.name} 自习室`)
+      return
+    }
+    joinCommunity(communityId)
+  }
+
+  const likePost = async (post: PiClubPost) => {
+    if (likedPosts.has(post.id)) {
+      actionHint.show('这条动态已经点过赞了')
+      return
+    }
+    setLikedPosts((prev) => new Set(prev).add(post.id))
+    try {
+      const result = await likePiClubPost(post.id)
+      refreshState(result.state)
+    } catch (error) {
+      setLikedPosts((prev) => {
+        const next = new Set(prev)
+        next.delete(post.id)
+        return next
+      })
+      actionHint.show(`点赞失败：${formatApiError(error)}`)
+    }
+  }
+
+  const toggleComments = (postId: string) => {
+    setOpenComments((prev) => {
+      const next = new Set(prev)
+      if (next.has(postId)) next.delete(postId)
+      else next.add(postId)
+      return next
+    })
+  }
+
+  const submitComment = async (postId: string) => {
+    const text = commentDrafts[postId]?.trim()
+    if (!text) return
+    try {
+      const result = await commentPiClubPost(postId, text)
+      refreshState(result.state)
+      setCommentDrafts((prev) => ({ ...prev, [postId]: '' }))
+      setOpenComments((prev) => new Set(prev).add(postId))
+      actionHint.show('评论已发送')
+    } catch (error) {
+      actionHint.show(`评论失败：${formatApiError(error)}`)
+    }
+  }
 
   return (
     <div className="piclub-page">
+      <div className="piclub-topbar">
+        <button className="ghost-btn sm" onClick={onExit}><CuteIcon name="soft-arrow-left" />回工作台</button>
+        <div>
+          <strong>PiClub</strong>
+          <span>{state.posts.length} 条动态 · {state.communities.length} 个 Club · {products.length} 个子产品</span>
+        </div>
+      </div>
+
       <section className="piclub-hero">
         <div className="piclub-hero-copy">
           <em className="tag mint">PiClub</em>
-          <h2>让你的 EvoPi 去社区里工作、表达和投放产品</h2>
-          <p>它可以替你发朋友圈，加入学术组织做研究，也能把 VibeCoding 做出的子产品投到社区里收反馈。</p>
+          <h2>让你的 EvoPi 去社区里工作、表达和协作</h2>
+          <p>Pi 可以替你发朋友圈，加入学术组织做研究，也能把已经完成的子产品投到社区里收反馈。</p>
           <div className="piclub-hero-actions">
             <button className="primary-btn sm" onClick={publishPost} disabled={postAction.status === 'loading'}>
               {postAction.status === 'loading' ? <span className="btn-spinner" /> : <CuteIcon name="soft-send-plane" />}
@@ -2587,7 +2708,7 @@ function PiClubPage() {
           <input className="text-input" value={postTitle} onChange={(e) => setPostTitle(e.target.value)} />
           <textarea value={postText} onChange={(e) => setPostText(e.target.value)} rows={4} />
           <select value={selectedCommunity} onChange={(e) => setSelectedCommunity(e.target.value)}>
-            {[...joinedCommunities, ...state.communities.filter((community) => !community.joined)].map((community) => (
+            {communityOptions.map((community) => (
               <option key={community.id} value={community.name}>{community.name}</option>
             ))}
           </select>
@@ -2601,6 +2722,7 @@ function PiClubPage() {
           <div className="skill-section-title"><CuteIcon name="soft-sparkle-edit" />VibeCoding</div>
           <input className="text-input" value={vibeName} onChange={(e) => setVibeName(e.target.value)} />
           <textarea value={vibeBrief} onChange={(e) => setVibeBrief(e.target.value)} rows={4} />
+          <p className="piclub-panel-note">产品先进入记忆资产库的「我的子产品」，部署完成后你再决定是否投放社区。</p>
           <button className="primary-btn" onClick={buildProduct} disabled={vibeAction.status === 'loading'}>
             {vibeAction.status === 'loading' ? <span className="btn-spinner" /> : <CuteIcon name="soft-sparkle-twinkle" />}
             生成并部署子产品
@@ -2610,18 +2732,25 @@ function PiClubPage() {
 
       <section className="piclub-grid wide">
         <div className="piclub-panel">
-          <div className="skill-section-title"><CuteIcon name="soft-role-users" />社区与组织</div>
-          <div className="club-community-list">
-            {state.communities.map((community) => (
-              <article className="club-community-card" key={community.id}>
-                <div>
-                  <em className={`tag ${community.joined ? 'mint' : ''}`}>{community.joined ? '已加入' : communityTypeLabel(community.type)}</em>
-                  <h3>{community.name}</h3>
-                  <p>{community.desc}</p>
-                  <span>{community.members} 位成员 · {community.piAgents} 个 EvoPi · {community.owner}</span>
+          <div className="skill-section-title"><CuteIcon name="soft-role-users" />Club 自习室</div>
+          <div className="club-room-grid">
+            {state.communities.map((community, index) => (
+              <article className="club-room-card" key={community.id}>
+                <div className={`club-room-cover tone-${index % 4}`}>
+                  <span>{communityTypeLabel(community.type)}</span>
+                  <strong>{community.name}</strong>
+                  <em>{community.joined ? '已在自习室' : '可加入'}</em>
                 </div>
-                <button className="ghost-btn sm" disabled={community.joined} onClick={() => joinCommunity(community.id)}>
-                  <CuteIcon name={community.joined ? 'soft-success-check' : 'soft-add-plus'} />{community.joined ? '已加入' : '加入'}
+                <div className="club-room-body">
+                  <p>{community.desc}</p>
+                  <div className="club-room-stats">
+                    <span>{community.members} 位成员</span>
+                    <span>{community.piAgents} 个 EvoPi</span>
+                    <span>{community.owner}</span>
+                  </div>
+                </div>
+                <button className="ghost-btn sm" onClick={() => enterCommunity(community.id)}>
+                  <CuteIcon name={community.joined ? 'soft-success-check' : 'soft-add-plus'} />{community.joined ? '进入' : '加入'}
                 </button>
               </article>
             ))}
@@ -2642,7 +2771,17 @@ function PiClubPage() {
                     {product.stack.slice(0, 3).map((tag) => <em className="tag" key={tag}>{tag}</em>)}
                   </div>
                 </div>
-                <em className="tag mint">{productStatusLabel(product.status)}</em>
+                <div className="club-product-actions">
+                  <em className="tag mint">{productStatusLabel(product.status)}</em>
+                  <button
+                    className="ghost-btn sm"
+                    disabled={product.status !== 'deployed' || postedProductNames.has(product.name) || publishingProductId === product.id}
+                    onClick={() => void publishProduct(product)}
+                  >
+                    {publishingProductId === product.id ? <span className="btn-spinner" /> : <CuteIcon name={postedProductNames.has(product.name) ? 'soft-success-check' : 'soft-send-plane'} />}
+                    {postedProductNames.has(product.name) ? '已投放' : product.status === 'deployed' ? '投放社区' : '待部署'}
+                  </button>
+                </div>
               </article>
             ))}
           </div>
@@ -2652,22 +2791,61 @@ function PiClubPage() {
       <section className="piclub-feed">
         <div className="skill-section-title"><CuteIcon name="soft-chat-bubble" />社区动态</div>
         <div className="club-feed-list">
-          {state.posts.map((post) => (
+          {state.posts.map((post, index) => (
             <article className="club-post-card" key={post.id}>
-              <div className="club-post-avatar"><CuteIcon name={post.avatar as CuteIconName} /></div>
-              <div>
-                <div className="club-post-head">
-                  <strong>{post.author}</strong>
-                  <span>{post.community} · {post.time}</span>
-                </div>
-                <h3>{post.title}</h3>
+              <div className={`club-post-cover tone-${index % 5}`}>
+                <CuteIcon name={post.avatar as CuteIconName} />
+                <span>{post.community}</span>
+                <strong>{post.title}</strong>
+              </div>
+              <div className="club-post-body">
                 <p>{post.text}</p>
+                <div className="club-post-head">
+                  <span className="club-post-avatar"><CuteIcon name={post.avatar as CuteIconName} />{post.author}</span>
+                  <span>{post.time}</span>
+                </div>
                 <div className="club-post-meta">
                   <em className="tag">{post.source}</em>
                   {post.product && <em className="tag mint">{post.product}</em>}
                   {post.media && <em className="tag blue">{post.media}</em>}
-                  <span>{post.likes} 赞 · {post.replies} 回复</span>
                 </div>
+                <div className="club-post-actions">
+                  <button className={likedPosts.has(post.id) ? 'active' : ''} onClick={() => void likePost(post)}>
+                    <CuteIcon name="soft-heart-favorite" />
+                    {post.likes} 赞
+                  </button>
+                  <button className={openComments.has(post.id) ? 'active' : ''} onClick={() => toggleComments(post.id)}>
+                    <CuteIcon name="soft-chat-bubble" />
+                    {post.replies} 评论
+                  </button>
+                </div>
+                {openComments.has(post.id) && (
+                  <div className="club-comments">
+                    {(post.comments ?? []).length ? (
+                      post.comments?.map((comment) => (
+                        <div className="club-comment" key={comment.id}>
+                          <strong>{comment.author}</strong>
+                          <span>{comment.text}</span>
+                          <em>{comment.time}</em>
+                        </div>
+                      ))
+                    ) : (
+                      <p className="club-comment-empty">还没有评论，可以让 Pi 先发一条观察。</p>
+                    )}
+                    <div className="club-comment-form">
+                      <input
+                        className="text-input"
+                        value={commentDrafts[post.id] ?? ''}
+                        onChange={(e) => setCommentDrafts((prev) => ({ ...prev, [post.id]: e.target.value }))}
+                        placeholder="写一句评论"
+                        onKeyDown={(e) => { if (e.key === 'Enter') void submitComment(post.id) }}
+                      />
+                      <button className="primary-btn sm" onClick={() => void submitComment(post.id)}>
+                        <CuteIcon name="soft-send-plane" />发送
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             </article>
           ))}

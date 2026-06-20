@@ -9,8 +9,9 @@
   min-height: 100svh;
   grid-template-columns: 244px minmax(0, 1fr) 326px;
   gap: 18px;
+  align-items: start;
   padding: 18px;
-  overflow: hidden;
+  overflow: visible;
   color: var(--text);
   background: var(--bg);
   isolation: isolate;
@@ -25,6 +26,27 @@
 }
 
 .app-shell:has(.goal-card-open) .state-rail {
+  display: none;
+}
+
+.app-shell.rail-collapsed {
+  grid-template-columns: 244px minmax(0, 1fr);
+}
+
+.app-shell.nav-collapsed.rail-collapsed {
+  grid-template-columns: 78px minmax(0, 1fr);
+}
+
+.app-shell.focus-page {
+  min-height: 100svh;
+  grid-template-columns: minmax(0, 1fr);
+  padding: 16px;
+}
+
+.app-shell.focus-page .app-nav,
+.app-shell.focus-page .state-rail,
+.app-shell.focus-page .back-launch,
+.app-shell.focus-page .theme-switcher {
   display: none;
 }
 
@@ -129,10 +151,14 @@
 
 /* —— 共享「卡片」表面：根据主题智能切换 —— */
 .app-nav {
+  position: sticky;
+  top: 18px;
   display: flex;
   min-height: calc(100svh - 36px);
+  max-height: calc(100svh - 36px);
   flex-direction: column;
   gap: 16px;
+  overflow: auto;
   border: var(--border-w) solid var(--line);
   border-radius: var(--r-lg);
   padding: 16px;
@@ -355,8 +381,9 @@ body[data-theme="glass"] .cute-icon {
    ============================================================ */
 .page-area {
   min-width: 0;
-  max-height: calc(100svh - 36px);
-  overflow: auto;
+  min-height: calc(100svh - 36px);
+  max-height: none;
+  overflow: visible;
   border: var(--border-w) solid var(--line);
   border-radius: var(--r-xl);
   padding: 24px;
@@ -377,6 +404,12 @@ body[data-theme="glass"] .cute-icon {
 
 body[data-theme="glass"] .page-area {
   background: rgba(15, 22, 46, 0.4);
+}
+
+.app-shell.focus-page .page-area {
+  min-height: calc(100svh - 32px);
+  border-radius: 28px;
+  padding: 28px;
 }
 
 .page-header {
@@ -1713,7 +1746,7 @@ body[data-theme="glass"] .ws-workspace {
    ============================================================ */
 .piclub-page {
   display: grid;
-  gap: 16px;
+  gap: 18px;
 }
 
 .piclub-hero,
@@ -1726,6 +1759,29 @@ body[data-theme="glass"] .ws-workspace {
 .piclub-hero {
   grid-template-columns: minmax(0, 1.45fr) minmax(320px, 0.8fr);
   align-items: stretch;
+}
+
+.piclub-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.piclub-topbar > div {
+  display: grid;
+  gap: 2px;
+  text-align: right;
+}
+
+.piclub-topbar strong {
+  font-size: 18px;
+}
+
+.piclub-topbar span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
 }
 
 .piclub-hero-copy,
@@ -1775,13 +1831,7 @@ body[data-theme="glass"] .ws-workspace {
   background: var(--cute-pink);
 }
 
-.piclub-camera-card > span,
-.club-community-card p,
-.club-community-card span,
-.club-product-card p,
-.club-product-card span,
-.club-post-card p,
-.club-post-head span {
+.piclub-camera-card > span {
   color: var(--muted);
   line-height: 1.5;
   font-size: 13px;
@@ -1819,6 +1869,12 @@ body[data-theme="glass"] .ws-workspace {
   padding: 16px;
 }
 
+.piclub-panel-note {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.55;
+}
+
 .piclub-post-composer textarea,
 .piclub-vibe textarea,
 .piclub-post-composer select {
@@ -1832,30 +1888,141 @@ body[data-theme="glass"] .ws-workspace {
   resize: vertical;
 }
 
-.club-community-list,
-.club-product-list,
-.club-feed-list {
+.club-room-grid,
+.club-product-list {
   display: grid;
   gap: 10px;
 }
 
-.club-community-card,
+.club-room-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.club-room-card,
 .club-product-card,
 .club-post-card {
   display: grid;
   gap: 12px;
-  padding: 14px;
   border: 1.5px dashed var(--line-soft);
   border-radius: var(--r-md);
   background: var(--paper);
+  overflow: hidden;
 }
 
-.club-community-card {
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: start;
+.club-room-card {
+  align-content: start;
+  padding: 10px;
 }
 
-.club-community-card h3,
+.club-room-cover,
+.club-post-cover {
+  display: grid;
+  align-content: space-between;
+  min-height: 156px;
+  border: var(--border-w) solid var(--line);
+  border-radius: var(--r-sm);
+  padding: 14px;
+  background:
+    radial-gradient(circle at 20% 22%, rgba(255, 255, 255, 0.78), transparent 23%),
+    linear-gradient(135deg, var(--cute-mint), var(--cute-blue));
+}
+
+.club-room-cover.tone-1,
+.club-post-cover.tone-1 {
+  background:
+    radial-gradient(circle at 82% 18%, rgba(255, 255, 255, 0.7), transparent 24%),
+    linear-gradient(135deg, var(--cute-pink), var(--cute-yellow));
+}
+
+.club-room-cover.tone-2,
+.club-post-cover.tone-2 {
+  background:
+    radial-gradient(circle at 18% 75%, rgba(255, 255, 255, 0.72), transparent 25%),
+    linear-gradient(135deg, var(--cute-blue), var(--cute-pink));
+}
+
+.club-room-cover.tone-3,
+.club-post-cover.tone-3 {
+  background:
+    radial-gradient(circle at 75% 70%, rgba(255, 255, 255, 0.74), transparent 24%),
+    linear-gradient(135deg, var(--cute-yellow), var(--cute-mint));
+}
+
+.club-post-cover.tone-4 {
+  background:
+    radial-gradient(circle at 50% 20%, rgba(255, 255, 255, 0.72), transparent 22%),
+    linear-gradient(135deg, var(--cute-peach), var(--cute-blue));
+}
+
+.club-room-cover span,
+.club-post-cover span {
+  width: max-content;
+  max-width: 100%;
+  border: 2px solid var(--line);
+  border-radius: 999px;
+  padding: 4px 10px;
+  background: rgba(255, 255, 255, 0.72);
+  font-size: 12px;
+  font-weight: 950;
+}
+
+.club-room-cover strong,
+.club-post-cover strong {
+  align-self: end;
+  font-size: 20px;
+  line-height: 1.18;
+}
+
+.club-room-cover em {
+  justify-self: end;
+  border: 2px solid var(--line);
+  border-radius: 999px;
+  padding: 4px 9px;
+  background: var(--surface);
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 950;
+}
+
+.club-room-body {
+  display: grid;
+  gap: 10px;
+  padding: 2px 4px 0;
+}
+
+.club-room-body p,
+.club-product-card p,
+.club-product-card span,
+.club-post-body p,
+.club-post-head span,
+.club-comment-empty {
+  color: var(--muted);
+  line-height: 1.5;
+  font-size: 13px;
+}
+
+.club-room-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.club-room-stats span {
+  min-height: 24px;
+  border: 1.5px solid var(--line-soft);
+  border-radius: 999px;
+  padding: 3px 8px;
+  background: var(--surface-soft);
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 850;
+}
+
+.club-room-card .ghost-btn {
+  justify-self: start;
+  margin: 0 4px 4px;
+}
+
 .club-product-card h3,
 .club-post-card h3 {
   margin: 6px 0 4px;
@@ -1865,6 +2032,7 @@ body[data-theme="glass"] .ws-workspace {
 .club-product-card {
   grid-template-columns: 42px minmax(0, 1fr) auto;
   align-items: start;
+  padding: 14px;
 }
 
 .club-product-card > .cute-icon {
@@ -1881,30 +2049,144 @@ body[data-theme="glass"] .ws-workspace {
   margin-top: 8px;
 }
 
+.club-product-actions {
+  display: grid;
+  justify-items: end;
+  gap: 8px;
+}
+
+.club-feed-list {
+  column-width: 280px;
+  column-gap: 14px;
+}
+
 .club-post-card {
-  grid-template-columns: 44px minmax(0, 1fr);
+  width: 100%;
+  margin: 0 0 14px;
+  break-inside: avoid;
+  display: inline-grid;
+}
+
+.club-post-card:nth-child(2n) .club-post-cover {
+  min-height: 198px;
+}
+
+.club-post-card:nth-child(3n) .club-post-cover {
+  min-height: 132px;
+}
+
+.club-post-cover {
+  min-height: 178px;
+  border: 0;
+  border-bottom: var(--border-w) solid var(--line);
+  border-radius: 0;
+}
+
+.club-post-cover .cute-icon {
+  width: 42px;
+  height: 42px;
+  border: 2px solid var(--line);
+  border-radius: 14px;
+  padding: 6px;
+  background: rgba(255, 255, 255, 0.72);
+}
+
+.club-post-body {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
 }
 
 .club-post-avatar {
-  display: grid;
-  place-items: center;
-  width: 42px;
-  height: 42px;
-  border: var(--border-w) solid var(--line);
-  border-radius: 14px;
-  background: var(--cute-mint);
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+  color: var(--text);
+  font-weight: 900;
 }
 
 .club-post-avatar .cute-icon {
-  width: 28px;
-  height: 28px;
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
 }
 
 .club-post-head {
   display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
+  justify-content: space-between;
+  gap: 10px;
   align-items: baseline;
+}
+
+.club-post-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.club-post-actions button {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 32px;
+  border: 0;
+  border-radius: 999px;
+  padding: 0 9px;
+  background: var(--surface-soft);
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.club-post-actions button.active {
+  background: var(--cute-pink);
+  color: var(--text);
+}
+
+.club-post-actions .cute-icon {
+  width: 18px;
+  height: 18px;
+}
+
+.club-comments {
+  display: grid;
+  gap: 8px;
+  border-top: 1.5px dashed var(--line-soft);
+  padding-top: 10px;
+}
+
+.club-comment {
+  display: grid;
+  gap: 2px;
+  border: 1.5px solid var(--line-soft);
+  border-radius: var(--r-sm);
+  padding: 8px 10px;
+  background: var(--surface-soft);
+}
+
+.club-comment strong {
+  font-size: 12px;
+}
+
+.club-comment span {
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.club-comment em {
+  color: var(--muted);
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 800;
+}
+
+.club-comment-form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
 }
 
 /* ============================================================
@@ -2192,13 +2474,53 @@ body[data-theme="glass"] .ws-workspace {
    右侧 PiCore 状态栏（生命核）
    ============================================================ */
 .state-rail {
+  position: sticky;
+  top: 18px;
   min-width: 0;
+  max-height: calc(100svh - 36px);
+  overflow: auto;
+  display: grid;
+  gap: 10px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--line-soft) transparent;
 }
 
 .picore-panel {
-  position: sticky;
-  top: 18px;
   padding: 18px;
+}
+
+.rail-collapse-btn,
+.rail-restore-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 38px;
+  border: var(--border-w) solid var(--line);
+  border-radius: 999px;
+  padding: 0 12px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 900;
+  box-shadow: 3px 3px 0 var(--line-soft);
+}
+
+.rail-collapse-btn {
+  justify-self: end;
+}
+
+.rail-restore-btn {
+  position: fixed;
+  top: 18px;
+  right: 18px;
+  z-index: 45;
+}
+
+.rail-collapse-btn .cute-icon,
+.rail-restore-btn .cute-icon {
+  width: 20px;
+  height: 20px;
 }
 
 .rail-title {
@@ -7359,9 +7681,12 @@ body[data-theme="glass"] .onboard-card {
     grid-template-columns: 1fr;
   }
 
-  .club-community-card,
   .club-product-card,
   .club-post-card {
+    grid-template-columns: 1fr;
+  }
+
+  .club-room-grid {
     grid-template-columns: 1fr;
   }
 
@@ -8435,4 +8760,357 @@ body[data-theme="glass"] .map-core-body {
   .map-node {
     width: 150px;
   }
+}
+
+/* ============================================================
+   Notion 科技风 · 深度视觉覆盖
+   与 cute 暖白风完全区分：深色玻璃卡 + 青绿紫荧光边 + 发光阴影
+   仅覆盖外观，不改功能与排布
+   ============================================================ */
+
+/* —— 卡片表面：深色玻璃 + 荧光描边 —— */
+body[data-theme="notion"] .hero-card,
+body[data-theme="notion"] .compose-card,
+body[data-theme="notion"] .soft-panel,
+body[data-theme="notion"] .picore-panel,
+body[data-theme="notion"] .goal-card,
+body[data-theme="notion"] .memory-item,
+body[data-theme="notion"] .role-card,
+body[data-theme="notion"] .skill-card,
+body[data-theme="notion"] .evolution-step,
+body[data-theme="notion"] .privacy-row,
+body[data-theme="notion"] .timeline-item,
+body[data-theme="notion"] .detail-panel,
+body[data-theme="notion"] .recent-section,
+body[data-theme="notion"] .setting-block,
+body[data-theme="notion"] .focus-hero,
+body[data-theme="notion"] .workspace-surface,
+body[data-theme="notion"] .person-card,
+body[data-theme="notion"] .quick-card,
+body[data-theme="notion"] .import-panel,
+body[data-theme="notion"] .adopt-box,
+body[data-theme="notion"] .agent-task {
+  background: rgba(20, 28, 48, 0.72) !important;
+  border: 1px solid rgba(0, 229, 255, 0.28) !important;
+  box-shadow: 0 0 24px rgba(0, 229, 255, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.04) !important;
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+}
+
+body[data-theme="notion"] .hero-card:hover,
+body[data-theme="notion"] .goal-card:hover,
+body[data-theme="notion"] .quick-card:hover,
+body[data-theme="notion"] .person-card:hover,
+body[data-theme="notion"] .skill-card:hover {
+  border-color: rgba(0, 229, 255, 0.6) !important;
+  box-shadow: 0 0 32px rgba(0, 229, 255, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.06) !important;
+}
+
+/* —— 三栏容器：导航/内容/状态栏 —— */
+body[data-theme="notion"] .app-nav,
+body[data-theme="notion"] .page-area,
+body[data-theme="notion"] .state-rail {
+  background: rgba(13, 18, 36, 0.7) !important;
+  border: 1px solid rgba(0, 229, 255, 0.22) !important;
+  box-shadow: 0 0 40px rgba(0, 229, 255, 0.05), inset 0 1px 0 rgba(255, 255, 255, 0.03) !important;
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+}
+
+/* —— 品牌 mark —— */
+body[data-theme="notion"] .brand-mark {
+  background: linear-gradient(135deg, var(--tech-cyan), var(--tech-purple)) !important;
+  color: #0a0e1a !important;
+  box-shadow: 0 0 20px var(--tech-glow) !important;
+  border-color: var(--tech-cyan) !important;
+}
+
+/* —— 页面标题 —— */
+body[data-theme="notion"] .page-header h1 {
+  background: linear-gradient(90deg, var(--tech-cyan), var(--tech-green));
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+body[data-theme="notion"] .page-head-icon {
+  background: rgba(0, 229, 255, 0.12) !important;
+  border-color: var(--tech-cyan) !important;
+  box-shadow: 0 0 16px rgba(0, 229, 255, 0.3) !important;
+}
+
+body[data-theme="notion"] .page-kicker {
+  background: rgba(167, 139, 250, 0.2) !important;
+  border-color: var(--tech-purple) !important;
+  color: var(--tech-purple) !important;
+}
+
+/* —— 导航按钮 —— */
+body[data-theme="notion"] .nav-button {
+  background: transparent !important;
+  border-color: transparent !important;
+  color: var(--cute-muted) !important;
+}
+
+body[data-theme="notion"] .nav-button:hover {
+  background: rgba(0, 229, 255, 0.08) !important;
+  border-color: rgba(0, 229, 255, 0.3) !important;
+  color: var(--tech-cyan) !important;
+}
+
+body[data-theme="notion"] .nav-button.active {
+  background: linear-gradient(90deg, rgba(0, 229, 255, 0.18), rgba(167, 139, 250, 0.12)) !important;
+  border: 1px solid var(--tech-cyan) !important;
+  color: var(--tech-cyan) !important;
+  box-shadow: 0 0 20px rgba(0, 229, 255, 0.25) !important;
+}
+
+body[data-theme="notion"] .nav-button.active::before {
+  background: var(--tech-cyan) !important;
+  box-shadow: 0 0 8px var(--tech-cyan);
+}
+
+/* —— 分组标题 —— */
+body[data-theme="notion"] .nav-group-head {
+  color: rgba(0, 229, 255, 0.6) !important;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+}
+
+/* —— 按钮：荧光描边 + 悬停发光 —— */
+body[data-theme="notion"] .primary-btn {
+  background: linear-gradient(135deg, var(--tech-cyan), var(--tech-green)) !important;
+  color: #0a0e1a !important;
+  border-color: var(--tech-cyan) !important;
+  box-shadow: 0 0 20px rgba(0, 229, 255, 0.4) !important;
+}
+
+body[data-theme="notion"] .primary-btn:hover {
+  box-shadow: 0 0 32px rgba(0, 229, 255, 0.6) !important;
+}
+
+body[data-theme="notion"] .ghost-btn,
+body[data-theme="notion"] .soft-button,
+body[data-theme="notion"] .round-action {
+  background: rgba(0, 229, 255, 0.06) !important;
+  border-color: rgba(0, 229, 255, 0.35) !important;
+  color: var(--tech-cyan) !important;
+}
+
+body[data-theme="notion"] .ghost-btn:hover,
+body[data-theme="notion"] .soft-button:hover,
+body[data-theme="notion"] .round-action:hover {
+  background: rgba(0, 229, 255, 0.14) !important;
+  border-color: var(--tech-cyan) !important;
+  box-shadow: 0 0 18px rgba(0, 229, 255, 0.3) !important;
+}
+
+/* —— 输入框：荧光聚焦 —— */
+body[data-theme="notion"] .compose-box,
+body[data-theme="notion"] .library-search,
+body[data-theme="notion"] .text-input,
+body[data-theme="notion"] .today-compose {
+  background: rgba(10, 14, 26, 0.6) !important;
+  border-color: rgba(0, 229, 255, 0.25) !important;
+}
+
+body[data-theme="notion"] .compose-box:focus-within,
+body[data-theme="notion"] .library-search:focus-within,
+body[data-theme="notion"] .text-input:focus,
+body[data-theme="notion"] .today-compose:focus-within {
+  border-color: var(--tech-cyan) !important;
+  box-shadow: 0 0 0 2px rgba(0, 229, 255, 0.2), 0 0 20px rgba(0, 229, 255, 0.2) !important;
+}
+
+/* —— 进度条：青绿渐变发光 —— */
+body[data-theme="notion"] .progress-line,
+body[data-theme="notion"] .growth-bar {
+  background: rgba(10, 14, 26, 0.8) !important;
+  border-color: rgba(0, 229, 255, 0.2) !important;
+}
+
+body[data-theme="notion"] .progress-line span {
+  background: linear-gradient(90deg, var(--tech-green), var(--tech-cyan)) !important;
+  box-shadow: 0 0 12px var(--tech-cyan);
+}
+
+body[data-theme="notion"] .growth-bar span {
+  background: linear-gradient(90deg, var(--tech-purple), var(--tech-pink)) !important;
+  box-shadow: 0 0 12px var(--tech-pink);
+}
+
+/* —— 标签 tag —— */
+body[data-theme="notion"] .tag {
+  background: rgba(0, 229, 255, 0.12) !important;
+  border-color: rgba(0, 229, 255, 0.4) !important;
+  color: var(--tech-cyan) !important;
+}
+
+body[data-theme="notion"] .tag.pink {
+  background: rgba(255, 87, 184, 0.14) !important;
+  border-color: rgba(255, 87, 184, 0.4) !important;
+  color: var(--tech-pink) !important;
+}
+
+body[data-theme="notion"] .tag.mint {
+  background: rgba(0, 255, 157, 0.14) !important;
+  border-color: rgba(0, 255, 157, 0.4) !important;
+  color: var(--tech-green) !important;
+}
+
+/* —— 状态行 / 任务行 —— */
+body[data-theme="notion"] .state-row,
+body[data-theme="notion"] .task-row,
+body[data-theme="notion"] .recent-row,
+body[data-theme="notion"] .memory-item,
+body[data-theme="notion"] .privacy-row,
+body[data-theme="notion"] .skill-card {
+  background: rgba(15, 22, 40, 0.6) !important;
+  border-color: rgba(0, 229, 255, 0.15) !important;
+}
+
+body[data-theme="notion"] .recent-row:hover,
+body[data-theme="notion"] .memory-item:hover {
+  background: rgba(0, 229, 255, 0.08) !important;
+  border-color: rgba(0, 229, 255, 0.3) !important;
+}
+
+body[data-theme="notion"] .task-row.mint { background: rgba(0, 255, 157, 0.1) !important; border-color: rgba(0, 255, 157, 0.3) !important; }
+body[data-theme="notion"] .task-row.blue { background: rgba(0, 229, 255, 0.1) !important; border-color: rgba(0, 229, 255, 0.3) !important; }
+body[data-theme="notion"] .task-row.yellow { background: rgba(255, 214, 10, 0.1) !important; border-color: rgba(255, 214, 10, 0.3) !important; }
+
+/* —— 图标提亮（深底上要够亮） —— */
+body[data-theme="notion"] .cute-icon {
+  filter: brightness(1.8) saturate(2) drop-shadow(0 0 6px rgba(0, 229, 255, 0.6));
+}
+
+/* —— 分隔虚线用荧光 —— */
+body[data-theme="notion"] .nav-note,
+body[data-theme="notion"] .goal-meta-row,
+body[data-theme="notion"] .pi-modules,
+body[data-theme="notion"] .agent-tasks,
+body[data-theme="notion"] .integrations {
+  border-color: rgba(0, 229, 255, 0.18) !important;
+}
+
+body[data-theme="notion"] .nav-note {
+  background: rgba(0, 229, 255, 0.08) !important;
+}
+
+/* —— 主题切换器 dot —— */
+body[data-theme="notion"] .theme-switcher {
+  background: rgba(13, 18, 36, 0.85) !important;
+  border-color: rgba(0, 229, 255, 0.3) !important;
+  box-shadow: 0 0 20px rgba(0, 229, 255, 0.2) !important;
+}
+
+/* —— PiCore 核心 / 地图中枢：青紫发光 —— */
+body[data-theme="notion"] .picore-core,
+body[data-theme="notion"] .map-core-body,
+body[data-theme="notion"] .evo-hub-core {
+  background: radial-gradient(circle at 35% 30%, rgba(0, 229, 255, 0.5), rgba(167, 139, 250, 0.5)) !important;
+  border-color: var(--tech-cyan) !important;
+  box-shadow: 0 0 0 4px rgba(0, 229, 255, 0.15), 0 0 40px rgba(0, 229, 255, 0.5) !important;
+}
+
+body[data-theme="notion"] .picore-core::after,
+body[data-theme="notion"] .map-core-ring {
+  border-color: var(--tech-cyan) !important;
+}
+
+/* —— 弹窗（auth / 地图面板） —— */
+body[data-theme="notion"] .auth-card,
+body[data-theme="notion"] .map-record-panel,
+body[data-theme="notion"] .auth-overlay {
+  background: rgba(13, 18, 36, 0.92) !important;
+}
+
+body[data-theme="notion"] .auth-card {
+  border-color: rgba(0, 229, 255, 0.35) !important;
+  box-shadow: 0 0 60px rgba(0, 229, 255, 0.2) !important;
+}
+
+/* —— 思维导图 / 地图节点：荧光 —— */
+body[data-theme="notion"] .mm-core,
+body[data-theme="notion"] .map-node-label strong,
+body[data-theme="notion"] .map-branch-head,
+body[data-theme="notion"] .mm-head {
+  border-color: rgba(0, 229, 255, 0.4) !important;
+}
+
+body[data-theme="notion"] .map-link,
+body[data-theme="notion"] .map-nerve-line {
+  stroke: var(--tech-cyan) !important;
+  opacity: 0.4;
+}
+
+/* —— 进化日志卡片 / 共进化循环 —— */
+body[data-theme="notion"] .co-evo-side.user {
+  background: rgba(255, 87, 184, 0.1) !important;
+  border-color: rgba(255, 87, 184, 0.3) !important;
+}
+
+body[data-theme="notion"] .co-evo-side.agent {
+  background: rgba(0, 229, 255, 0.1) !important;
+  border-color: rgba(0, 229, 255, 0.3) !important;
+}
+
+/* —— 滚动条：荧光细条 —— */
+body[data-theme="notion"] ::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+body[data-theme="notion"] ::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+body[data-theme="notion"] ::-webkit-scrollbar-thumb {
+  background: rgba(0, 229, 255, 0.3);
+  border-radius: 3px;
+}
+
+body[data-theme="notion"] ::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 229, 255, 0.6);
+}
+
+/* —— 背景动画 blob 在深色上改成荧光 + 降低透明度 —— */
+body[data-theme="notion"] .blob {
+  opacity: 0.18 !important;
+  border-color: transparent !important;
+  filter: blur(40px);
+}
+
+body[data-theme="notion"] .blob-a { background: var(--tech-cyan) !important; }
+body[data-theme="notion"] .blob-b { background: var(--tech-purple) !important; }
+body[data-theme="notion"] .blob-c { background: var(--tech-green) !important; }
+body[data-theme="notion"] .blob-d { background: var(--tech-pink) !important; }
+
+/* —— 发送按钮 / mini-action —— */
+body[data-theme="notion"] .send-button,
+body[data-theme="notion"] .mini-action {
+  background: rgba(0, 229, 255, 0.15) !important;
+  border-color: rgba(0, 229, 255, 0.4) !important;
+}
+
+/* —— tab 按钮 —— */
+body[data-theme="notion"] .tab-btn {
+  background: rgba(15, 22, 40, 0.6) !important;
+  border-color: rgba(0, 229, 255, 0.2) !important;
+  color: var(--cute-muted) !important;
+}
+
+body[data-theme="notion"] .tab-btn.active {
+  background: rgba(0, 229, 255, 0.15) !important;
+  border-color: var(--tech-cyan) !important;
+  color: var(--tech-cyan) !important;
+  box-shadow: 0 0 16px rgba(0, 229, 255, 0.3) !important;
+}
+
+/* —— pending banner / room-notice：荧光提示 —— */
+body[data-theme="notion"] .pending-banner,
+body[data-theme="notion"] .room-notice {
+  background: rgba(255, 214, 10, 0.1) !important;
+  border-color: rgba(255, 214, 10, 0.35) !important;
+  color: #ffd60a !important;
 }

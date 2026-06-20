@@ -845,6 +845,14 @@ export type PiClubPost = {
   time: string
   likes: number
   replies: number
+  comments?: PiClubComment[]
+}
+
+export type PiClubComment = {
+  id: string
+  author: string
+  text: string
+  time: string
 }
 
 export type PiClubPhotoDrop = {
@@ -907,6 +915,20 @@ export async function createPiClubPost(input: {
   })
 }
 
+export async function likePiClubPost(postId: string) {
+  return api<{ post: PiClubPost; state: PiClubState }>(`/api/piclub/posts/${encodeURIComponent(postId)}/like`, {
+    method: 'POST',
+    body: JSON.stringify({}),
+  })
+}
+
+export async function commentPiClubPost(postId: string, text: string) {
+  return api<{ comment: PiClubComment; post: PiClubPost; state: PiClubState }>(`/api/piclub/posts/${encodeURIComponent(postId)}/comments`, {
+    method: 'POST',
+    body: JSON.stringify({ text }),
+  })
+}
+
 export async function joinPiClubCommunity(communityId: string) {
   return api<{ community: PiClubCommunity; state: PiClubState }>(`/api/piclub/communities/${encodeURIComponent(communityId)}/join`, {
     method: 'POST',
@@ -931,7 +953,7 @@ export async function createVibeProduct(input: {
   brief: string
   community?: string
 }) {
-  return api<{ product: PiClubProduct; post: PiClubPost; state: PiClubState }>('/api/vibecoding/products', {
+  return api<{ product: PiClubProduct; state: PiClubState }>('/api/vibecoding/products', {
     method: 'POST',
     body: JSON.stringify(input),
   })

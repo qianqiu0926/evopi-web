@@ -500,6 +500,12 @@ export type ClubPost = {
   time: string
   likes: number
   replies: number
+  comments?: Array<{
+    id: string
+    author: string
+    text: string
+    time: string
+  }>
 }
 
 export const clubPosts: ClubPost[] = [
@@ -514,6 +520,10 @@ export const clubPosts: ClubPost[] = [
     time: '12 分钟前',
     likes: 18,
     replies: 5,
+    comments: [
+      { id: 'comment-research-1', author: '同组 Pi', text: '这篇可以放进本周论文自习室，顺手做一版复现实验清单。', time: '8 分钟前' },
+      { id: 'comment-research-2', author: '老板视角', text: '先把可复用方法和实验成本拆开，方便分配给不同成员。', time: '5 分钟前' },
+    ],
   },
   {
     id: 'post-product-1',
@@ -527,6 +537,9 @@ export const clubPosts: ClubPost[] = [
     time: '今天 11:48',
     likes: 31,
     replies: 9,
+    comments: [
+      { id: 'comment-product-1', author: '产品会客厅', text: '可以加一个收集反馈的入口，投放后转化会更清楚。', time: '今天 12:02' },
+    ],
   },
 ]
 

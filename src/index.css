@@ -66,24 +66,153 @@
 }
 
 /* ============================================================
-   主题二：Notion 科技理性（淡奶白 + 细线 + 理性克制）
+   主题二：Notion 科技风（深色底 + 青/绿/紫荧光 + 网格扫线）
+   与 cute 暖白手绘风形成强对比：深色、冷光、理性、未来感
    ============================================================ */
 body[data-theme="notion"] {
-  --cute-bg: #f7f7f5;
-  --cute-surface: #ffffff;
-  --cute-surface-soft: #f1f1ef;
-  --cute-text: #191919;
-  --cute-muted: #787774;
-  --cute-line: #37352f;
-  --cute-line-soft: rgba(55, 53, 47, 0.16);
-  --cute-pink: #fbe4e8;
-  --cute-blue: #ddebf1;
-  --cute-yellow: #f9f0c3;
-  --cute-lilac: #ebe7fb;
-  --cute-peach: #fbe5d6;
-  --cute-mint: #dceae3;
-  --cute-shadow: rgba(55, 53, 47, 0.08);
-  --cute-shadow-line: rgba(55, 53, 47, 0.14);
+  --cute-bg: #0a0e1a;
+  --cute-surface: rgba(23, 30, 48, 0.72);
+  --cute-surface-soft: rgba(18, 24, 40, 0.6);
+  --cute-text: #e6f1ff;
+  --cute-muted: #8b9bb4;
+  --cute-line: rgba(0, 229, 255, 0.32);
+  --cute-line-soft: rgba(0, 229, 255, 0.14);
+  --cute-pink: rgba(255, 87, 184, 0.16);
+  --cute-blue: rgba(0, 229, 255, 0.16);
+  --cute-yellow: rgba(255, 214, 10, 0.16);
+  --cute-lilac: rgba(167, 139, 250, 0.18);
+  --cute-peach: rgba(255, 138, 101, 0.16);
+  --cute-mint: rgba(0, 255, 157, 0.16);
+  --cute-shadow: rgba(0, 229, 255, 0.12);
+  --cute-shadow-line: rgba(0, 229, 255, 0.2);
+
+  /* 科技风专属令牌（其它主题不定义） */
+  --tech-cyan: #00e5ff;
+  --tech-green: #00ff9d;
+  --tech-purple: #a78bfa;
+  --tech-pink: #ff57b8;
+  --tech-glow: rgba(0, 229, 255, 0.5);
+
+  /* 深色主题下圆角更利落、描边更细、阴影改成发光 */
+  --border-w: 1px;
+  --r-sm: 8px;
+  --r-md: 12px;
+  --r-lg: 16px;
+  --r-xl: 22px;
+  --shadow-offset: 0px;
+  --shadow-offset-lg: 0px;
+
+  font-family: "SF Mono", "JetBrains Mono", "Fira Code", ui-monospace, "PingFang SC", "Microsoft YaHei", monospace;
+}
+
+/* notion 主题：全局深色背景 + 科技网格扫线 */
+body[data-theme="notion"] {
+  background:
+    linear-gradient(180deg, #0a0e1a 0%, #0d1224 100%);
+  background-attachment: fixed;
+}
+
+/* 网格扫线层（科技感底纹） */
+body[data-theme="notion"]::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background-image:
+    linear-gradient(rgba(0, 229, 255, 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0, 229, 255, 0.05) 1px, transparent 1px);
+  background-size: 40px 40px;
+  mask-image: radial-gradient(ellipse 90% 80% at 50% 40%, #000 20%, transparent 90%);
+  -webkit-mask-image: radial-gradient(ellipse 90% 80% at 50% 40%, #000 20%, transparent 90%);
+  animation: techGridShift 18s linear infinite;
+}
+
+/* 顶部流动光带 */
+body[data-theme="notion"]::after {
+  content: "";
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  z-index: 1;
+  pointer-events: none;
+  background: linear-gradient(90deg, transparent, var(--tech-cyan), var(--tech-purple), var(--tech-green), transparent);
+  background-size: 200% 100%;
+  animation: techScan 4s linear infinite;
+  opacity: 0.6;
+}
+
+@keyframes techGridShift {
+  0% { background-position: 0 0, 0 0; }
+  100% { background-position: 40px 40px, 40px 40px; }
+}
+
+@keyframes techScan {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* notion 主题：选区用青色荧光 */
+body[data-theme="notion"] ::selection {
+  color: #0a0e1a;
+  background: var(--tech-cyan);
+}
+
+/* notion 主题：隐藏系统光标，用自定义科技光标 */
+body[data-theme="notion"],
+body[data-theme="notion"] * {
+  cursor: none !important;
+}
+
+.tech-cursor-layer {
+  pointer-events: none;
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+}
+
+.tech-cursor-dot,
+.tech-cursor-ring,
+.tech-cursor-ripple {
+  pointer-events: none;
+  position: fixed;
+  border-radius: 999px;
+  opacity: 0;
+  will-change: transform, opacity;
+}
+
+.tech-cursor-dot {
+  width: 8px;
+  height: 8px;
+  background: var(--tech-cyan);
+  box-shadow: 0 0 16px var(--tech-cyan);
+}
+
+.tech-cursor-ring {
+  width: 32px;
+  height: 32px;
+  border: 1.5px solid var(--tech-cyan);
+}
+
+.tech-cursor-ripple {
+  width: 10px;
+  height: 10px;
+  border: 1px solid var(--tech-cyan);
+  transform: translate(-50%, -50%);
+  animation: techCursorRipple 0.6s ease-out forwards;
+}
+
+@keyframes techCursorRipple {
+  0% {
+    opacity: 0.8;
+    transform: translate(-50%, -50%) scale(0.4);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(5);
+  }
 }
 
 /* ============================================================
