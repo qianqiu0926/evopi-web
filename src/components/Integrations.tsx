@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import {
   confirmWeChatSession,
   createWeChatSession,
@@ -29,19 +29,19 @@ export function Integrations() {
   const [wechatInboundText, setWechatInboundText] = useState('帮我把这条微信消息变成一张小票')
   const [wechatReply, setWechatReply] = useState('')
 
-  const showHint = (text: string, duration = 2200) => {
+  const showHint = useCallback((text: string, duration = 2200) => {
     setHint(text)
     window.setTimeout(() => setHint(null), duration)
-  }
+  }, [])
 
-  const refreshConnectors = async () => {
+  const refreshConnectors = useCallback(async () => {
     try {
       const result = await listConnectors()
       setWechatConnector(result.connectors.find((connector) => connector.kind === 'wechat') ?? null)
     } catch (error) {
       showHint(`微信连接状态读取失败：${formatConnectorError(error)}`)
     }
-  }
+  }, [showHint])
 
   // 注册全局快捷键回到 EvoPi（演示：提示用户已就绪）
   useEffect(() => {
@@ -56,14 +56,12 @@ export function Integrations() {
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [showHint])
 
   useEffect(() => {
     const timer = window.setTimeout(() => { void refreshConnectors() }, 0)
     return () => window.clearTimeout(timer)
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [refreshConnectors])
 
   useEffect(() => {
     if (!wechatSession || wechatSession.status !== 'qr_pending') return
@@ -76,8 +74,7 @@ export function Integrations() {
         .catch((error) => showHint(`微信二维码状态刷新失败：${formatConnectorError(error)}`))
     }, 4000)
     return () => window.clearInterval(timer)
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [wechatSession?.id, wechatSession?.status])
+  }, [showHint, wechatSession])
 
   const jump = (url: string, name: string) => {
     // 真实跳转；失败（如未安装应用）会静默忽略

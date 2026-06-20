@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import './App.css'
 import {
   assetLibrary,
@@ -2093,7 +2093,8 @@ function RoomLobby({ setActivePerson }: { setActivePerson: (p: RoomPerson) => vo
   const roomPeople = useMemo(() => {
     if (!piPersonas.length) return presetPersons
     const piRooms: RoomPerson[] = piPersonas.map(piPersonaToRoomPerson)
-    const otherPresets = presetPersons.filter((person) => person.agentKind !== 'pi')
+    const piRoomIds = new Set(piRooms.map((person) => person.id))
+    const otherPresets = presetPersons.filter((person) => person.agentKind !== 'pi' && !piRoomIds.has(person.id))
     return [...piRooms, ...otherPresets]
   }, [piPersonas])
 
@@ -4192,13 +4193,13 @@ function ConnectorsPrivacyPanel() {
   const copyAct = useActionState()
   const copyHint = useInlineHint(2200)
 
-  const syncRelayContract = async () => {
+  const syncRelayContract = useCallback(async () => {
     const result = await getWeChatRelayContract()
     setRelayContract(result.contract)
     return result.contract
-  }
+  }, [])
 
-  const refresh = async () => {
+  const refresh = useCallback(async () => {
     setStatus('loading')
     try {
       const [result, contractResult] = await Promise.all([
@@ -4212,12 +4213,12 @@ function ConnectorsPrivacyPanel() {
       setMessage(formatApiError(error))
       setStatus('error')
     }
-  }
+  }, [])
 
   useEffect(() => {
     const timer = window.setTimeout(() => { void refresh() }, 0)
     return () => window.clearTimeout(timer)
-  }, [])
+  }, [refresh])
 
   useEffect(() => {
     if (!session || session.status !== 'qr_pending') return
@@ -4234,7 +4235,7 @@ function ConnectorsPrivacyPanel() {
         })
     }, 4000)
     return () => window.clearInterval(timer)
-  }, [session?.id, session?.status])
+  }, [session, syncRelayContract])
 
   const start = () => {
     startAct.run(async () => {

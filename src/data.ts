@@ -687,3 +687,73 @@ export const onboardingQuestions: OnboardQuestion[] = [
     ],
   },
 ]
+
+/* ============================================================
+   Agent 代理任务（Pi 模块下方的空框）
+   - 用户授权 Agent CLI 代理信息获取 / 工作任务
+   - 授权一次后按计划自动定时执行
+   - 典型场景：每天爬 Reddit / 公开网站的每日周时事
+   ⚠️ 真实抓取走 Vite 代理 /reddit-proxy（见 vite.config.ts）
+   ============================================================ */
+export type AgentTaskSource = 'reddit' | 'rss' | 'api'
+
+export type AgentTaskFreq = 'hourly' | 'daily' | 'weekly' | 'manual'
+
+export type AgentTaskStatus = 'draft' | 'authorized' | 'running' | 'done' | 'error' | 'paused'
+
+export type AgentTaskResult = {
+  title: string
+  meta: string // 如 "r/worldnews · ↑ 12.3k"
+  url?: string
+}
+
+export type AgentTask = {
+  id: string
+  name: string // 任务名（用户可读）
+  source: AgentTaskSource
+  // 抓取参数：Reddit 用 subreddit + sort；RSS/API 用 url
+  subreddit?: string
+  sort?: 'hot' | 'top' | 'new' | 'rising'
+  url?: string
+  freq: AgentTaskFreq
+  status: AgentTaskStatus
+  limit: number // 每次抓多少条
+  lastRun?: string
+  nextRun?: string
+  results?: AgentTaskResult[]
+}
+
+// 预置示例任务（对应你说的：爬 Reddit 每日/周时事评论）
+export const presetAgentTasks: AgentTask[] = [
+  {
+    id: 'reddit-world-daily',
+    name: 'Reddit 每日时事',
+    source: 'reddit',
+    subreddit: 'worldnews',
+    sort: 'top',
+    freq: 'daily',
+    status: 'draft',
+    limit: 5,
+    nextRun: '每天 08:00',
+  },
+  {
+    id: 'reddit-tech-weekly',
+    name: 'Reddit 每周科技热点',
+    source: 'reddit',
+    subreddit: 'technology',
+    sort: 'top',
+    freq: 'weekly',
+    status: 'draft',
+    limit: 8,
+    nextRun: '每周一 09:00',
+  },
+]
+
+// 频率选项
+export const agentFreqOptions: Array<{ value: AgentTaskFreq; label: string; hint: string }> = [
+  { value: 'manual', label: '手动', hint: '只在我点「现在执行」时跑' },
+  { value: 'hourly', label: '每小时', hint: '高频，谨慎使用' },
+  { value: 'daily', label: '每天', hint: '推荐：每天定时一次' },
+  { value: 'weekly', label: '每周', hint: '低频周报素材' },
+]
+

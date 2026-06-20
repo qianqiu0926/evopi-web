@@ -5971,6 +5971,312 @@ body[data-theme="glass"] .pet-sprite {
   animation: fadeUp var(--dur-fast) var(--ease-smooth) both;
 }
 
+/* ============================================================
+   Agent 代理任务（Pi 伙伴下方）
+   ============================================================ */
+.agent-tasks {
+  display: grid;
+  gap: 10px;
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1.5px dashed var(--line-soft);
+}
+
+.agent-tasks-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 950;
+}
+
+.agent-tasks-head .cute-icon {
+  width: 22px;
+  height: 22px;
+}
+
+.agent-add-btn {
+  margin-left: auto;
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border: var(--border-w) solid var(--line);
+  border-radius: 50%;
+  background: var(--cute-mint);
+  color: var(--text);
+  font-size: 16px;
+  font-weight: 950;
+  line-height: 1;
+  cursor: pointer;
+  transition: transform var(--dur-fast) var(--ease-press);
+}
+
+.agent-add-btn:hover {
+  transform: scale(1.1);
+}
+
+/* 添加表单 */
+.agent-add-form {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  border: var(--border-w) dashed var(--line);
+  border-radius: var(--r-sm);
+  background: var(--surface-soft);
+  animation: fadeUp var(--dur-mid) var(--ease-smooth) both;
+}
+
+.agent-add-form .text-input {
+  min-height: 38px;
+  font-size: 13px;
+}
+
+.agent-add-row {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr);
+  align-items: center;
+  gap: 6px;
+}
+
+.agent-add-prefix {
+  display: grid;
+  place-items: center;
+  height: 38px;
+  border: var(--border-w) solid var(--line);
+  border-radius: var(--r-sm);
+  background: var(--cute-blue);
+  font-weight: 900;
+  font-size: 13px;
+}
+
+.agent-freq-pick {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.agent-freq {
+  min-height: 30px;
+  padding: 0 11px;
+  border: var(--border-w) solid var(--line);
+  border-radius: 999px;
+  background: var(--surface);
+  font-size: 12px;
+  font-weight: 850;
+  cursor: pointer;
+  transition: all var(--dur-fast) var(--ease-smooth);
+}
+
+.agent-freq.active {
+  background: var(--cute-blue);
+  box-shadow: 2px 2px 0 var(--line-soft);
+}
+
+.agent-add-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+/* 任务列表 */
+.agent-tasks-list {
+  display: grid;
+  gap: 8px;
+}
+
+.agent-task {
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+  border: var(--border-w) solid var(--line);
+  border-radius: var(--r-sm);
+  background: var(--surface);
+}
+
+.agent-task-main {
+  display: grid;
+  grid-template-columns: 12px minmax(0, 1fr) 16px;
+  align-items: center;
+  gap: 10px;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+  padding: 0;
+}
+
+.agent-status-dot {
+  width: 12px;
+  height: 12px;
+  border: 2px solid var(--line);
+  border-radius: 50%;
+  background: var(--muted);
+  flex: 0 0 auto;
+}
+
+.agent-status-dot.draft {
+  background: var(--muted);
+}
+
+.agent-status-dot.authorized,
+.agent-status-dot.done {
+  background: var(--cute-mint);
+}
+
+.agent-status-dot.running {
+  background: var(--cute-blue);
+  animation: pulseDot 1s ease-in-out infinite;
+}
+
+@keyframes pulseDot {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.3); opacity: 0.7; }
+}
+
+.agent-status-dot.error {
+  background: var(--cute-peach);
+}
+
+.agent-status-dot.paused {
+  background: var(--cute-yellow);
+}
+
+.agent-task-info strong {
+  display: block;
+  font-size: 13px;
+  font-weight: 900;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.agent-task-info span {
+  display: block;
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.agent-chev {
+  color: var(--muted);
+  font-size: 11px;
+  text-align: right;
+}
+
+.agent-task-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.agent-task-actions .ghost-btn.sm,
+.agent-task-actions .primary-btn.sm {
+  min-height: 28px;
+  padding: 0 10px;
+  font-size: 11.5px;
+}
+
+.agent-del {
+  margin-left: auto;
+  width: 26px;
+  height: 26px;
+  border: 1.5px solid var(--line);
+  border-radius: 50%;
+  background: transparent;
+  color: var(--muted);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.agent-del:hover {
+  background: var(--cute-peach);
+  color: var(--text);
+}
+
+/* 结果区 */
+.agent-results {
+  display: grid;
+  gap: 8px;
+  padding-top: 8px;
+  border-top: 1.5px dashed var(--line-soft);
+  animation: fadeUp var(--dur-mid) var(--ease-smooth) both;
+}
+
+.agent-running {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12.5px;
+  color: var(--muted);
+  font-weight: 800;
+}
+
+.agent-spin {
+  width: 14px;
+  height: 14px;
+  border: 2px solid var(--line-soft);
+  border-top-color: var(--cute-blue);
+  border-radius: 50%;
+  animation: orbitSpin 0.8s linear infinite;
+}
+
+.agent-result-list {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.agent-result-list li {
+  display: grid;
+  gap: 2px;
+  padding: 7px 9px;
+  border: 1.5px solid var(--line-soft);
+  border-radius: var(--r-sm);
+  background: var(--surface-soft);
+}
+
+.agent-result-list a,
+.agent-result-list span {
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--text);
+  text-decoration: none;
+  word-break: break-word;
+}
+
+.agent-result-list a:hover {
+  text-decoration: underline;
+}
+
+.agent-result-list em {
+  color: var(--muted);
+  font-size: 10.5px;
+  font-style: normal;
+  font-weight: 700;
+}
+
+.agent-empty {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.agent-note {
+  margin: 0;
+  color: var(--muted);
+  font-size: 10.5px;
+  line-height: 1.45;
+}
+
+
 .wechat-controls {
   display: flex;
   flex-wrap: wrap;

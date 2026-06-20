@@ -6,6 +6,7 @@ EvoPi is a self-evolving personal assistant prototype built with Vite, React 19,
 
 ```bash
 npm install
+npm run api
 npm run dev -- --host 127.0.0.1
 ```
 
@@ -18,10 +19,25 @@ http://127.0.0.1:5173/
 ## Scripts
 
 ```bash
+npm run api
 npm run lint
 npm run build
 npm run preview
 ```
+
+## Local Backend
+
+The local API runs at `http://127.0.0.1:8787/` and is used by PiRoom, external Skill discovery, receipt runs, Skill confirmation, local EvolutionEvents, and connector mocks.
+
+Create `.env.local` from `.env.example` and set `MINIMAX_API_KEY`. For this workspace the MiniMax OpenAI-compatible endpoint is `https://api.minimaxi.com/v1/chat/completions`, model `MiniMax-M3`.
+
+Pixel personas can be imported from a local clone:
+
+```bash
+npm run pixel:import -- /tmp/qybaihe-Pixel
+```
+
+Imported PiRoom Skills live in `skills/piroom/`. The hidden test persona is kept in the knowledge base but is not exposed in PiRoom.
 
 ## Product Surface
 

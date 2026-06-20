@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { PetSprite } from './PetSprite'
 import { Integrations } from './Integrations'
+import { AgentTasks } from './AgentTasks'
 import { adoptablePets, piModules, petAnimations, type PetMood } from '../data'
 
 /* ============================================================
@@ -74,8 +75,8 @@ export function PiCorePanel({
         <span className="pet-mood-bubble">{displayAnim.desc}</span>
       </div>
 
-      {/* 认领 / 命名 */}
-      {!petName ? (
+      {/* 认领 / 命名 / 改名 */}
+      {!petName && !editing ? (
         <div className="adopt-box">
           <p className="adopt-desc">
             领养 <strong>{pet.name}</strong> 作为你的 PiCore 化身。它不是普通宠物，而是用状态反映你的学习与协作进度。
@@ -89,7 +90,7 @@ export function PiCorePanel({
         <div className="adopt-box">
           <input
             className="text-input"
-            placeholder={`给 ${petName} 起个新名字`}
+            placeholder={petName ? `给 ${petName} 起个新名字` : `给 ${pet.name} 起个名字（回车确认）`}
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
             autoFocus
@@ -132,6 +133,8 @@ export function PiCorePanel({
       )}
 
       {/* 系统外接：微信/飞书/邮件 转接 + 快捷键回 + 开代理 */}
+      {petName && <AgentTasks />}
+
       {petName && <Integrations />}
 
       {editing && !petName && null}
