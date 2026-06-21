@@ -5417,6 +5417,13 @@ function PiClubPage({ onExit }: { onExit: () => void }) {
                   {post.product && <em className="tag mint">{post.product}</em>}
                   {post.media && <em className="tag blue">{post.media}</em>}
                 </div>
+                {!openComments.has(post.id) && Boolean(post.comments?.length) && (
+                  <button className="club-comment-preview" onClick={() => toggleComments(post.id)}>
+                    <span>{post.comments?.[0]?.author}</span>
+                    <strong>{post.comments?.[0]?.text}</strong>
+                    <em>展开 {post.replies} 条评论</em>
+                  </button>
+                )}
                 <div className="club-post-actions">
                   <button className={likedPosts.has(post.id) ? 'active' : ''} onClick={() => void likePost(post)}>
                     <CuteIcon name="soft-heart-favorite" />
@@ -5465,7 +5472,7 @@ function PiClubPage({ onExit }: { onExit: () => void }) {
 
 function clubPostOwner(post: PiClubPost) {
   if (post.author.endsWith('Pi') || post.author.includes('EvoPi')) return post.author
-  return `${post.author} 的 Pi`
+  return `${post.author}的 Pi`
 }
 
 function productAssetToClubProduct(product: ProductAsset): PiClubProduct {
