@@ -37,6 +37,8 @@ import { Onboarding } from './components/Onboarding'
 import { IconThemeSwap } from './components/IconThemeSwap'
 import { TechCursor } from './components/TechCursor'
 import { EvolutionMapCanvas } from './components/EvolutionMapCanvas'
+import { AgentTasks } from './components/AgentTasks'
+import { Integrations } from './components/Integrations'
 import { emitPiCoreSignal, type PiCoreSignalKind } from './piCoreSignals'
 import {
   ApiError,
@@ -490,15 +492,6 @@ function AppShell({
     emitPiCoreSignal(key === 'goals' || key === 'club' ? 'work' : 'interaction')
   }
 
-  const openHealthMode = () => {
-    setPage('today')
-    setActivePerson(null)
-    setActiveGroupRoom(null)
-    setHealthModeActive(true)
-    setRailCollapsed(false)
-    emitPiCoreSignal('interaction', { mood: 'learning', duration: 9000 })
-  }
-
   return (
     <main className={`app-shell ${inRoomChat ? 'wide-center' : ''} ${healthModeActive && page === 'today' ? 'health-mode' : ''} ${navCollapsed ? 'nav-collapsed' : ''} ${railCollapsed ? 'rail-collapsed' : ''}`}>
       <div className="doodle-bg" aria-hidden="true">
@@ -647,7 +640,6 @@ function AppShell({
             moodIsLive={moodIsLive}
             emotion={piEmotion}
             healthActive={healthModeActive && page === 'today'}
-            onOpenHealth={openHealthMode}
           />
         </aside>
       )}
@@ -697,6 +689,7 @@ type PiCallMode = 'text' | 'voice'
 type HealthSessionKind = 'burpee' | 'mobility' | 'neck'
 type HealthPoseStatus = 'idle' | 'warming' | 'tracking' | 'adjusting' | 'rest'
 type HealthAudioStatus = 'idle' | 'loading' | 'speaking' | 'fallback' | 'error'
+type HealthMusicStatus = 'idle' | 'playing' | 'error'
 
 type HealthCoachPlan = {
   id: HealthSessionKind
@@ -705,6 +698,10 @@ type HealthCoachPlan = {
   duration: string
   intent: string
   cue: string
+  frameCue: string
+  focusJoints: string
+  coachRule: string
+  fallback: string
 }
 
 type PoseKeypoint = {
@@ -904,6 +901,10 @@ const healthCoachPlans: HealthCoachPlan[] = [
     duration: '约 90 秒',
     intent: '唤醒腿部、腰背和核心，让久坐后的身体重新热起来。',
     cue: '下蹲时膝盖对准脚尖，落地先稳住，再跳起。',
+    frameCue: '尽量让头、肩、髋、膝、脚踝都进入画面。',
+    focusJoints: '肩、髋、膝、踝、核心稳定和落地节奏',
+    coachRule: '重点判断膝盖是否内扣、落地是否稳定、腰背是否塌陷。',
+    fallback: '站远一点，让全身进入画面，我才能看波比跳。',
   },
   {
     id: 'mobility',
@@ -912,6 +913,10 @@ const healthCoachPlans: HealthCoachPlan[] = [
     duration: '低强度',
     intent: '放松肩颈和腰背，不追求出汗，只把身体从僵住的状态里带出来。',
     cue: '动作慢一点，肩膀放松，呼吸不要憋住。',
+    frameCue: '让头、肩、手臂和上半身进入画面就够了。',
+    focusJoints: '头颈、肩线、手臂摆动、上背放松程度',
+    coachRule: '重点判断肩膀是否耸起、动作是否太急、呼吸是否憋住。',
+    fallback: '把头、肩和手臂放进画面，我来帮你调节奏。',
   },
   {
     id: 'neck',
@@ -920,10 +925,16 @@ const healthCoachPlans: HealthCoachPlan[] = [
     duration: '约 45 秒',
     intent: '缓解颈部紧绷和屏幕前前伸姿态。',
     cue: '幅度小一点，不要甩头，感觉到拉伸就好。',
+    frameCue: '只需要头、脖子和双肩清楚入镜，不需要看到膝盖。',
+    focusJoints: '头颈角度、双肩高度、下巴前伸、转动幅度',
+    coachRule: '重点判断有没有甩头、耸肩、下巴前伸或左右幅度不均。',
+    fallback: '把头、脖子和双肩放进画面就好，不用拍到膝盖。',
   },
 ]
 
-const defaultHealthCoach = '我先看你的站姿。把全身放进画面里，等肩、髋、膝都能看到，我们再开始。'
+const defaultHealthCoach = '我先看你的动作。选好训练后，把对应部位放进画面，我每隔几秒给你反馈。'
+const healthAnalysisIntervalMs = 5500
+const piHealthMusicUrl = '/audio/pihealth-focus-flow.mp3'
 
 function TodayPage({
   goRoom,
@@ -955,6 +966,7 @@ function TodayPage({
   const [healthRepCount, setHealthRepCount] = useState(0)
   const [healthAnalysisAt, setHealthAnalysisAt] = useState('')
   const [healthAudioStatus, setHealthAudioStatus] = useState<HealthAudioStatus>('idle')
+  const [healthMusicStatus, setHealthMusicStatus] = useState<HealthMusicStatus>('idle')
   const [poseModelStatus, setPoseModelStatus] = useState<'idle' | 'loading' | 'ready' | 'error'>('idle')
   const [poseKeypointCount, setPoseKeypointCount] = useState(0)
   const chatRef = useRef<HTMLDivElement>(null)
@@ -967,6 +979,9 @@ function TodayPage({
   const poseFrameRef = useRef<number | null>(null)
   const poseDetectorRef = useRef<PoseDetectionRuntime | null>(null)
   const healthAudioRef = useRef<HTMLAudioElement | null>(null)
+  const healthMusicRef = useRef<HTMLAudioElement | null>(null)
+  const healthAnalyzingRef = useRef(false)
+  const latestPoseKeypointsRef = useRef<PoseKeypoint[]>([])
   const lastSpokenCoachRef = useRef('')
   const recognitionRef = useRef<BrowserSpeechRecognition | null>(null)
   const speechRunRef = useRef(0)
@@ -1000,6 +1015,7 @@ function TodayPage({
       if (healthTimerRef.current !== null) window.clearInterval(healthTimerRef.current)
       if (poseFrameRef.current !== null) window.cancelAnimationFrame(poseFrameRef.current)
       healthAudioRef.current?.pause()
+      healthMusicRef.current?.pause()
       recognitionRef.current?.abort()
       streamRef.current?.getTracks().forEach((track) => track.stop())
       streamRef.current = null
@@ -1101,15 +1117,48 @@ function TodayPage({
     return canvas.toDataURL('image/jpeg', 0.72)
   }, [cameraStatus, healthModeActive])
 
+  const ensureHealthMusic = useCallback(() => {
+    if (healthMusicRef.current) return healthMusicRef.current
+    const audio = new Audio(piHealthMusicUrl)
+    audio.loop = true
+    audio.volume = 0.42
+    audio.onplay = () => setHealthMusicStatus('playing')
+    audio.onpause = () => setHealthMusicStatus('idle')
+    audio.onerror = () => setHealthMusicStatus('error')
+    healthMusicRef.current = audio
+    return audio
+  }, [])
+
+  const startHealthMusic = useCallback(async () => {
+    const audio = ensureHealthMusic()
+    try {
+      await audio.play()
+      setHealthMusicStatus('playing')
+    } catch {
+      setHealthMusicStatus('error')
+    }
+  }, [ensureHealthMusic])
+
+  const toggleHealthMusic = () => {
+    const audio = ensureHealthMusic()
+    if (!audio.paused) {
+      audio.pause()
+      setHealthMusicStatus('idle')
+      return
+    }
+    void startHealthMusic()
+  }
+
   const startHealthMode = async () => {
     onHealthModeChange(true)
     setPiCallMode('text')
     setPiVoiceEnabled(false)
     cancelPiSpeech('idle')
     setHealthPoseStatus('warming')
-    setHealthCoachText(defaultHealthCoach)
+    setHealthCoachText(`${activeHealthPlan.frameCue} ${activeHealthPlan.cue}`)
     setHealthRepCount(0)
     pulseLivePetMood('learning', 'interaction', 9000)
+    void startHealthMusic()
     if (cameraStatus !== 'on' && cameraStatus !== 'requesting') {
       await startCamera('text')
     }
@@ -1123,6 +1172,7 @@ function TodayPage({
     }
     healthAudioRef.current?.pause()
     healthAudioRef.current = null
+    healthMusicRef.current?.pause()
     setHealthPoseStatus('idle')
     setHealthCoachText(defaultHealthCoach)
     setHealthAnalysisAt('')
@@ -1176,11 +1226,62 @@ function TodayPage({
     }
   }, [cancelPiSpeech, pickPiVoice])
 
-  const analyzeHealthFrame = useCallback(async () => {
+  const localPoseCoach = useCallback((plan: HealthCoachPlan) => {
+    const keypoints = latestPoseKeypointsRef.current
+    const point = (name: string, minScore = 0.32) => keypoints.find((item) => item.name === name && (item.score ?? 0) > minScore)
+    const leftShoulder = point('left_shoulder')
+    const rightShoulder = point('right_shoulder')
+    const nose = point('nose', 0.28)
+    const leftHip = point('left_hip')
+    const rightHip = point('right_hip')
+    const leftKnee = point('left_knee')
+    const rightKnee = point('right_knee')
+    const leftAnkle = point('left_ankle')
+    const rightAnkle = point('right_ankle')
+    const shoulderGap = leftShoulder && rightShoulder ? Math.abs(leftShoulder.y - rightShoulder.y) : 0
+    const visibleCount = keypoints.filter((item) => (item.score ?? 0) > 0.32).length
+
+    if (plan.id === 'neck') {
+      if (!nose || !leftShoulder || !rightShoulder) return plan.fallback
+      if (shoulderGap > 36) return '肩膀有点一高一低，先把双肩放松放平。'
+      return '很好，头颈幅度稳定，继续慢慢转，不要甩头。'
+    }
+
+    if (plan.id === 'mobility') {
+      if (!leftShoulder || !rightShoulder) return plan.fallback
+      if (shoulderGap > 42) return '肩线有点歪，先放松肩膀，再慢慢带手臂。'
+      return '节奏不错，肩膀保持放松，呼吸继续跟上。'
+    }
+
+    const lowerBodyReady = leftHip && rightHip && leftKnee && rightKnee && leftAnkle && rightAnkle
+    if (!lowerBodyReady || visibleCount < 10) return plan.fallback
+    const leftKneeDrift = leftHip && leftKnee && leftAnkle ? Math.abs(leftKnee.x - ((leftHip.x + leftAnkle.x) / 2)) : 0
+    const rightKneeDrift = rightHip && rightKnee && rightAnkle ? Math.abs(rightKnee.x - ((rightHip.x + rightAnkle.x) / 2)) : 0
+    if (Math.max(leftKneeDrift, rightKneeDrift) > 72) return '膝盖有点跑偏，蹲下时让膝盖对准脚尖。'
+    return '这一组很稳，落地继续轻一点，核心别松。'
+  }, [])
+
+  const applyHealthCoachFeedback = useCallback((value: string, plan: HealthCoachPlan, spoken = true) => {
+    const shortReply = value.replace(/\*/g, '').trim().slice(0, 48)
+    if (!shortReply) return
+    const positive = /(很好|不错|稳定|标准|继续|很稳|漂亮)/.test(shortReply)
+    setHealthCoachText(shortReply)
+    setHealthPoseStatus(positive ? 'tracking' : 'adjusting')
+    setHealthAnalysisAt(new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' }))
+    pulseLivePetMood(positive ? 'happy' : 'learning', 'interaction', 7600)
+    if (spoken) void speakHealthCoach(shortReply || plan.cue)
+  }, [speakHealthCoach])
+
+  const analyzeHealthFrame = useCallback(async (planOverride?: HealthCoachPlan) => {
     if (!healthModeActive || cameraStatus !== 'on') return
+    if (healthAnalyzingRef.current) return
+    const coachPlan = planOverride ?? activeHealthPlan
     const visualFrameDataUrl = captureVideoFrame()
     if (!visualFrameDataUrl) return
+    healthAnalyzingRef.current = true
     setHealthPoseStatus('tracking')
+    const quickFeedback = localPoseCoach(coachPlan)
+    applyHealthCoachFeedback(quickFeedback, coachPlan)
     try {
       const result = await runPiAgent({
         workspaceTitle: 'EvoPi 身心健康检测',
@@ -1188,33 +1289,36 @@ function TodayPage({
         sessionKey: 'today-health-coach',
         message: [
           '你是 EvoPi 的身心健康教练，正在根据摄像头单帧做姿态教学。',
-          '请参考 OpenPose 的 BODY_25 关键点思路：头颈、肩、肘、腕、髋、膝、踝的相对位置。',
+          `当前只观察本动作需要的部位：${coachPlan.focusJoints}。`,
+          `入镜要求：${coachPlan.frameCue}`,
+          `判断规则：${coachPlan.coachRule}`,
+          '如果动作做得好，请直接鼓励一句，并点出保持哪个动作质量。',
+          '如果动作不标准，请只说一个最需要修正的关节或姿态，并给一个马上能执行的小调整。',
+          '不要要求用户露出本动作不需要的部位。例如肩颈训练不要要求看到膝盖。',
           '不要诊断疾病，不要输出技术字段，不要提 API。',
-          '只回复一句轻松中文，最多 38 个字。先指出一个动作问题，再给一个可执行修正。',
-          `当前训练：${activeHealthPlan.title}。目标：${activeHealthPlan.target}。目的：${activeHealthPlan.intent}。标准提示：${activeHealthPlan.cue}`,
+          '只回复一句轻松中文，最多 34 个字。语气像身边教练，及时、自然、可执行。',
+          `当前训练：${coachPlan.title}。目标：${coachPlan.target}。目的：${coachPlan.intent}。标准提示：${coachPlan.cue}`,
         ].join('\n'),
         visualFrameDataUrl,
-        timeoutSec: 18,
+        timeoutSec: 5,
       })
-      const reply = (externalAgentOutput(result.result) || activeHealthPlan.cue).replace(/\*/g, '').trim()
-      const shortReply = reply.length > 48 ? `${reply.slice(0, 46)}。` : reply
-      setHealthCoachText(shortReply)
-      setHealthPoseStatus(reply.includes('很好') || reply.includes('标准') ? 'tracking' : 'adjusting')
-      setHealthAnalysisAt(new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' }))
-      pulseLivePetMood(reply.includes('很好') ? 'happy' : 'learning', 'interaction', 7600)
-      void speakHealthCoach(shortReply)
+      if (result.operation.status === 'completed') {
+        const reply = (externalAgentOutput(result.result) || coachPlan.cue).replace(/\*/g, '').trim()
+        const shortReply = reply.length > 48 ? `${reply.slice(0, 46)}。` : reply
+        applyHealthCoachFeedback(shortReply, coachPlan)
+      }
     } catch {
-      const fallback = '站远一点，让肩、髋、膝都进画面。'
-      setHealthCoachText(fallback)
-      setHealthPoseStatus('adjusting')
-      void speakHealthCoach(fallback)
+      applyHealthCoachFeedback(coachPlan.fallback, coachPlan)
+    } finally {
+      healthAnalyzingRef.current = false
     }
-  }, [activeHealthPlan, cameraStatus, captureVideoFrame, healthModeActive, speakHealthCoach])
+  }, [activeHealthPlan, applyHealthCoachFeedback, cameraStatus, captureVideoFrame, healthModeActive, localPoseCoach])
 
   const drawPoseOverlay = useCallback((keypoints: PoseKeypoint[]) => {
     const video = healthVideoRef.current
     const canvas = poseCanvasRef.current
     if (!video || !canvas || !video.videoWidth || !video.videoHeight) return
+    latestPoseKeypointsRef.current = keypoints
     const rect = video.getBoundingClientRect()
     const width = Math.max(1, Math.round(rect.width))
     const height = Math.max(1, Math.round(rect.height))
@@ -1363,7 +1467,7 @@ function TodayPage({
       healthTimerRef.current = window.setInterval(() => {
         void analyzeHealthFrame()
         setHealthRepCount((count) => count + (healthPlanId === 'burpee' ? 1 : 0))
-      }, healthPlanId === 'burpee' ? 5200 : 6800)
+      }, healthAnalysisIntervalMs)
     }
     return () => {
       if (healthTimerRef.current !== null) {
@@ -1725,6 +1829,9 @@ function TodayPage({
               <p>{activeHealthPlan.intent}</p>
             </div>
             <div className="health-stage-actions">
+              <button className="ghost-btn sm" onClick={toggleHealthMusic} type="button">
+                <CuteIcon name="soft-waveform-audio" />{healthMusicStatus === 'playing' ? '暂停音乐' : '训练音乐'}
+              </button>
               <button className="ghost-btn sm" onClick={() => void analyzeHealthFrame()} type="button">
                 <CuteIcon name="soft-refresh-loop" />校准
               </button>
@@ -1798,8 +1905,8 @@ function TodayPage({
                 onClick={() => {
                   setHealthPlanId(plan.id)
                   setHealthRepCount(0)
-                  setHealthCoachText(plan.cue)
-                  void analyzeHealthFrame()
+                  setHealthCoachText(`${plan.frameCue} ${plan.cue}`)
+                  void analyzeHealthFrame(plan)
                 }}
                 type="button"
               >
@@ -1809,9 +1916,12 @@ function TodayPage({
             ))}
           </div>
 
-          <div className="health-protocol-note">
-            <CuteIcon name="soft-sparkle-twinkle" />
-            <span>OpenPose BODY_25 关键点协议适配，当前由 MiniMax 视觉帧分析驱动；语音回话沿用豆包配置入口。</span>
+          <div className={`health-music-note status-${healthMusicStatus}`}>
+            <CuteIcon name="soft-waveform-audio" />
+            <div>
+              <strong>身心节律音乐</strong>
+              <span>{healthMusicStatus === 'playing' ? '舒缓轻电子正在陪练，让动作保持稳定节拍。' : healthMusicStatus === 'error' ? '点击训练音乐即可播放，浏览器可能需要一次手动确认。' : 'MiniMax 生成的舒缓节奏轻音乐，适合拉伸和轻量训练。'}</span>
+            </div>
           </div>
         </aside>
       </div>
@@ -1845,10 +1955,6 @@ function TodayPage({
             ))}
           </div>
           <div className="pi-call-controls">
-            <button className="ghost-btn sm" onClick={() => void startHealthMode()} type="button">
-              <CuteIcon name="soft-heart-favorite" />
-              身心检测
-            </button>
             {piCallMode === 'text' ? (
               <button className="ghost-btn sm" onClick={toggleVideoWindow} type="button">
                 <CuteIcon name={videoWindowOpen ? 'soft-success-check' : 'soft-privacy-eye'} />
@@ -2022,6 +2128,40 @@ function TodayPage({
       {sendHint.hint && (
         <div className="inline-hint"><CuteIcon name="soft-success-check" />{sendHint.hint}</div>
       )}
+
+      <section className="today-capability-section">
+        <div className="section-title">
+          <CuteIcon name="soft-sparkle-edit" />
+          <strong>能力</strong>
+          <span>多模态检测、校园事务和自动代理都在这里管理</span>
+        </div>
+
+        <div className="today-capability-grid">
+          <article className={`today-health-card ${healthModeActive ? 'active' : ''}`}>
+            <div className="today-capability-head">
+              <span className="today-capability-icon">
+                <CuteIcon name="soft-heart-favorite" />
+              </span>
+              <div>
+                <strong>{healthModeActive ? '身心健康检测中' : '身心健康检测'}</strong>
+                <span>{healthModeActive ? '摄像头正在辅助观察动作线' : '视频动作检测、语音指导和训练音乐'}</span>
+              </div>
+            </div>
+            <div className="today-capability-metrics">
+              <span>动作追踪</span>
+              <span>轻音乐陪练</span>
+              <span>实时提醒</span>
+            </div>
+            <button className="primary-btn sm" onClick={() => void startHealthMode()} type="button">
+              <CuteIcon name="soft-privacy-eye" />
+              {healthModeActive ? '回到训练画面' : '开始检测'}
+            </button>
+          </article>
+
+          <AgentTasks />
+          <Integrations />
+        </div>
+      </section>
 
       <section className="eve-capture-actions">
         <button className="ghost-btn sm" onClick={captureAsSkill}>

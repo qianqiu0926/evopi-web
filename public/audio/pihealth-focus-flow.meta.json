@@ -1,0 +1,14 @@
+{
+  "provider": "minimax",
+  "model": "music-2.6-free",
+  "prompt": "instrumental only, no vocal, wellness fitness background music, rhythmic but soothing light electronic, warm marimba, soft synth pulse, gentle bass groove, 102 bpm, clean layered percussion, calm breathing space, uplifting and comfortable, suitable for posture tracking, stretching, mobility, mindful workout in EvoPi PiHealth",
+  "generatedAt": "2026-06-21T02:17:28.268Z",
+  "traceId": "06867c4dde15edde701523e652c0e5e5",
+  "extraInfo": {
+    "music_duration": 175960,
+    "music_sample_rate": 44100,
+    "music_channel": 2,
+    "bitrate": 256000,
+    "music_size": 5632721
+  }
+}

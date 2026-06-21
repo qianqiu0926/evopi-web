@@ -446,7 +446,8 @@ async function callAgent(input) {
   try {
     if (!minimaxApiKey) throw new Error('MINIMAX_API_KEY is not configured')
     const visualFrameDataUrl = normalizeImageDataUrl(input.visualFrameDataUrl)
-    const reply = await callMiniMax(prompt, persona, visualFrameDataUrl)
+    const timeoutMs = normalizeTimeoutMs(input.timeoutSec, 90_000)
+    const reply = await callMiniMax(prompt, persona, visualFrameDataUrl, timeoutMs)
     stdout = reply
     json = { reply, provider: 'minimax', model: minimaxModel, visualFrameUsed: Boolean(visualFrameDataUrl) }
   } catch (error) {
@@ -495,9 +496,15 @@ async function callAgent(input) {
   return { result, operation }
 }
 
-async function callMiniMax(prompt, persona, visualFrameDataUrl) {
+function normalizeTimeoutMs(value, fallbackMs) {
+  const seconds = Number(value)
+  if (!Number.isFinite(seconds) || seconds <= 0) return fallbackMs
+  return Math.min(90_000, Math.max(1_000, Math.round(seconds * 1000)))
+}
+
+async function callMiniMax(prompt, persona, visualFrameDataUrl, timeoutMs = 90_000) {
   const controller = new AbortController()
-  const timeout = setTimeout(() => controller.abort(), 90_000)
+  const timeout = setTimeout(() => controller.abort(), timeoutMs)
   const userContent = visualFrameDataUrl
     ? [
         { type: 'text', text: prompt || '请先给我一个判断。' },

@@ -42,7 +42,10 @@ function parseRedditRss(xmlText: string, limit: number): AgentTaskResult[] {
 
 export function AgentTasks() {
   const [tasks, setTasks] = useState<AgentTask[]>(presetAgentTasks)
-  const [open, setOpen] = useState(false)
+  const [open, setOpen] = useState(true)
+  const [schoolBound, setSchoolBound] = useState(false)
+  const [schoolStep, setSchoolStep] = useState<'idle' | 'qr' | 'binding' | 'bound' | 'importing' | 'synced'>('idle')
+  const [calendarSynced, setCalendarSynced] = useState(false)
   const [adding, setAdding] = useState(false)
   const [draftName, setDraftName] = useState('')
   const [draftSub, setDraftSub] = useState('')
@@ -173,6 +176,34 @@ export function AgentTasks() {
     setDraftFreq('daily')
   }
 
+  const startSchoolBinding = () => {
+    emitPiCoreSignal('delegate')
+    setSchoolStep('qr')
+    setCalendarSynced(false)
+  }
+
+  const confirmSchoolBinding = () => {
+    emitPiCoreSignal('delegate')
+    setSchoolStep('binding')
+    window.setTimeout(() => {
+      setSchoolBound(true)
+      setSchoolStep('bound')
+    }, 700)
+  }
+
+  const importSchedule = () => {
+    emitPiCoreSignal('delegate')
+    setSchoolStep('importing')
+    window.setTimeout(() => {
+      setSchoolStep('synced')
+    }, 900)
+  }
+
+  const syncCalendar = () => {
+    emitPiCoreSignal('delegate')
+    setCalendarSynced(true)
+  }
+
   return (
     <div className={`agent-tasks ${open ? 'is-open' : ''}`}>
       <button
@@ -183,13 +214,104 @@ export function AgentTasks() {
         <img className="cute-icon" src="/cute-line-icons/soft-sparkle-twinkle.png" alt="" />
         <div>
           <strong>Pi 代理任务</strong>
-          <span>{tasks.filter((task) => task.status === 'authorized' || task.status === 'running').length} 个运行中 · {tasks.length} 个任务</span>
+          <span>
+            学校事务{schoolBound ? '已绑定' : '待绑定'} · {tasks.filter((task) => task.status === 'authorized' || task.status === 'running').length} 个运行中 · {tasks.length} 个自动任务
+          </span>
         </div>
         <em>{open ? '收起' : '展开'}</em>
       </button>
 
       {open && (
         <>
+        <section className={`school-agent-card ${schoolBound ? 'bound' : ''}`}>
+          <div className="school-agent-head">
+            <span className="school-agent-icon">
+              <img className="cute-icon" src="/cute-line-icons/soft-bookmark-study.png" alt="" />
+            </span>
+            <div>
+              <strong>学校事务一站式</strong>
+              <span>{schoolBound ? '企业微信已绑定 · 可导入课表和同步日历' : '通过企业微信扫码双因子验证，不保存账号密码'}</span>
+            </div>
+          </div>
+
+          <div className="school-agent-flow" aria-label="学校事务接入步骤">
+            <span className={schoolStep !== 'idle' ? 'active' : ''}>扫码验证</span>
+            <span className={schoolBound ? 'active' : ''}>绑定企业微信</span>
+            <span className={schoolStep === 'synced' || calendarSynced ? 'active' : ''}>导入课表</span>
+            <span className={calendarSynced ? 'active' : ''}>加入日历</span>
+          </div>
+
+          {schoolStep === 'qr' && (
+            <div className="school-qr-panel">
+              <div className="school-qr" aria-label="企业微信扫码验证二维码">
+                <span />
+                <span />
+                <span />
+                <i />
+              </div>
+              <div>
+                <strong>企业微信扫码确认</strong>
+                <span>扫码后在手机端完成学校身份二次验证，Pi 只接收授权回执。</span>
+                <button className="primary-btn sm" onClick={confirmSchoolBinding}>我已扫码确认</button>
+              </div>
+            </div>
+          )}
+
+          <div className="school-agent-actions">
+            {!schoolBound ? (
+              <button className="primary-btn sm" onClick={startSchoolBinding}>
+                <img className="cute-icon" src="/cute-line-icons/soft-shield-check.png" alt="" />
+                企业微信扫码绑定
+              </button>
+            ) : (
+              <>
+                <button className="ghost-btn sm" onClick={importSchedule} disabled={schoolStep === 'importing'}>
+                  <img className="cute-icon" src="/cute-line-icons/soft-import-data.png" alt="" />
+                  {schoolStep === 'importing' ? '导入中' : '导入课表'}
+                </button>
+                <button className="primary-btn sm" onClick={syncCalendar} disabled={schoolStep !== 'synced' || calendarSynced}>
+                  <img className="cute-icon" src="/cute-line-icons/soft-calendar-reminder.png" alt="" />
+                  {calendarSynced ? '已加入日历' : '加入日历'}
+                </button>
+              </>
+            )}
+          </div>
+
+          <div className="school-schedule-preview">
+            <article>
+              <span>今日课程</span>
+              <strong>{schoolStep === 'synced' || calendarSynced ? '3 门' : '待导入'}</strong>
+            </article>
+            <article>
+              <span>日历同步</span>
+              <strong>{calendarSynced ? '已完成' : '未同步'}</strong>
+            </article>
+            <article>
+              <span>安全方式</span>
+              <strong>扫码授权</strong>
+            </article>
+          </div>
+
+          {(schoolStep === 'binding' || schoolStep === 'importing') && (
+            <div className="agent-running">
+              <span className="agent-spin" />
+              {schoolStep === 'binding' ? 'Pi 正在确认企业微信授权回执。' : 'Pi 正在读取课表并整理成日历事件。'}
+            </div>
+          )}
+
+          {(schoolStep === 'synced' || calendarSynced) && (
+            <ul className="school-course-list">
+              <li><strong>机器学习导论</strong><span>周一 09:00 · 教学楼 A302</span></li>
+              <li><strong>产品设计专题</strong><span>周三 14:30 · 东校园实验室</span></li>
+              <li><strong>大学体育</strong><span>周五 16:00 · 体育中心</span></li>
+            </ul>
+          )}
+
+          <p className="agent-note">
+            参考 SYSU-Anything 的校园 skill layer：优先走企业微信扫码、官方授权或既有登录态，可继续扩展教务、雨课堂、场馆、图书馆和就业事务。
+          </p>
+        </section>
+
         <button
           className="agent-add-btn"
           onClick={() => setAdding((v) => !v)}

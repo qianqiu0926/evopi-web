@@ -1,7 +1,5 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { PetSprite } from './PetSprite'
-import { Integrations } from './Integrations'
-import { AgentTasks } from './AgentTasks'
 import { adoptablePets, petAnimations, type PetMood } from '../data'
 
 type PiCoreEmotion = 'calm' | 'happy' | 'waiting'
@@ -18,27 +16,16 @@ export function PiCorePanel({
   moodIsLive = false,
   emotion,
   healthActive = false,
-  onOpenHealth,
 }: {
   mood: PetMood
   moodIsLive?: boolean
   emotion: PiCoreEmotion
   healthActive?: boolean
-  onOpenHealth?: () => void
 }) {
-  const [petName, setPetName] = useState(adoptablePets[0].name)
-  const [editing, setEditing] = useState(false)
-  const [draft, setDraft] = useState('')
-  const pet = adoptablePets[0]
+  const petName = adoptablePets[0].name
+  const [pokeCount, setPokeCount] = useState(0)
   const anim = petAnimations.find((a) => a.mood === mood) ?? petAnimations[0]
-  const emotionLabel = moodIsLive ? anim.label : emotion === 'happy' ? '开心奔跑' : emotion === 'waiting' ? '等你确认' : anim.label
-
-  const rename = () => {
-    const n = draft.trim() || pet.name
-    setPetName(n)
-    setEditing(false)
-    setDraft('')
-  }
+  const displayMood = pokeCount % 3 === 1 ? '开心回应' : pokeCount % 3 === 2 ? '摇尾巴' : moodIsLive ? anim.label : emotion === 'happy' ? '开心奔跑' : emotion === 'waiting' ? '等你确认' : anim.label
 
   const liveStatusCopy: Record<PetMood, string> = {
     idle: anim.desc,
@@ -48,7 +35,11 @@ export function PiCorePanel({
     sleeping: 'Pi 会进入低打扰状态，等你回来再继续确认。',
   }
 
-  const statusCopy = moodIsLive
+  const statusCopy = pokeCount % 3 === 1
+    ? '你戳了它一下，它抬头看你，像是在说：我在，继续吧。'
+    : pokeCount % 3 === 2
+      ? '它围着你跑了一小圈，今天的能量又亮了一格。'
+      : moodIsLive
     ? liveStatusCopy[mood]
     : emotion === 'happy'
       ? '你在推进任务或把事情交给 Pi，它正开心地跑起来。'
@@ -56,13 +47,20 @@ export function PiCorePanel({
         ? '有任务等你确认。你停太久了，它在提醒你回来动一动。'
         : anim.desc
 
+  const petStats = useMemo(() => {
+    const workLoad = emotion === 'happy' || mood === 'learning' ? 76 : emotion === 'waiting' ? 58 : 42
+    const fitness = healthActive ? 4 : mood === 'happy' ? 3 : 2
+    const growth = Math.min(96, 63 + pokeCount * 4 + (healthActive ? 9 : 0) + (emotion === 'happy' ? 8 : 0))
+    return { workLoad, fitness, growth }
+  }, [emotion, healthActive, mood, pokeCount])
+
   return (
     <section className="picore-panel">
       <div className="rail-title">
         <span className="cute-icon-wrap"><img className="cute-icon" src="/cute-line-icons/soft-sparkle-twinkle.png" alt="" /></span>
         <div>
           <strong>EvoPi 生命核</strong>
-          <span>{`${petName} · Lv.3 · ${emotionLabel}`}</span>
+          <span>{`${petName} · Lv.3 · ${displayMood}`}</span>
         </div>
       </div>
 
@@ -83,75 +81,58 @@ export function PiCorePanel({
         <span className="pet-mood-bubble">{statusCopy}</span>
       </div>
 
-      {/* 养成 / 命名 */}
-      {editing ? (
-        <div className="adopt-box">
-          <p className="adopt-desc">
-            现在已进入 PiCore 养成。你可以给它换个称呼，不影响它继续学习你的工作节奏。
-          </p>
-          <input
-            className="text-input"
-            placeholder={`给 ${petName} 起个新名字`}
-            value={draft}
-            onChange={(e) => setDraft(e.target.value)}
-            autoFocus
-            onKeyDown={(e) => { if (e.key === 'Enter') rename() }}
-          />
-          <div className="auth-aux">
-            <button className="primary-btn sm" onClick={rename}>确定</button>
-            <button className="ghost-btn sm" onClick={() => setEditing(false)}>取消</button>
-          </div>
+      <div className="pet-owned pet-interaction-card">
+        <div className="growth-copy">
+          <span className="tag mint">养成中 · {petName}</span>
+          <p>它会根据今日工作量、锻炼完成度和你交给 Pi 的任务自动成长。</p>
         </div>
-      ) : (
-        <div className="pet-owned">
-          <div className="growth-copy">
-            <span className="tag mint">养成中 · {petName}</span>
-            <p>它会根据你推进目标、交给 Pi 代理、停留等待等节奏自动变化，不需要手动抚摸或休息。</p>
-          </div>
-          <div className="auth-aux">
-            <button className="ghost-btn sm" onClick={() => setEditing(true)}>改名</button>
-          </div>
+        <div className="auth-aux">
+          <button className="ghost-btn sm" onClick={() => setPokeCount((value) => value + 1)}>戳一戳</button>
         </div>
-      )}
+      </div>
 
-      <section className={`pi-health-panel ${healthActive ? 'active' : ''}`}>
-        <div className="pi-health-preview">
-          <div className="pi-health-stick" aria-hidden="true">
-            <span className="head" />
-            <span className="body" />
-            <span className="arms" />
-            <span className="legs" />
-          </div>
-          <div>
-            <strong>{healthActive ? '正在检测你的动作' : '身心健康检测'}</strong>
-            <span>{healthActive ? 'Pi 正在看肩、髋、膝、踝的动作线。' : '站到屏幕前，Pi 会用视频帮你调动作。'}</span>
-          </div>
+      <section className="pet-progress-panel">
+        <PetMeter icon="soft-sparkle-edit" label="今日工作量" value={petStats.workLoad} note={petStats.workLoad >= 70 ? '跑得很勤快' : '节奏稳定'} />
+        <PetStars label="身心健康锻炼" value={petStats.fitness} active={healthActive} />
+        <PetMeter icon="soft-heart-favorite" label="成长进度" value={petStats.growth} note={`Lv.4 还差 ${Math.max(0, 100 - petStats.growth)}%`} />
+        <div className="pet-daily-line">
+          <img className="cute-icon" src={iconPath('soft-note-sticky')} alt="" />
+          <span>{pokeCount > 0 ? '它记下了这次互动，今天更愿意陪你继续推进。' : '今天先保持轻量节奏，完成一个小任务就会涨一点经验。'}</span>
         </div>
-
-        <div className="pi-health-metrics">
-          <article>
-            <span>识别协议</span>
-            <strong>OpenPose BODY_25</strong>
-          </article>
-          <article>
-            <span>视觉模型</span>
-            <strong>MiniMax</strong>
-          </article>
-          <article>
-            <span>语音教练</span>
-            <strong>豆包</strong>
-          </article>
-        </div>
-
-        <button className="primary-btn pi-health-start" onClick={onOpenHealth} type="button">
-          <img className="cute-icon" src={iconPath('soft-heart-favorite')} alt="" />
-          {healthActive ? '回到训练画面' : '开始身心检测'}
-        </button>
       </section>
 
-      <AgentTasks />
-
-      <Integrations />
     </section>
+  )
+}
+
+function PetMeter({ icon, label, value, note }: { icon: string; label: string; value: number; note: string }) {
+  return (
+    <article className="pet-meter">
+      <div className="pet-meter-head">
+        <img className="cute-icon" src={iconPath(icon)} alt="" />
+        <span>{label}</span>
+        <strong>{value}%</strong>
+      </div>
+      <div className="pet-meter-track" aria-hidden="true">
+        <i style={{ width: `${value}%` }} />
+      </div>
+      <em>{note}</em>
+    </article>
+  )
+}
+
+function PetStars({ label, value, active }: { label: string; value: number; active: boolean }) {
+  return (
+    <article className="pet-stars">
+      <div>
+        <span>{label}</span>
+        <strong>{active ? '训练中' : `${value}/5 星`}</strong>
+      </div>
+      <div className="pet-star-row" aria-label={`${label} ${value} 星`}>
+        {Array.from({ length: 5 }).map((_, index) => (
+          <i className={index < value ? 'on' : ''} key={index}>★</i>
+        ))}
+      </div>
+    </article>
   )
 }
