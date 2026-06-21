@@ -492,6 +492,14 @@ function AppShell({
     emitPiCoreSignal(key === 'goals' || key === 'club' ? 'work' : 'interaction')
   }
 
+  const openHealthMode = () => {
+    setPage('today')
+    setActivePerson(null)
+    setActiveGroupRoom(null)
+    setHealthModeActive(true)
+    emitPiCoreSignal('interaction', { mood: 'learning', duration: 9000 })
+  }
+
   return (
     <main className={`app-shell ${inRoomChat ? 'wide-center' : ''} ${healthModeActive && page === 'today' ? 'health-mode' : ''} ${navCollapsed ? 'nav-collapsed' : ''} ${railCollapsed ? 'rail-collapsed' : ''}`}>
       <div className="doodle-bg" aria-hidden="true">
@@ -619,7 +627,7 @@ function AppShell({
           />
         )}
         {page === 'club' && <PiClubPage onExit={() => setPage('today')} />}
-        {page === 'skills' && <SkillsPage />}
+        {page === 'skills' && <SkillsPage onOpenHealth={openHealthMode} />}
         {page === 'evolution' && <EvolutionPage />}
         {page === 'privacy' && <PrivacyPage initialLevel={onboardDepth} />}
       </section>
@@ -5653,7 +5661,7 @@ function productStatusLabel(status: PiClubProduct['status']) {
 /* ============================================================
    技能中心 / 进化日志 / 设置
    ============================================================ */
-function SkillsPage() {
+function SkillsPage({ onOpenHealth }: { onOpenHealth: () => void }) {
   // 会话内已安装的商店技能：点「安装」后并入已启用（刷新才重置）
   const [installed, setInstalled] = useState<Set<string>>(new Set())
   const [evomapConnection, setEvomapConnection] = useState<{
@@ -5816,6 +5824,38 @@ function SkillsPage() {
 
   return (
     <div className="library-page">
+      <section className="skill-capability-console">
+        <div className="section-title">
+          <CuteIcon name="soft-dashboard-tiles" />
+          <strong>能力控制台</strong>
+          <span>身心健康、校园事务和外部应用入口</span>
+        </div>
+        <div className="skill-capability-grid">
+          <article className="today-health-card">
+            <div className="today-capability-head">
+              <span className="today-capability-icon">
+                <CuteIcon name="soft-heart-favorite" />
+              </span>
+              <div>
+                <strong>身心健康检测</strong>
+                <span>视频动作检测、语音指导和训练音乐</span>
+              </div>
+            </div>
+            <div className="today-capability-metrics">
+              <span>动作追踪</span>
+              <span>轻音乐陪练</span>
+              <span>实时提醒</span>
+            </div>
+            <button className="primary-btn sm" onClick={onOpenHealth} type="button">
+              <CuteIcon name="soft-privacy-eye" />开始检测
+            </button>
+          </article>
+
+          <AgentTasks />
+          <Integrations />
+        </div>
+      </section>
+
       <SkillSection icon="soft-search-spark" title="EvoMap 经验网络">
         <section className="skill-evomap-panel">
           <div className="skill-evomap-status">
