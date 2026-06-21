@@ -2,7 +2,7 @@ import fs from 'node:fs'
 import http from 'node:http'
 import path from 'node:path'
 import crypto from 'node:crypto'
-import { execFile } from 'node:child_process'
+import { execFile, spawn } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
@@ -14,6 +14,11 @@ const statePath = path.join(repoRoot, 'data', 'backend-state.json')
 const piroomRoot = path.join(repoRoot, 'skills', 'piroom')
 const productivityRoot = path.join(repoRoot, 'skills', 'productivity')
 const personasManifestPath = path.join(piroomRoot, 'personas.json')
+const sysuAnythingBin = fs.existsSync(path.join(repoRoot, 'node_modules', '.bin', 'sysu-anything'))
+  ? path.join(repoRoot, 'node_modules', '.bin', 'sysu-anything')
+  : 'sysu-anything'
+const sysuStateDir = process.env.SYSU_ANYTHING_STATE_DIR || path.join(process.env.HOME || repoRoot, '.sysu-anything')
+const schoolAuthTimeoutSec = Math.max(60, Number(process.env.SYSU_ANYTHING_AUTH_TIMEOUT_SEC || 240))
 const minimaxApiKey = process.env.MINIMAX_API_KEY ?? process.env.VITE_MINIMAX_API_KEY ?? ''
 const minimaxBaseUrl = (process.env.MINIMAX_BASE_URL ?? 'https://api.minimaxi.com/v1').replace(/\/+$/, '')
 const minimaxModel = process.env.MINIMAX_MODEL ?? 'MiniMax-M3'
@@ -79,15 +84,25 @@ async function handle(req, res) {
     return sendJson(res, 200, { personas: piRoomPersonas() })
   }
 
+  if (req.method === 'GET' && pathname === '/api/school/runtime') {
+    const runtime = await schoolRuntimeStatus()
+    return sendJson(res, 200, { runtime })
+  }
+
   if (req.method === 'POST' && pathname === '/api/school/session') {
-    const session = createSchoolSession()
+    const session = await createSchoolSession()
+    return sendJson(res, 200, { session })
+  }
+
+  const schoolSessionMatch = pathname.match(/^\/api\/school\/session\/([^/]+)$/)
+  if (req.method === 'GET' && schoolSessionMatch) {
+    const session = getSchoolSession(decodeURIComponent(schoolSessionMatch[1]))
     return sendJson(res, 200, { session })
   }
 
   const schoolSessionConfirmMatch = pathname.match(/^\/api\/school\/session\/([^/]+)\/confirm$/)
   if (req.method === 'POST' && schoolSessionConfirmMatch) {
-    const input = await readJson(req)
-    const session = confirmSchoolSession(decodeURIComponent(schoolSessionConfirmMatch[1]), input)
+    const session = confirmSchoolSession(decodeURIComponent(schoolSessionConfirmMatch[1]))
     return sendJson(res, 200, { session })
   }
 
@@ -1034,48 +1049,100 @@ function defaultState() {
   }
 }
 
-function createSchoolSession() {
+async function schoolRuntimeStatus() {
+  const cli = await runCommand(sysuAnythingBin, ['--help'], { timeout: 10_000, allowFailure: true })
+  const sessionFile = path.join(sysuStateDir, 'session.json')
+  const hasCasSession = fs.existsSync(sessionFile)
+  return {
+    available: cli.exitCode === 0,
+    command: cli.exitCode === 0 ? sysuAnythingBin : null,
+    stateDir: sysuStateDir,
+    hasCasSession,
+    installCommand: 'npm i -g sysu-anything',
+    deploySkillCommand: 'npx -y sysu-anything-cli-skill@latest deploy --target codex',
+    authCommand: `${sysuAnythingBin} auth workwechat --state-dir ${sysuStateDir} --open-image --timeout ${schoolAuthTimeoutSec}`,
+    scheduleCommand: `${sysuAnythingBin} jwxt timetable-import --state-dir ${sysuStateDir} --json`,
+    nextAction: cli.exitCode === 0
+      ? (hasCasSession ? '已检测到 SYSU-Anything 和本地 CAS 会话，可以导入 JWXT 课表。' : '已检测到 SYSU-Anything，请先启动企业微信扫码授权。')
+      : '未检测到 sysu-anything CLI。请先安装后再进行企业微信扫码授权。',
+    stdoutPreview: cli.stdout.slice(0, 600),
+    stderrPreview: cli.stderr.slice(0, 600),
+  }
+}
+
+async function createSchoolSession() {
   const state = readState()
-  const manualCode = String(100000 + Math.floor(Math.random() * 900000))
+  const runtime = await schoolRuntimeStatus()
+  if (!runtime.available) {
+    throw new HttpError(503, 'sysu_anything_missing', '还没有检测到真实 SYSU-Anything 运行时，无法生成企业微信官方扫码会话。请先执行 npm i -g sysu-anything。', runtime)
+  }
+  const id = newId('school')
   const session = {
-    id: newId('school'),
+    id,
     status: 'qr_pending',
-    manualCode,
-    qrDataUrl: schoolQrDataUrl(manualCode),
-    expiresInSec: 300,
+    mode: 'sysu-anything',
+    provider: 'SYSU-Anything',
+    displayName: 'SYSU 企业微信',
+    stateDir: sysuStateDir,
+    qrImagePath: path.join(sysuStateDir, 'qr', 'workwechat-login.png'),
+    manualCode: '',
+    qrDataUrl: '',
+    expiresInSec: schoolAuthTimeoutSec,
+    command: [sysuAnythingBin, 'auth', 'workwechat', '--state-dir', sysuStateDir, '--open-image', '--timeout', String(schoolAuthTimeoutSec)],
+    stdout: '',
+    stderr: '',
+    lastMessage: '正在调用 SYSU-Anything 请求企业微信官方二维码。',
     createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
   }
   state.schoolSession = session
   writeState(state)
+  startSchoolAuthProcess(id, session.command)
   addEvolutionEvent({
     type: 'school.session.created',
     subjectId: session.id,
-    summary: '学校服务一站通已生成企业微信扫码验证码',
-    evidence: { auth: 'qr_2fa', passwordStored: false },
+    summary: '学校服务一站通已启动 SYSU-Anything 企业微信真实扫码授权',
+    evidence: { auth: 'sysu_anything_workwechat', passwordStored: false, stateDir: sysuStateDir },
   })
   return session
 }
 
-function confirmSchoolSession(sessionId, input = {}) {
+function getSchoolSession(sessionId) {
   const state = readState()
   const session = state.schoolSession
   if (!session || session.id !== sessionId) throw new HttpError(404, 'not_found', 'School session not found')
-  if (input.manualCode && String(input.manualCode) !== String(session.manualCode)) {
-    throw new HttpError(400, 'invalid_code', '验证码不匹配')
+  return refreshSchoolSession(state, session)
+}
+
+function confirmSchoolSession(sessionId) {
+  const state = readState()
+  const session = state.schoolSession
+  if (!session || session.id !== sessionId) throw new HttpError(404, 'not_found', 'School session not found')
+  const refreshed = refreshSchoolSession(state, session)
+  if (refreshed.status !== 'connected') {
+    throw new HttpError(409, 'school_auth_pending', refreshed.lastMessage || '企业微信扫码授权还没有完成。请在手机企业微信确认后稍等片刻。', refreshed)
   }
+  return refreshed
+}
+
+function refreshSchoolSession(state, session) {
+  if (session.status !== 'qr_pending') return session
+  const sessionFile = path.join(String(session.stateDir || sysuStateDir), 'session.json')
+  if (!fs.existsSync(sessionFile)) return session
   const connected = {
     ...session,
     status: 'connected',
-    displayName: 'SYSU 企业微信',
+    lastMessage: 'SYSU-Anything 已写入 CAS 会话，企业微信授权完成。',
     connectedAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
   }
   state.schoolSession = connected
   writeState(state)
   addEvolutionEvent({
     type: 'school.session.connected',
-    subjectId: sessionId,
-    summary: '学校服务一站通已通过企业微信双因子验证',
-    evidence: { auth: 'wechat_work_qr', passwordStored: false },
+    subjectId: session.id,
+    summary: '学校服务一站通已通过 SYSU-Anything 企业微信扫码验证',
+    evidence: { auth: 'sysu_anything_workwechat', passwordStored: false, sessionFile },
   })
   return connected
 }
@@ -1085,16 +1152,178 @@ async function importSchoolSchedule(input = {}) {
   if (input.sessionId && (!state.schoolSession || state.schoolSession.id !== input.sessionId)) {
     throw new HttpError(404, 'not_found', 'School session not found')
   }
-  const schedule = await generateSchoolSchedule()
+  const session = state.schoolSession ? refreshSchoolSession(state, state.schoolSession) : null
+  const sessionFile = path.join(sysuStateDir, 'session.json')
+  if ((!session || session.status !== 'connected') && !fs.existsSync(sessionFile)) {
+    throw new HttpError(409, 'school_auth_required', '请先完成企业微信扫码授权，EvoPi 才能读取真实 JWXT 课表。', session)
+  }
+  if ((!state.schoolSession || state.schoolSession.status !== 'connected') && fs.existsSync(sessionFile)) {
+    state.schoolSession = existingSchoolSession()
+  }
+  const schedule = await importSysuAnythingSchedule()
   state.schoolSchedule = schedule
   writeState(state)
   addEvolutionEvent({
     type: 'school.schedule.imported',
     subjectId: state.schoolSession?.id ?? 'school-local',
     summary: `学校课表已导入：${schedule.courses.length} 门课程，${schedule.events.length} 条日程`,
-    evidence: { generatedBy: schedule.generatedBy },
+    evidence: { generatedBy: schedule.generatedBy, source: schedule.source },
   })
   return schedule
+}
+
+function existingSchoolSession() {
+  const now = new Date().toISOString()
+  return {
+    id: newId('school'),
+    status: 'connected',
+    mode: 'sysu-anything',
+    provider: 'SYSU-Anything',
+    displayName: 'SYSU 企业微信',
+    stateDir: sysuStateDir,
+    qrImagePath: path.join(sysuStateDir, 'qr', 'workwechat-login.png'),
+    manualCode: '',
+    qrDataUrl: '',
+    expiresInSec: 0,
+    command: [sysuAnythingBin, 'auth', 'workwechat', '--state-dir', sysuStateDir],
+    stdout: '',
+    stderr: '',
+    lastMessage: '已复用 SYSU-Anything 本地 CAS 会话。',
+    createdAt: now,
+    updatedAt: now,
+    connectedAt: now,
+  }
+}
+
+function startSchoolAuthProcess(sessionId, command) {
+  const child = spawn(command[0], command.slice(1), {
+    cwd: repoRoot,
+    env: { ...process.env },
+    stdio: ['ignore', 'pipe', 'pipe'],
+  })
+  const append = (kind, chunk) => {
+    const state = readState()
+    if (!state.schoolSession || state.schoolSession.id !== sessionId) return
+    const text = chunk.toString('utf8')
+    const session = state.schoolSession
+    const next = {
+      ...session,
+      [kind]: `${session[kind] || ''}${text}`.slice(-5000),
+      lastMessage: extractSchoolAuthMessage(text) || session.lastMessage,
+      updatedAt: new Date().toISOString(),
+    }
+    state.schoolSession = next
+    writeState(state)
+  }
+  child.stdout.on('data', (chunk) => append('stdout', chunk))
+  child.stderr.on('data', (chunk) => append('stderr', chunk))
+  child.on('error', (error) => {
+    const state = readState()
+    if (!state.schoolSession || state.schoolSession.id !== sessionId) return
+    state.schoolSession = {
+      ...state.schoolSession,
+      status: 'expired',
+      lastError: error.message,
+      lastMessage: 'SYSU-Anything 启动失败，请确认 CLI 已安装且可执行。',
+      updatedAt: new Date().toISOString(),
+    }
+    writeState(state)
+  })
+  child.on('close', (code) => {
+    const state = readState()
+    if (!state.schoolSession || state.schoolSession.id !== sessionId) return
+    const session = refreshSchoolSession(state, state.schoolSession)
+    if (session.status === 'connected') return
+    state.schoolSession = {
+      ...session,
+      status: 'expired',
+      exitCode: code,
+      lastMessage: code === 0 ? '扫码流程已结束，但还没有检测到 CAS 会话文件。' : '扫码流程未完成或已超时，请重新发起企业微信授权。',
+      updatedAt: new Date().toISOString(),
+    }
+    writeState(state)
+  })
+}
+
+function extractSchoolAuthMessage(text) {
+  const clean = String(text || '').split('\n').map((line) => line.trim()).filter(Boolean).pop()
+  if (!clean) return ''
+  return clean.replace(/\x1b\[[0-9;]*m/g, '').slice(0, 180)
+}
+
+async function importSysuAnythingSchedule() {
+  const result = await runCommand(sysuAnythingBin, ['jwxt', 'timetable-import', '--state-dir', sysuStateDir, '--json'], {
+    timeout: 90_000,
+    allowFailure: false,
+  })
+  const raw = parseJsonObject(result.stdout)
+  return normalizeSysuAnythingSchedule(raw)
+}
+
+function normalizeSysuAnythingSchedule(payload) {
+  const fallback = defaultSchoolSchedule('sysu-anything')
+  const occurrences = Array.isArray(payload?.occurrences) ? payload.occurrences : []
+  const todayIso = shanghaiDateOnly(new Date())
+  const sorted = occurrences
+    .filter((item) => item && typeof item === 'object')
+    .map((item, index) => ({
+      id: sanitizePlain(item.sourceKey || `jwxt-${index + 1}`),
+      title: sanitizePlain(item.courseName || item.title || fallback.courses[index % fallback.courses.length].title),
+      day: item.date === todayIso ? '今天' : sanitizeSchoolDay(item.weekdayLabel || fallback.courses[index % fallback.courses.length].day),
+      date: sanitizeDate(item.date, fallback.courses[index % fallback.courses.length].date),
+      start: sanitizeTime(item.startTime, '09:00'),
+      end: sanitizeTime(item.endTime, '10:30'),
+      location: sanitizePlain(item.location || '教务系统'),
+      teacher: sanitizePlain(item.teacherName || '任课老师'),
+      type: 'course',
+      color: sanitizeTone(undefined, index),
+    }))
+    .sort((left, right) => left.date.localeCompare(right.date) || left.start.localeCompare(right.start))
+  const thisWeek = sorted.filter((course) => Math.abs(daysBetween(todayIso, course.date)) <= 6).slice(0, 28)
+  const courses = thisWeek.length ? thisWeek : sorted.slice(0, 28)
+  const upcoming = sorted.filter((course) => `${course.date}T${course.start}` >= `${todayIso}T00:00`).slice(0, 6)
+  const events = upcoming.map((course) => ({
+    id: `event-${course.id}`,
+    title: `上课：${course.title}`,
+    date: course.date,
+    time: course.start,
+    location: course.location,
+    source: 'JWXT',
+  }))
+  const reminders = upcoming.slice(0, 3).map((course) => ({
+    id: `reminder-${course.id}`,
+    title: `课前提醒：${course.title}`,
+    due: `${course.date} ${course.start}`,
+    course: course.title,
+  }))
+  return {
+    generatedBy: 'sysu-anything',
+    source: 'JWXT',
+    weekLabel: `${sanitizePlain(payload?.query?.academicYear || payload?.schoolYear || '当前学期')} · 课表导入`,
+    summary: courses.length
+      ? `已通过 SYSU-Anything 从 JWXT 导入 ${sorted.length} 条课程 occurrence，并整理成本周校园小日历。`
+      : 'SYSU-Anything 已连接，但 JWXT 暂未返回可导入课程。',
+    courses,
+    events,
+    reminders,
+    rawCount: sorted.length,
+  }
+}
+
+function shanghaiDateOnly(date) {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Shanghai',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(date)
+}
+
+function daysBetween(left, right) {
+  const leftTime = Date.parse(`${left}T00:00:00+08:00`)
+  const rightTime = Date.parse(`${right}T00:00:00+08:00`)
+  if (!Number.isFinite(leftTime) || !Number.isFinite(rightTime)) return 999
+  return Math.round((rightTime - leftTime) / 86_400_000)
 }
 
 async function generateSchoolSchedule() {
@@ -1210,11 +1439,6 @@ function sanitizeTime(value, fallback) {
 function sanitizeTone(value, index) {
   const tones = ['mint', 'blue', 'yellow', 'pink']
   return tones.includes(value) ? value : tones[index % tones.length]
-}
-
-function schoolQrDataUrl(code) {
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="184" height="184" viewBox="0 0 184 184"><rect width="184" height="184" rx="18" fill="#fff7d6"/><rect x="16" y="16" width="48" height="48" rx="8" fill="#dff5ea" stroke="#30313b" stroke-width="4"/><rect x="120" y="16" width="48" height="48" rx="8" fill="#dfeeff" stroke="#30313b" stroke-width="4"/><rect x="16" y="120" width="48" height="48" rx="8" fill="#ffe3ef" stroke="#30313b" stroke-width="4"/><g fill="#30313b">${Array.from(String(code)).map((digit, index) => `<rect x="${78 + (index % 3) * 18}" y="${78 + Math.floor(index / 3) * 18}" width="${8 + Number(digit) % 8}" height="${8 + (Number(digit) * 2) % 8}" rx="2"/>`).join('')}<rect x="91" y="122" width="18" height="18" rx="3"/><rect x="132" y="91" width="15" height="15" rx="3"/><rect x="112" y="140" width="38" height="10" rx="3"/></g><text x="92" y="176" text-anchor="middle" font-family="monospace" font-size="14" font-weight="700" fill="#30313b">${code}</text></svg>`
-  return `data:image/svg+xml;base64,${Buffer.from(svg).toString('base64')}`
 }
 
 function piClubState() {
@@ -1608,6 +1832,31 @@ end tell
       } else {
         resolve(stdout)
       }
+    })
+  })
+}
+
+function runCommand(command, args, options = {}) {
+  return new Promise((resolve, reject) => {
+    execFile(command, args, {
+      cwd: options.cwd || repoRoot,
+      timeout: options.timeout || 30_000,
+      maxBuffer: options.maxBuffer || 10 * 1024 * 1024,
+      env: { ...process.env, ...(options.env || {}) },
+    }, (error, stdout, stderr) => {
+      const exitCode = typeof error?.code === 'number' ? error.code : error ? 1 : 0
+      const result = {
+        command: [command, ...args],
+        exitCode,
+        stdout: String(stdout || ''),
+        stderr: String(stderr || ''),
+      }
+      if (error && !options.allowFailure) {
+        const message = result.stderr.trim() || error.message
+        reject(new HttpError(502, 'command_failed', message, result))
+        return
+      }
+      resolve(result)
     })
   })
 }

@@ -37,6 +37,7 @@ import { Onboarding } from './components/Onboarding'
 import { Tutorial, clearTutorialDoneLocally, loadTutorialDone, markTutorialDoneLocally } from './components/Tutorial'
 import { IconThemeSwap } from './components/IconThemeSwap'
 import { TechCursor } from './components/TechCursor'
+import { PetSprite } from './components/PetSprite'
 import { EvolutionMapCanvas } from './components/EvolutionMapCanvas'
 import { emitPiCoreSignal, type PiCoreSignalKind } from './piCoreSignals'
 import {
@@ -65,6 +66,8 @@ import {
   evolutionEventsStreamUrl,
   exportSkillToExternalAgent,
   getEvoMapDeveloperEnvironment,
+  getSchoolRuntime,
+  getSchoolSession,
   getWeChatRelayContract,
   getPiClubState,
   getSkill,
@@ -134,6 +137,7 @@ import {
   type PiClubState,
   type PiRoomPersona,
   type SchoolCourse,
+  type SchoolRuntime,
   type SchoolSchedule,
   type SchoolSession,
   type Skill,
@@ -1209,23 +1213,58 @@ function TodayPage({
     /^(对|是|嗯|可以|ok|yes)/i.test(value.trim()) || /(就是这样|可以开始|开始执行|没错)/i.test(value)
   )
 
-  const shortVoiceTask = (value: string) => {
-    const compact = value
+  const normalizedSpeech = (value: string) => value
+    .replace(/\*/g, '')
+    .replace(/\s+/g, '')
+    .replace(/[，。！？、,.!?;；:："'“”‘’（）()【】[\]]/g, '')
+    .trim()
+
+  const compactVoiceReply = (value: string) => {
+    const sentences = value
       .replace(/\*/g, '')
       .replace(/\s+/g, ' ')
-      .replace(/^(我想|我需要|帮我|请你|就是|那个|嗯|呃|啊|可以|麻烦你)/, '')
       .trim()
-    return compact.slice(0, 42) || '这件事'
+      .split(/(?<=[。！？!?])\s*/)
+      .map((item) => item.trim())
+      .filter(Boolean)
+    const compact = sentences.slice(0, 3).join('')
+    return compact.length > 96 ? `${compact.slice(0, 94)}。` : compact
+  }
+
+  const userAsksProgress = (value: string) => (
+    /(上次|之前|刚才|前面|上回).*(进展|怎么样|做得|做到|完成|结果|汇报)/i.test(value)
+    || /(职业成长|述职|季度成果).*(进展|怎么样|做得|做到|完成|结果|汇报)/i.test(value)
+  )
+
+  const directVoiceFallback = (userText: string) => {
+    if (userAsksProgress(userText)) {
+      return '职业成长这块我会按季度成果素材整理：先补证据和时间线，再压成汇报稿。你想先听进度，还是让我继续推进？'
+    }
+    if (/做|帮|写|整理|生成|分析|设计|搭|改|查|发|继续|开始/i.test(userText)) {
+      return '可以，我会围绕你刚才这件事先抓目标和下一步，不跑题。你点“对”我就开始做，点“否”再补充。'
+    }
+    return '收到，我先按你刚才说的方向来回应，不复读你的原话。你想让我直接推进，还是先帮你拆下一步？'
   }
 
   const shapePiReplyForCurrentMode = (rawReply: string, userText: string) => {
     const cleanReply = rawReply.replace(/\*/g, '').replace(/\s+/g, ' ').trim()
     if (piCallMode !== 'voice') return cleanReply
     if (isVoiceConfirmText(userText)) {
-      const title = activeContext?.title.replace(/[，,:：].*$/, '').slice(0, 18)
-      return title ? `好，我开始做。先处理${title}，完成后给你确认。` : '好，我开始做。先把第一步处理好，完成后给你确认。'
+      return '好，我开始做。先处理第一步，完成后马上给你确认。'
     }
-    return `我理解是：${shortVoiceTask(userText)}。是这样吗？`
+    const stripped = cleanReply
+      .replace(/^我理解是[:：，,]?\s*/i, '')
+      .replace(/^(你的意思是|你是想|你想要)[:：，,]?\s*/i, '')
+      .replace(/是这样吗[？?]?$/i, '')
+      .trim()
+    const replyNorm = normalizedSpeech(stripped)
+    const userNorm = normalizedSpeech(userText)
+    const repeatsUser = replyNorm.length > 0 && userNorm.length > 8 && (
+      replyNorm.includes(userNorm.slice(0, Math.min(18, userNorm.length)))
+      || userNorm.includes(replyNorm.slice(0, Math.min(18, replyNorm.length)))
+    )
+    if (!stripped || repeatsUser || /^好的?[，,。]?$/.test(stripped)) return directVoiceFallback(userText)
+    return compactVoiceReply(stripped)
   }
 
   const captureVideoFrame = useCallback(() => {
@@ -1881,10 +1920,14 @@ function TodayPage({
     const modeText = piCallMode === 'voice'
       ? [
           '当前是视频对话模式。请像真人轻松聊天，不要报告腔，不要机械化。',
-          '每次最多 50 个中文字，最多 2 句，不要列清单，不要连续追问多个问题。',
+          '回复必须以用户刚说的话为中心，不要自顾自切到历史上下文或职业成长。',
+          '不要复述用户原话，不要说“我理解是”，不要把用户的话换一种说法再确认。',
+          '每次最多 70 个中文字，最多 3 句，不要列清单，不要连续追问多个问题。',
+          '如果用户只是提出问题或问进展，请直接回答；如果用户要你执行，再用一句话确认下一步。',
+          '只有当用户明确提到“上次、之前、职业成长、进展、做得怎么样”等内容时，才可以简短汇报当前续接上下文。',
           isVoiceConfirmText(clean)
             ? '用户刚确认“对”。这表示理解正确，请不要再确认，也不要再追问，直接说你开始执行和第一步动作。'
-            : '用户刚描述或修改任务。你只需要用一句话说“我理解是……”，然后问“是这样吗？”。确认前不要说开始执行。',
+            : '用户刚描述或修改任务。请直接自然回应用户这句话；需要确认时只问一个很短的问题。',
         ].join('\n')
       : cameraStatus === 'on'
         ? '当前是文字协作 + 视频观察模式。请结合画面判断用户是否在电脑前、是否疑惑、疲惫、专注或兴奋，但不要输出技术字段，不要声称百分百准确。Pi 默认不说话，只在文字里温和提示观察到的协作节奏。'
@@ -1902,7 +1945,7 @@ function TodayPage({
           message: [
             '你是 EvoPi，用户的自进化个人助理。',
             '请用中文自然回复，不要使用星号符号。',
-            '你的任务不是只给建议，而是先对话协作，判断这件事应该进入目标舱、继续在工作台完成，还是沉淀成 Skill。',
+            '你的任务不是只给建议，而是围绕用户当前这句话对话协作，必要时再判断这件事应该进入目标舱、继续在工作台完成，还是沉淀成 Skill。',
             contextText,
             modeText,
             sensingText,
@@ -2189,13 +2232,17 @@ function TodayPage({
             <div className="eve-chat-stream" ref={chatRef}>
               {piCallMode === 'voice' ? (
                 <div className={`eve-call-stage mood-${callMood}`}>
-                  <div className="eve-call-signal" aria-hidden="true">
-                    <span />
-                    <span />
-                    <span />
+                  <div className="eve-call-pet-stage" aria-label="Pi 小狗视频对话状态">
+                    <div className="eve-call-hearts" aria-hidden="true">
+                      <span />
+                      <span />
+                      <span />
+                    </div>
+                    <PetSprite mood={callMood} size={178} variant="dog" />
+                    <div className="eve-call-pet-shadow" aria-hidden="true" />
                   </div>
                   <strong>{voiceStatus === 'listening' ? 'Pi 正在听你说' : voiceStatus === 'speaking' ? 'Pi 正在回应你' : '正在和 Pi 视频通话'}</strong>
-                  <span>{send.status === 'loading' ? 'Pi 正在整理你的表达' : '说完后会直接发送到聊天记录，通话中不显示转写文字。'}</span>
+                  <span>{send.status === 'loading' ? 'Pi 正在围绕你的问题组织回复' : '你说完后，Pi 会直接回应；开心时会跳起来，确认时会发小爱心。'}</span>
                 </div>
               ) : (
                 <>
@@ -6023,9 +6070,61 @@ function SchoolServicePage() {
   const [schoolBound, setSchoolBound] = useState(false)
   const [schoolStep, setSchoolStep] = useState<'idle' | 'qr' | 'binding' | 'bound' | 'importing' | 'synced'>('idle')
   const [calendarSynced, setCalendarSynced] = useState(false)
+  const [schoolRuntime, setSchoolRuntime] = useState<SchoolRuntime | null>(null)
   const [schoolSession, setSchoolSession] = useState<SchoolSession | null>(null)
   const [schoolSchedule, setSchoolSchedule] = useState<SchoolSchedule | null>(null)
   const [schoolError, setSchoolError] = useState('')
+
+  const loadSchoolRuntime = useCallback(async () => {
+    try {
+      const result = await getSchoolRuntime()
+      setSchoolRuntime(result.runtime)
+      if (result.runtime.hasCasSession) {
+        setSchoolBound(true)
+        setSchoolStep((step) => step === 'idle' || step === 'qr' ? 'bound' : step)
+      }
+    } catch (error) {
+      setSchoolError(formatApiError(error))
+    }
+  }, [])
+
+  useEffect(() => {
+    let cancelled = false
+    getSchoolRuntime()
+      .then((result) => {
+        if (cancelled) return
+        setSchoolRuntime(result.runtime)
+        if (result.runtime.hasCasSession) {
+          setSchoolBound(true)
+          setSchoolStep((step) => step === 'idle' || step === 'qr' ? 'bound' : step)
+        }
+      })
+      .catch((error) => {
+        if (!cancelled) setSchoolError(formatApiError(error))
+      })
+    return () => { cancelled = true }
+  }, [])
+
+  useEffect(() => {
+    if (!schoolSession || schoolSession.status !== 'qr_pending') return
+    const timer = window.setInterval(() => {
+      getSchoolSession(schoolSession.id)
+        .then((result) => {
+          setSchoolSession(result.session)
+          if (result.session.status === 'connected') {
+            setSchoolBound(true)
+            setSchoolStep('bound')
+            setSchoolError('')
+          }
+          if (result.session.status === 'expired') {
+            setSchoolStep('idle')
+            setSchoolError(result.session.lastMessage || '企业微信扫码流程已超时，请重新发起授权。')
+          }
+        })
+        .catch((error) => setSchoolError(formatApiError(error)))
+    }, 3000)
+    return () => window.clearInterval(timer)
+  }, [schoolSession])
 
   const startSchoolBinding = async () => {
     emitPiCoreSignal('delegate')
@@ -6043,13 +6142,13 @@ function SchoolServicePage() {
   const confirmSchoolBinding = async () => {
     emitPiCoreSignal('delegate')
     if (!schoolSession) {
-      setSchoolError('请先生成企业微信扫码验证码。')
+      setSchoolError('请先启动 SYSU-Anything 企业微信官方扫码。')
       return
     }
     setSchoolError('')
     setSchoolStep('binding')
     try {
-      const result = await confirmSchoolSession(schoolSession.id, { manualCode: schoolSession.manualCode })
+      const result = await confirmSchoolSession(schoolSession.id)
       setSchoolSession(result.session)
       setSchoolBound(true)
       setSchoolStep('bound')
@@ -6083,6 +6182,14 @@ function SchoolServicePage() {
   const todayCourses = courses.filter((course) => course.day === '今天').slice(0, 4)
   const visibleCourses = todayCourses.length ? todayCourses : courses.slice(0, 4)
   const weekDays = buildSchoolWeek(courses)
+  const authCommand = schoolSession?.command?.join(' ') || schoolRuntime?.authCommand || 'sysu-anything auth workwechat --open-image'
+  const scheduleSourceLabel = schoolSchedule?.generatedBy === 'sysu-anything'
+    ? 'JWXT 真实导入'
+    : schoolSchedule?.generatedBy === 'minimax'
+      ? 'MiniMax 摘要'
+      : schoolSchedule
+        ? '本地兜底'
+        : '等待导入'
 
   return (
     <div className="school-service-page">
@@ -6093,47 +6200,58 @@ function SchoolServicePage() {
           </span>
           <div>
             <strong>学校服务一站通</strong>
-            <span>{schoolBound ? '企业微信已绑定 · 可导入课表和同步日历' : '通过企业微信扫码双因子验证，不保存账号密码'}</span>
+            <span>{schoolBound ? 'SYSU-Anything 已授权 · 可从 JWXT 导入课表' : '通过 SYSU-Anything 调起企业微信官方扫码，不保存账号密码'}</span>
           </div>
         </div>
 
         <div className="school-agent-flow" aria-label="学校事务接入步骤">
-          <span className={schoolStep !== 'idle' ? 'active' : ''}>扫码验证</span>
-          <span className={schoolBound ? 'active' : ''}>绑定企业微信</span>
-          <span className={schoolStep === 'synced' || calendarSynced ? 'active' : ''}>导入课表</span>
+          <span className={schoolRuntime?.available ? 'active' : ''}>检测运行时</span>
+          <span className={schoolStep !== 'idle' || schoolBound ? 'active' : ''}>企业微信授权</span>
+          <span className={schoolStep === 'synced' || courses.length > 0 ? 'active' : ''}>导入课表</span>
           <span className={calendarSynced ? 'active' : ''}>加入日历</span>
         </div>
 
-        {schoolStep === 'qr' && (
+        {!schoolRuntime?.available && (
+          <div className="school-runtime-panel">
+            <CuteIcon name="soft-warning-triangle" />
+            <div>
+              <strong>还没有接上真实 SYSU-Anything</strong>
+              <span>{schoolRuntime?.nextAction ?? '正在检测本机运行时。'}</span>
+              <code>{schoolRuntime?.installCommand ?? 'npm i -g sysu-anything'}</code>
+            </div>
+            <button className="ghost-btn sm" onClick={loadSchoolRuntime}>重新检测</button>
+          </div>
+        )}
+
+        {(schoolStep === 'qr' || schoolStep === 'binding') && (
           <div className="school-qr-panel">
-            <div className="school-qr" aria-label="企业微信扫码验证二维码">
-              <span />
-              <span />
-              <span />
-              <i />
+            <div className="school-real-qr" aria-label="SYSU-Anything 企业微信授权状态">
+              <CuteIcon name="soft-shield-check" />
+              <span>官方 QR</span>
             </div>
             <div>
-              <strong>企业微信扫码确认</strong>
+              <strong>请在系统打开的企业微信二维码中扫码</strong>
               <span>
-                {schoolSession ? `验证码 ${schoolSession.manualCode} · ${schoolSession.expiresInSec}s 后过期。` : '正在生成企业微信扫码验证码。'}
-                扫码后在手机端完成学校身份二次验证，Pi 只接收授权回执。
+                {schoolSession?.lastMessage || 'SYSU-Anything 正在请求企业微信官方二维码；如果系统没有自动打开图片，可以查看状态目录里的 qr/workwechat-login.png。'}
               </span>
-              <button className="primary-btn sm" onClick={confirmSchoolBinding}>我已扫码确认</button>
+              <code>{authCommand}</code>
+              {schoolSession?.qrImagePath ? <em>二维码文件：{schoolSession.qrImagePath}</em> : null}
+              <button className="primary-btn sm" onClick={confirmSchoolBinding}>检查授权状态</button>
             </div>
           </div>
         )}
 
         <div className="school-agent-actions">
           {!schoolBound ? (
-            <button className="primary-btn sm" onClick={startSchoolBinding}>
+            <button className="primary-btn sm" onClick={startSchoolBinding} disabled={schoolStep === 'qr' || schoolStep === 'binding' || !schoolRuntime?.available}>
               <CuteIcon name="soft-shield-check" />
-              {schoolSession ? '重新生成验证码' : '企业微信扫码绑定'}
+              {schoolStep === 'qr' || schoolStep === 'binding' ? '等待企业微信确认' : '启动官方扫码授权'}
             </button>
           ) : (
             <>
               <button className="ghost-btn sm" onClick={importSchedule} disabled={schoolStep === 'importing'}>
                 <CuteIcon name="soft-import-data" />
-                {schoolStep === 'importing' ? '导入中' : '导入课表'}
+                {schoolStep === 'importing' ? '导入中' : '从 JWXT 导入课表'}
               </button>
               <button className="primary-btn sm" onClick={syncCalendar} disabled={schoolStep !== 'synced' || calendarSynced}>
                 <CuteIcon name="soft-calendar-reminder" />
@@ -6153,8 +6271,8 @@ function SchoolServicePage() {
             <strong>{calendarSynced ? '已完成' : '未同步'}</strong>
           </article>
           <article>
-            <span>安全方式</span>
-            <strong>{schoolSession?.status === 'connected' ? '已授权' : '扫码授权'}</strong>
+            <span>真实运行时</span>
+            <strong>{schoolRuntime?.available ? '已检测' : '未安装'}</strong>
           </article>
         </div>
 
@@ -6168,7 +6286,7 @@ function SchoolServicePage() {
         {(schoolStep === 'binding' || schoolStep === 'importing') && (
           <div className="agent-running">
             <span className="agent-spin" />
-            {schoolStep === 'binding' ? 'Pi 正在确认企业微信授权回执。' : 'Pi 正在读取课表并整理成日历事件。'}
+            {schoolStep === 'binding' ? 'Pi 正在检查 SYSU-Anything 是否写入 CAS 会话。' : 'Pi 正在调用 JWXT 读取课表并整理成日历事件。'}
           </div>
         )}
 
@@ -6177,9 +6295,9 @@ function SchoolServicePage() {
             <div className="school-dashboard-head">
               <div>
                 <strong>{schoolSchedule?.weekLabel ?? '本周课表'}</strong>
-                <span>{schoolSchedule?.summary ?? '导入后会在这里形成一个校园小日历。'}</span>
+                <span>{schoolSchedule?.summary ?? '完成企业微信授权后，JWXT 课表会在这里形成一个校园小日历。'}</span>
               </div>
-              <em>{schoolSchedule?.generatedBy === 'minimax' ? 'MiniMax 生成' : schoolSchedule ? '本地兜底' : '等待导入'}</em>
+              <em>{scheduleSourceLabel}</em>
             </div>
             <div className="school-week-grid">
               {weekDays.map((day) => (
@@ -6213,7 +6331,7 @@ function SchoolServicePage() {
                   <span>{course.start}-{course.end} · {course.location} · {course.teacher}</span>
                 </li>
               )) : (
-                <li><strong>等待课表导入</strong><span>绑定企业微信后，Pi 会把 JWXT 课表整理到这里。</span></li>
+                <li><strong>等待课表导入</strong><span>授权完成后，Pi 会通过 SYSU-Anything 把 JWXT 课表整理到这里。</span></li>
               )}
             </ul>
             <div className="school-event-list">
@@ -6243,7 +6361,7 @@ function SchoolServicePage() {
         ) : null}
 
         <p className="agent-note">
-          参考 SYSU-Anything 的校园 skill layer：优先走企业微信扫码、官方授权或既有登录态，可继续扩展教务、雨课堂、场馆、图书馆和就业事务。
+          当前接入路径：EvoPi 后端调用本机 SYSU-Anything CLI，企业微信扫码和 CAS 登录态由 SYSU-Anything 管理；EvoPi 只读取授权后的课表结果，不保存校园账号密码。
         </p>
       </section>
     </div>

@@ -169,11 +169,36 @@ export type ExternalAgentConnection = {
 export type SchoolSession = {
   id: string
   status: 'qr_pending' | 'connected' | 'expired'
-  manualCode: string
-  qrDataUrl: string
+  mode?: 'sysu-anything'
+  provider?: string
+  manualCode?: string
+  qrDataUrl?: string
+  command?: string[]
+  stateDir?: string
+  qrImagePath?: string
+  stdout?: string
+  stderr?: string
+  lastMessage?: string
+  lastError?: string
   expiresInSec: number
   createdAt: string
+  updatedAt?: string
+  connectedAt?: string
   displayName?: string
+}
+
+export type SchoolRuntime = {
+  available: boolean
+  command?: string | null
+  stateDir: string
+  hasCasSession: boolean
+  installCommand: string
+  deploySkillCommand: string
+  authCommand: string
+  scheduleCommand: string
+  nextAction: string
+  stdoutPreview?: string
+  stderrPreview?: string
 }
 
 export type SchoolCourse = {
@@ -199,12 +224,14 @@ export type SchoolCalendarEvent = {
 }
 
 export type SchoolSchedule = {
-  generatedBy: 'minimax' | 'local'
+  generatedBy: 'sysu-anything' | 'minimax' | 'local'
+  source?: 'JWXT' | 'YKT' | 'Calendar'
   weekLabel: string
   courses: SchoolCourse[]
   events: SchoolCalendarEvent[]
   reminders: Array<{ id: string; title: string; due: string; course?: string }>
   summary: string
+  rawCount?: number
 }
 
 export type ExternalAgentDiscovery = Omit<ExternalAgentConnection, 'id' | 'status'> & {
@@ -931,10 +958,18 @@ export async function createSchoolSession() {
   })
 }
 
-export async function confirmSchoolSession(sessionId: string, input: { manualCode?: string } = {}) {
+export async function getSchoolRuntime() {
+  return api<{ runtime: SchoolRuntime }>('/api/school/runtime')
+}
+
+export async function getSchoolSession(sessionId: string) {
+  return api<{ session: SchoolSession }>(`/api/school/session/${encodeURIComponent(sessionId)}`)
+}
+
+export async function confirmSchoolSession(sessionId: string) {
   return api<{ session: SchoolSession }>(`/api/school/session/${encodeURIComponent(sessionId)}/confirm`, {
     method: 'POST',
-    body: JSON.stringify(input),
+    body: JSON.stringify({}),
   })
 }
 
