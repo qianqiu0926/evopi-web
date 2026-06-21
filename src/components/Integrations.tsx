@@ -3,12 +3,18 @@ import {
   confirmWeChatSession,
   createWeChatSession,
   disconnectWeChat,
+  getFeishuCapability,
+  getOpenClawWeixinStatus,
   getWeChatSession,
+  sendViaOpenClawWeixin,
   listConnectors,
+  sendFeishuMessage,
   sendWeChatFollowUp,
   sendWeChatInbound,
   type ConnectorSession,
+  type FeishuCapability,
   type MessagingConnector,
+  type OpenClawWeixinStatus,
 } from '../api'
 import { integrations } from '../data'
 import { emitPiCoreSignal } from '../piCoreSignals'
@@ -30,6 +36,13 @@ export function Integrations() {
   const [wechatBusy, setWechatBusy] = useState<'idle' | 'loading' | 'confirming' | 'followup' | 'inbound'>('idle')
   const [wechatInboundText, setWechatInboundText] = useState('帮我把这条微信消息变成一张小票')
   const [wechatReply, setWechatReply] = useState('')
+  const [feishu, setFeishu] = useState<FeishuCapability | null>(null)
+  const [feishuText, setFeishuText] = useState('EvoPi 已接入飞书，后续会把需要确认的 Agent 跟进发送到这里。')
+  const [feishuBusy, setFeishuBusy] = useState<'idle' | 'sending'>('idle')
+  const [ocWxStatus, setOcWxStatus] = useState<OpenClawWeixinStatus | null>(null)
+  const [ocWxBusy, setOcWxBusy] = useState(false)
+  const [ocWxMessage, setOcWxMessage] = useState('EvoPi 已通过 openclaw-weixin 接入你的微信，需要确认的事项会真实发到这里。')
+  const [ocWxReplyTo, setOcWxReplyTo] = useState('filehelper')
 
   const showHint = useCallback((text: string, duration = 2200) => {
     setHint(text)
@@ -64,6 +77,18 @@ export function Integrations() {
     const timer = window.setTimeout(() => { void refreshConnectors() }, 0)
     return () => window.clearTimeout(timer)
   }, [refreshConnectors])
+
+  useEffect(() => {
+    getFeishuCapability()
+      .then(({ capability }) => setFeishu(capability))
+      .catch(() => setFeishu(null))
+  }, [])
+
+  useEffect(() => {
+    getOpenClawWeixinStatus()
+      .then(({ status }) => setOcWxStatus(status))
+      .catch(() => setOcWxStatus(null))
+  }, [])
 
   useEffect(() => {
     if (!wechatSession || wechatSession.status !== 'qr_pending') return
@@ -117,13 +142,72 @@ export function Integrations() {
     }
   }
 
+  const sendFeishu = async () => {
+    const text = feishuText.trim()
+    if (!text) return
+    emitPiCoreSignal('delegate')
+    setFeishuBusy('sending')
+    try {
+      const { ok, result } = await sendFeishuMessage({ text })
+      if (ok) {
+        setAgentOn((p) => ({ ...p, feishu: true }))
+        showHint(`飞书消息已发送（message_id: ${result.messageId ?? '-'}）。`, 3000)
+      } else {
+        showHint(`飞书发送失败：${result.error ?? result.status}`, 3600)
+      }
+    } catch (error) {
+      showHint(`飞书发送失败：${formatConnectorError(error)}`, 3600)
+    } finally {
+      setFeishuBusy('idle')
+    }
+  }
+
+  const sendViaOpenClawWeixinBridge = async () => {
+    const message = ocWxMessage.trim()
+    if (!message || ocWxBusy) return
+    emitPiCoreSignal('delegate')
+    setOcWxBusy(true)
+    try {
+      const { ok, result } = await sendViaOpenClawWeixin({ message, replyTo: ocWxReplyTo.trim() || undefined, deliver: true })
+      if (ok) {
+        setAgentOn((p) => ({ ...p, wechat: true }))
+        showHint(`已通过 openclaw-weixin 真实发送到 ${result.replyTo}。`, 3200)
+        void getOpenClawWeixinStatus().then(({ status }) => setOcWxStatus(status))
+      } else {
+        const hint = result.status === 'not_logged_in'
+          ? 'openclaw-weixin 未登录：终端运行 openclaw channels login --channel openclaw-weixin 扫码。'
+          : result.status === 'gateway_down'
+            ? 'OpenClaw 网关未运行：终端运行 openclaw gateway start。'
+            : `发送失败：${result.error ?? result.status}`
+        showHint(hint, 4200)
+      }
+    } catch (error) {
+      showHint(`openclaw-weixin 调用失败：${formatConnectorError(error)}`, 3600)
+    } finally {
+      setOcWxBusy(false)
+    }
+  }
+
   const followUpInWeChat = async () => {
     emitPiCoreSignal('delegate')
     setWechatBusy('followup')
     try {
-      await sendWeChatFollowUp({ message: 'EvoPi 已接入微信，后续会把需要用户确认的 Agent 跟进发送到这里。' })
+      const result = await sendWeChatFollowUp({ message: 'EvoPi 已接入微信，后续会把需要用户确认的 Agent 跟进发送到这里。' })
       setAgentOn((p) => ({ ...p, wechat: true }))
-      showHint('Agent 跟进已写入微信连接事件流。')
+      if (result.delivery.status === 'semi_automatic' && result.delivery.copyableMessage) {
+        // Semi-automatic mode: copy the reply to clipboard so the user can paste
+        // it into WeChat by hand. Avoids wxauto/wxhelper 封号 risk entirely.
+        try {
+          await navigator.clipboard.writeText(result.delivery.copyableMessage)
+          showHint('Agent 跟进已生成并复制到剪贴板，粘贴到微信即可。', 3600)
+        } catch {
+          showHint('Agent 跟进已生成（半自动模式）。', 3200)
+        }
+      } else if (result.delivery.status === 'sent') {
+        showHint('Agent 跟进已通过微信 relay 真实发送。', 3200)
+      } else {
+        showHint(`微信 Agent 跟进失败：${result.delivery.error ?? '未知'}`, 3600)
+      }
     } catch (error) {
       showHint(`微信 Agent 跟进失败：${formatConnectorError(error)}`, 3200)
     } finally {
@@ -214,6 +298,15 @@ export function Integrations() {
                       onFollowUp={() => void followUpInWeChat()}
                       onDisconnect={() => void disconnectWeChatConnector()}
                     />
+                  ) : it.id === 'feishu' ? (
+                    <FeishuConnectorControls
+                      capability={feishu}
+                      text={feishuText}
+                      onText={setFeishuText}
+                      busy={feishuBusy}
+                      agentOn={Boolean(agentOn.feishu)}
+                      onSend={() => void sendFeishu()}
+                    />
                   ) : it.agentSupported && (
                     <button
                       className={`agent-toggle ${agentOn[it.id] ? 'on' : ''}`}
@@ -259,6 +352,52 @@ export function Integrations() {
         </>
       )}
       {!open && hint && <div className="integration-hint compact">{hint}</div>}
+      <section className="setting-block" style={{ marginTop: 16 }}>
+        <div className="setting-head">
+          <img className="cute-icon" src="/cute-line-icons/soft-sparkle-twinkle.png" alt="" />
+          <div>
+            <strong>微信（openclaw-weixin 官方插件）</strong>
+            <span>
+              {!ocWxStatus ? '读取状态中…'
+                : ocWxStatus.available ? `已就绪：${ocWxStatus.account ?? '默认账号'}`
+                : ocWxStatus.gatewayReachable ? '网关在线，但微信未登录（需扫码）'
+                : '网关未启动 / 未登录'}
+            </span>
+          </div>
+        </div>
+        <div className="wechat-controls" style={{ display: 'block' }}>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+            <span className={`wechat-state ${ocWxStatus?.available ? 'connected' : ''}`}>
+              {ocWxStatus?.available ? '已连接' : '待配置'}
+            </span>
+            <input
+              value={ocWxReplyTo}
+              onChange={(e) => setOcWxReplyTo(e.target.value)}
+              placeholder="对方 wxid / 备注（默认 filehelper 文件传输助手）"
+              style={{ flex: 1, minWidth: 200 }}
+            />
+            <button
+              className={`agent-toggle ${agentOn.wechat ? 'on' : ''}`}
+              onClick={() => void sendViaOpenClawWeixinBridge()}
+              disabled={ocWxBusy || !ocWxMessage.trim()}
+              title="通过 openclaw-weixin 真实发送到微信"
+            >
+              {ocWxBusy ? '发送中' : 'Agent 真实发送'}
+            </button>
+          </div>
+          <textarea
+            value={ocWxMessage}
+            onChange={(e) => setOcWxMessage(e.target.value)}
+            rows={2}
+            placeholder="要发到微信的内容"
+          />
+          {ocWxStatus && !ocWxStatus.available && ocWxStatus.reason && (
+            <small style={{ display: 'block', marginTop: 6, color: 'var(--text-muted, #8a90a0)' }}>
+              {ocWxStatus.reason}
+            </small>
+          )}
+        </div>
+      </section>
     </div>
   )
 }
@@ -308,6 +447,46 @@ function WeChatConnectorControls({
         <button className="agent-toggle" onClick={onDisconnect} disabled={busy !== 'idle'}>
           断开
         </button>
+      )}
+    </div>
+  )
+}
+
+function FeishuConnectorControls({
+  capability,
+  text,
+  onText,
+  busy,
+  agentOn,
+  onSend,
+}: {
+  capability: FeishuCapability | null
+  text: string
+  onText: (value: string) => void
+  busy: 'idle' | 'sending'
+  agentOn: boolean
+  onSend: () => void
+}) {
+  const configured = capability?.configured
+  const stateLabel = !capability ? '读取中' : configured ? (agentOn ? '代理中' : '已配置') : '未配置'
+  return (
+    <div className="wechat-controls">
+      <span className={`wechat-state ${configured ? 'connected' : ''}`}>{stateLabel}</span>
+      <button
+        className={`agent-toggle ${agentOn ? 'on' : ''}`}
+        onClick={onSend}
+        disabled={busy !== 'idle' || !configured || !text.trim()}
+        title={configured ? '发送一条飞书消息' : '需在 .env 配置 FEISHU_APP_ID / APP_SECRET / RECEIVE_ID'}
+      >
+        {busy === 'sending' ? '发送中' : 'Agent 发送'}
+      </button>
+      {configured && (
+        <textarea
+          value={text}
+          onChange={(e) => onText(e.target.value)}
+          rows={2}
+          placeholder="要发到飞书的内容"
+        />
       )}
     </div>
   )

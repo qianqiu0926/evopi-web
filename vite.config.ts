@@ -5,9 +5,14 @@ import react from '@vitejs/plugin-react'
 export default defineConfig({
   plugins: [react()],
   server: {
-    // Reddit 公开 JSON 走 dev server 代理，绕过浏览器 CORS。
-    // 生产环境需换成自己的后端转发（参考 MOCKS.md）。
+    host: '127.0.0.1',
+    // 所有 /api/* 请求转发到 evopi-api（Fastify BFF，端口 8787）。
+    // evopi-web 自带的 mock server（server/index.mjs）已停用，统一走 evopi-api。
     proxy: {
+      '/api': {
+        target: 'http://127.0.0.1:8787',
+        changeOrigin: true,
+      },
       '/reddit-proxy': {
         target: 'https://www.reddit.com',
         changeOrigin: true,

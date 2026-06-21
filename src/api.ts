@@ -1,4 +1,4 @@
-const API_BASE = (import.meta.env.VITE_EVOPI_API_BASE ?? 'http://127.0.0.1:8787').replace(/\/+$/, '')
+const API_BASE = (import.meta.env.VITE_EVOPI_API_BASE ?? '').replace(/\/+$/, '')
 
 export class ApiError extends Error {
   readonly status: number
@@ -51,18 +51,35 @@ export type EvoMapReuseResponse = {
   pagination?: Record<string, unknown>
 }
 
+export type ReceiptRunStepStatus = 'pending' | 'running' | 'done' | 'blocked' | 'failed'
+
+export type ReceiptRunStepToolKind = 'reddit' | 'pi' | 'openclaw' | 'hermes' | 'evomap' | 'minimax' | 'manual'
+
+export type ReceiptRunStepTool = {
+  kind: ReceiptRunStepToolKind
+  input: Record<string, unknown>
+}
+
+export type ReceiptRunStep = {
+  id: string
+  title: string
+  status: ReceiptRunStepStatus
+  inputSummary?: string
+  outputSummary?: string
+  referencedEvoMapIds: string[]
+  tool?: ReceiptRunStepTool
+}
+
 export type ReceiptRun = {
   id: string
   title: string
+  status?: 'queued' | 'running' | 'needs_confirmation' | 'failed' | 'completed'
+  goalName?: string
+  evomapSearchQuery?: string
   referencedEvoMapIds: string[]
-  steps?: Array<{
-    id: string
-    title: string
-    status: 'pending' | 'running' | 'done' | 'blocked' | 'failed'
-    inputSummary?: string
-    outputSummary?: string
-    referencedEvoMapIds: string[]
-  }>
+  steps?: ReceiptRunStep[]
+  createdAt?: string
+  updatedAt?: string
 }
 
 export type Skill = {
@@ -513,15 +530,38 @@ export async function createReceiptRun(input: {
   title: string
   evomapSearchQuery?: string
   referencedEvoMapIds?: string[]
+  autoAdvance?: boolean
   steps?: Array<{
     title: string
     status?: 'pending' | 'running' | 'done' | 'blocked' | 'failed'
     inputSummary?: string
     outputSummary?: string
     referencedEvoMapIds?: string[]
+    tool?: {
+      kind: 'reddit' | 'pi' | 'openclaw' | 'hermes' | 'evomap' | 'minimax' | 'manual'
+      input: Record<string, unknown>
+    }
   }>
 }) {
   return api<{ run: ReceiptRun }>('/api/receipt-runs', {
+    method: 'POST',
+    body: JSON.stringify(input),
+  })
+}
+
+export async function getReceiptRun(runId: string) {
+  return api<{ run: ReceiptRun }>(`/api/receipt-runs/${encodeURIComponent(runId)}`)
+}
+
+export async function advanceReceiptRun(runId: string) {
+  return api<{ run: ReceiptRun }>(`/api/receipt-runs/${encodeURIComponent(runId)}/advance`, {
+    method: 'POST',
+    body: JSON.stringify({}),
+  })
+}
+
+export async function confirmReceiptStep(runId: string, stepId: string, input: { outputSummary?: string }) {
+  return api<{ run: ReceiptRun }>(`/api/receipt-runs/${encodeURIComponent(runId)}/steps/${encodeURIComponent(stepId)}/confirm`, {
     method: 'POST',
     body: JSON.stringify(input),
   })
@@ -579,11 +619,130 @@ export async function createEvoMapDraft(skillId: string) {
   })
 }
 
-export async function testPublishEvoMapRecipe(skillId: string) {
+export async function testPublishEvoMapRecipe(skillId: string, options: { confirmLivePublish?: boolean } = {}) {
   return api<{ skill: Skill; recipe: unknown; recipeInput: unknown }>(`/api/skills/${skillId}/evomap/test-publish`, {
     method: 'POST',
-    body: JSON.stringify({ confirmLivePublish: false }),
+    body: JSON.stringify({ confirmLivePublish: Boolean(options.confirmLivePublish) }),
   })
+}
+
+export async function livePublishEvoMapRecipe(skillId: string) {
+  return testPublishEvoMapRecipe(skillId, { confirmLivePublish: true })
+}
+
+export type EvoMapWebhook = {
+  id?: string
+  url?: string
+  events?: string[]
+  active?: boolean
+  createdAt?: string
+  [key: string]: unknown
+}
+
+export type EvoMapWebhookRegistration = {
+  id: string
+  url: string
+  events: string[]
+  active?: boolean
+  hasSecret: boolean
+  createdAt?: string
+  updatedAt?: string
+}
+
+export type EvoMapWebhookListResponse = {
+  webhooks: unknown
+  registrations: EvoMapWebhookRegistration[]
+}
+
+export type EvoMapWebhookRegisterResponse = {
+  webhook: { created: unknown; secret: string }
+  registration: EvoMapWebhookRegistration
+}
+
+export type EvoMapWebhookDelivery = {
+  id?: string
+  event?: string
+  event_id?: string
+  status?: string
+  http_status?: number
+  attempts?: number
+  last_error?: string | null
+  created_at?: string
+  [key: string]: unknown
+}
+
+export type EvoMapIntrospection = {
+  active: boolean
+  client_id?: string
+  username?: string
+  scope?: string
+  exp?: number
+  iat?: number
+  sub?: string
+  token_type?: string
+}
+
+export type EvoMapTokenStatus = {
+  introspection: EvoMapIntrospection
+  connection: {
+    expiresAt?: string
+    scopes: string[]
+    mode: 'test' | 'live' | 'unknown'
+    clientId?: string
+  }
+}
+
+export async function listEvoMapWebhooks() {
+  return api<EvoMapWebhookListResponse>('/api/evomap/webhooks')
+}
+
+export async function registerEvoMapWebhook(input: { url: string; events?: string[] }) {
+  const events = input.events?.length ? input.events : ['recipe.created', 'recipe.published']
+  return api<EvoMapWebhookRegisterResponse>('/api/evomap/webhooks/register', {
+    method: 'POST',
+    body: JSON.stringify({ url: input.url, events }),
+  })
+}
+
+export async function deleteEvoMapWebhook(webhookId: string) {
+  return api<{ ok: boolean; webhookId: string }>(`/api/evomap/webhooks/${encodeURIComponent(webhookId)}`, {
+    method: 'DELETE',
+  })
+}
+
+export async function pingEvoMapWebhook(webhookId: string) {
+  return api<{ ok: boolean; webhookId: string; result: unknown }>(`/api/evomap/webhooks/${encodeURIComponent(webhookId)}/ping`, {
+    method: 'POST',
+    body: JSON.stringify({}),
+  })
+}
+
+export async function listEvoMapWebhookDeliveries(webhookId: string, limit = 20) {
+  const params = new URLSearchParams({ limit: String(limit) })
+  return api<{ deliveries: EvoMapWebhookDelivery[] | Record<string, unknown> }>(`/api/evomap/webhooks/${encodeURIComponent(webhookId)}/deliveries?${params}`)
+}
+
+export async function redeliverEvoMapWebhookDelivery(webhookId: string, deliveryId: string) {
+  return api<{ ok: boolean; webhookId: string; deliveryId: string; result: unknown }>(
+    `/api/evomap/webhooks/${encodeURIComponent(webhookId)}/deliveries/${encodeURIComponent(deliveryId)}/redeliver`,
+    { method: 'POST', body: JSON.stringify({}) },
+  )
+}
+
+export async function getEvoMapTokenStatus() {
+  return api<EvoMapTokenStatus>('/api/evomap/token-status')
+}
+
+export async function getEvoMapUsage() {
+  return api<{ usage: unknown }>('/api/evomap/usage')
+}
+
+export async function getEvoMapClient() {
+  return api<{ client: unknown }>('/api/evomap/client')
+}
+
+export async function listLocalWebhookDeliveries(limit = 50) {
+  return api<{ deliveries: Array<{ id: string; type?: string; livemode?: boolean; recipeId?: string; skillId?: string; receivedAt: string; signatureScheme?: string }> }>(`/api/evomap/webhook-deliveries?limit=${limit}`)
 }
 
 export async function syncSkillEvoMapReuse(skillId: string, limit = 8) {
@@ -817,8 +976,18 @@ export async function confirmWeChatSession(sessionId: string, input: { displayNa
   })
 }
 
-export async function sendWeChatFollowUp(input: { goalName?: string; receiptRunId?: string; message: string }) {
-  return api<{ ok: boolean; delivery: { platform: 'wechat'; status: 'queued'; chatId?: string; messagePreview: string } }>('/api/connectors/wechat/follow-up', {
+export type WeChatFollowUpDelivery = {
+  platform: 'wechat'
+  status: 'sent' | 'semi_automatic' | 'failed'
+  chatId?: string
+  messagePreview: string
+  deliveryId?: string
+  copyableMessage?: string
+  error?: string
+}
+
+export async function sendWeChatFollowUp(input: { goalName?: string; receiptRunId?: string; message: string; relayUrl?: string }) {
+  return api<{ ok: boolean; delivery: WeChatFollowUpDelivery }>('/api/connectors/wechat/follow-up', {
     method: 'POST',
     body: JSON.stringify(input),
   })
@@ -842,6 +1011,70 @@ export async function disconnectWeChat() {
   return api<{ ok: boolean; connector: MessagingConnector }>('/api/connectors/wechat/disconnect', {
     method: 'POST',
     body: JSON.stringify({}),
+  })
+}
+
+export type FeishuCapability = {
+  platform: 'feishu'
+  label: string
+  configured: boolean
+  receiveId?: string
+  receiveIdType?: string
+  supportsInbound: boolean
+  supportsOutbound: boolean
+}
+
+export async function getFeishuCapability() {
+  return api<{ capability: FeishuCapability }>('/api/connectors/feishu/capability')
+}
+
+export type OpenClawWeixinStatus = {
+  available: boolean
+  pluginEnabled: boolean
+  gatewayReachable: boolean
+  loggedIn: boolean
+  account?: string
+  reason?: string
+}
+
+export type OpenClawWeixinSetup = {
+  steps: string[]
+  loginCommand: string
+  configPath: string
+}
+
+export async function getOpenClawWeixinStatus() {
+  return api<{ config: { enabled: boolean; bin: string; account?: string; replyTo?: string }; status: OpenClawWeixinStatus; setup: OpenClawWeixinSetup }>('/api/connectors/wechat/openclaw/status')
+}
+
+export type OpenClawWeixinSendResult = {
+  ok: boolean
+  status: 'sent' | 'not_logged_in' | 'gateway_down' | 'disabled' | 'failed'
+  replyTo: string
+  agentReply?: string
+  error?: string
+}
+
+export async function sendViaOpenClawWeixin(input: { message: string; replyTo?: string; account?: string; deliver?: boolean }) {
+  return api<{ ok: boolean; result: OpenClawWeixinSendResult }>('/api/connectors/wechat/openclaw/send', {
+    method: 'POST',
+    body: JSON.stringify({ deliver: true, ...input }),
+  })
+}
+
+export type FeishuSendResult = {
+  ok: boolean
+  receiveId: string
+  receiveIdType: string
+  status: 'sent' | 'failed' | 'not_configured'
+  messageId?: string
+  error?: string
+}
+
+export async function sendFeishuMessage(input: { text: string; receiveId?: string; receiveIdType?: 'chat_id' | 'open_id' | 'union_id' | 'user_id' | 'email' }) {
+  return api<{ ok: boolean; result: FeishuSendResult }>('/api/connectors/feishu/send', {
+    method: 'POST',
+    body: JSON.stringify(input),
   })
 }
 
@@ -932,6 +1165,50 @@ export async function createAppleReminder(input: {
   return api<AppleReminderResponse>('/api/reminders/apple', {
     method: 'POST',
     body: JSON.stringify(input),
+  })
+}
+
+export type UserOnboardingResult = {
+  depth: number
+  summary: string
+  answers: Record<string, number>
+  completedAt: string
+  updatedAt: string
+}
+
+export type UserPreferences = {
+  userId: string
+  onboarding?: UserOnboardingResult
+  tutorialCompletedAt?: string
+  updatedAt: string
+}
+
+export async function getUserPreferences() {
+  return api<{ preferences: UserPreferences | null }>('/api/onboarding')
+}
+
+export async function saveOnboarding(input: {
+  depth: number
+  summary: string
+  answers: Record<string, number>
+}) {
+  return api<{ preferences: UserPreferences }>('/api/onboarding', {
+    method: 'POST',
+    body: JSON.stringify(input),
+  })
+}
+
+export async function completeTutorial() {
+  return api<{ preferences: UserPreferences }>('/api/onboarding/tutorial', {
+    method: 'POST',
+    body: JSON.stringify({ completed: true }),
+  })
+}
+
+export async function resetTutorial() {
+  return api<{ preferences: UserPreferences }>('/api/onboarding/tutorial/reset', {
+    method: 'POST',
+    body: JSON.stringify({}),
   })
 }
 

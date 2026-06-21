@@ -7,6 +7,7 @@ import {
   type AgentTaskResult,
 } from '../data'
 import { emitPiCoreSignal } from '../piCoreSignals'
+import { createReceiptRun } from '../api'
 
 /* ============================================================
    AgentTasks · Agent 代理任务（Pi 伙伴下方）
@@ -102,6 +103,29 @@ export function AgentTasks() {
             t.id === id ? { ...t, status: 'done', results, lastRun: nowStr() } : t,
           ),
         )
+        // Persist this fetch as a backend ReceiptRun step so the GoalWorkspace
+        // receipt stream and the evolution log reflect the same Reddit result.
+        // We send both the reddit tool binding (backend re-fetches to confirm)
+        // and a pre-computed inputSummary of what we already fetched, so the
+        // receipt record is useful even if the backend's own fetch is rate-limited.
+        const titles = results.slice(0, 5).map((r) => r.title).filter(Boolean)
+        void createReceiptRun({
+          goalName: 'Pi 代理任务',
+          title: `${task.name} · Reddit 抓取`,
+          autoAdvance: true,
+          steps: [
+            {
+              title: `抓取 r/${task.subreddit ?? 'worldnews'} 热门`,
+              inputSummary: titles.length ? `本机已抓取：${titles.join('；')}` : undefined,
+              tool: {
+                kind: 'reddit',
+                input: { subreddit: task.subreddit ?? 'worldnews', limit: task.limit ?? 5 },
+              },
+            },
+          ],
+        }).catch(() => {
+          /* ReceiptRun persistence is best-effort; the panel already shows results. */
+        })
       } catch (e) {
         setTasks((prev) =>
           prev.map((t) =>

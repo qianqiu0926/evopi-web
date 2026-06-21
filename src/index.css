@@ -42,9 +42,44 @@
   --r-md: 16px;
   --r-lg: 20px;
   --r-xl: 28px;
+  /* 小元素 tag/chip / 卡片 / 大容器 / 胶囊 —— 统一圆角档位（详见美化规范） */
+  --radius-xs: 4px;    /* tag / chip */
+  --radius-card: 8px;
+  --radius-panel: 12px;
+  --radius-pill: 999px;
   --border-w: 2px;
   --shadow-offset: 5px;
   --shadow-offset-lg: 7px;
+
+  /* —— 8px 栅格间距（统一） —— */
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 20px;
+  --sp-6: 24px;
+  --sp-8: 32px;
+  --sp-12: 48px;
+
+  /* —— 8 档字号（收敛 13/12.5/14/15/16/18/22/28/32 散值） —— */
+  --fs-2xs: 11px;   /* meta / 时间戳 */
+  --fs-xs: 12px;    /* 标签 / 辅助说明 */
+  --fs-sm: 13px;    /* 正文小 */
+  --fs-base: 14px;  /* 正文默认 */
+  --fs-md: 15px;    /* 卡片标题 */
+  --fs-lg: 17px;    /* 区块标题 */
+  --fs-xl: 20px;    /* 页面标题 */
+  --fs-2xl: 24px;   /* hero 标题 */
+
+  /* —— 四档断点（补全 1180px 关键断点） —— */
+  --bp-sm: 640px;   /* 手机 */
+  --bp-md: 900px;   /* 大手机/小平板 */
+  --bp-lg: 1180px;  /* 平板横屏/小笔记本 */
+  --bp-xl: 1440px;  /* 桌面 */
+
+  /* —— line-clamp 工具（替代 nowrap 截断长文案） —— */
+  --clamp-1: 1;
+  --clamp-2: 2;
 
   /* —— 动效曲线（触控交互的灵魂） —— */
   --ease-press: cubic-bezier(0.34, 1.56, 0.64, 1);

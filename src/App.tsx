@@ -34,6 +34,7 @@ import { PiCorePanel } from './components/PiCorePanel'
 import { InteractiveBg } from './components/InteractiveBg'
 import { AuthModal } from './components/AuthModal'
 import { Onboarding } from './components/Onboarding'
+import { Tutorial, clearTutorialDoneLocally, loadTutorialDone, markTutorialDoneLocally } from './components/Tutorial'
 import { IconThemeSwap } from './components/IconThemeSwap'
 import { TechCursor } from './components/TechCursor'
 import { EvolutionMapCanvas } from './components/EvolutionMapCanvas'
@@ -51,7 +52,9 @@ import {
   createPhotoDrop,
   createPiClubPost,
   commentPiClubPost,
+  confirmReceiptStep,
   createReceiptRun,
+  getReceiptRun,
   createSkill,
   createSkillFromReceiptRun,
   createVibeProduct,
@@ -69,20 +72,31 @@ import {
   importExternalAgents,
   getEvoMapConnectUrl,
   getEvoMapConnection,
+  getEvoMapTokenStatus,
+  getEvoMapUsage,
   joinPiClubCommunity,
   likePiClubPost,
   listConnectors,
   listExternalConnections,
   listExternalSkills,
   listEvoMapGenes,
+  listEvoMapWebhooks,
   listEvolutionEvents,
+  listLocalWebhookDeliveries,
   listPiRoomPersonas,
+  pingEvoMapWebhook,
   previewHermesMigration,
   queryEvoMapReuse,
+  registerEvoMapWebhook,
+  deleteEvoMapWebhook,
   revokeEvoMapConnection,
   runEvoMapDeveloperWorkflow,
   runExternalAgentWithReceipt,
   runPiAgent,
+  saveOnboarding,
+  getUserPreferences,
+  completeTutorial,
+  resetTutorial,
   searchEvoMapRecipes,
   synthesizeDoubaoSpeech,
   syncSkillEvoMapReuse,
@@ -96,6 +110,8 @@ import {
   type EvoMapRecipe,
   type EvoMapRecipeSearchResponse,
   type EvoMapReuseResponse,
+  type EvoMapTokenStatus,
+  type EvoMapWebhookRegistration,
   type EvolutionEvent,
   type ConnectorSession,
   type DeveloperEnvironmentConnection,
@@ -110,11 +126,14 @@ import {
   type ExternalAgentSkill,
   type HermesMigrationPreview,
   type MessagingConnector,
+  type ReceiptRun,
+  type ReceiptRunStepStatus,
   type PiClubProduct,
   type PiClubPost,
   type PiClubState,
   type PiRoomPersona,
   type Skill,
+  type UserPreferences,
   type WeChatRelayContract,
 } from './api'
 import { useActionState, useInlineHint, type ActionStatus } from './hooks/useActionState'
@@ -196,6 +215,8 @@ function App() {
   const [authOpen, setAuthOpen] = useState<Mode>(null) // 'login' | 'register' | null
   const [onboardingFor, setOnboardingFor] = useState<AuthUser | null>(null) // 新用户需先完成预配置
   const [onboardDepth, setOnboardDepth] = useState(2) // 预配置推导的初始介入深度
+  const [preferences, setPreferences] = useState<UserPreferences | null>(null) // 后端持久化的用户偏好（含新手测试结果 + 教程完成态）
+  const [tutorialOpen, setTutorialOpen] = useState(false) // 内嵌新手教程弹层
   const [piEmotion, setPiEmotion] = useState<PiCoreEmotion>('calm')
   const [piBoostUntil, setPiBoostUntil] = useState(0)
   const [piDialogueMood, setPiDialogueMood] = useState<PetMood | null>(null)
@@ -208,6 +229,22 @@ function App() {
     const area = document.querySelector('.page-area')
     if (area) area.scrollTop = 0
   }, [page])
+
+  // Load persisted user preferences on mount so returning users keep their
+  // onboarding-derived collaboration depth and tutorial-completed state.
+  useEffect(() => {
+    let cancelled = false
+    getUserPreferences()
+      .then(({ preferences }) => {
+        if (cancelled || !preferences) return
+        setPreferences(preferences)
+        if (typeof preferences.onboarding?.depth === 'number') {
+          setOnboardDepth(preferences.onboarding.depth)
+        }
+      })
+      .catch(() => { /* preferences optional; defaults remain */ })
+    return () => { cancelled = true }
+  }, [])
 
   useEffect(() => {
     let idleTimer = window.setTimeout(() => setInactive(true), 15000)
@@ -290,8 +327,16 @@ function App() {
           userName={onboardingFor.name}
           onFinish={(r) => {
             setOnboardDepth(r.depth)
+            // Persist to backend so the result survives refresh and feeds the
+            // Privacy page collaboration-depth default.
+            saveOnboarding({ depth: r.depth, summary: r.summary, answers: r.answers })
+              .then(({ preferences }) => setPreferences(preferences))
+              .catch(() => { /* persistence failure must not block onboarding */ })
             setOnboardingFor(null)
             setPage('today')
+            // New users get the in-app tutorial on first entry unless they
+            // previously completed it on this device.
+            if (!loadTutorialDone()) setTutorialOpen(true)
           }}
         />
       </>
@@ -337,6 +382,14 @@ function App() {
       setActivePerson={setActivePerson}
       activeGroupRoom={activeGroupRoom}
       setActiveGroupRoom={setActiveGroupRoom}
+      onReplayTutorial={() => setTutorialOpen(true)}
+      preferences={preferences}
+      onResetTutorial={() => {
+        clearTutorialDoneLocally()
+        resetTutorial()
+          .then(({ preferences: prefs }) => setPreferences(prefs))
+          .catch(() => { /* optional */ })
+      }}
       navCollapsed={navCollapsed}
       setNavCollapsed={setNavCollapsed}
       mood={mood}
@@ -352,6 +405,15 @@ function App() {
         initialMode={authOpen}
         onClose={() => setAuthOpen(null)}
         onAuthed={(u) => { setUser(u); setAuthOpen(null) }}
+      />
+    )}
+    {tutorialOpen && (
+      <Tutorial
+        onClose={() => setTutorialOpen(false)}
+        onComplete={() => {
+          markTutorialDoneLocally()
+          completeTutorial().then(({ preferences }) => setPreferences(preferences)).catch(() => { /* optional */ })
+        }}
       />
     )}
   </>
@@ -443,6 +505,7 @@ function LaunchPage({
 function AppShell({
   page, setPage, theme, setTheme, activePerson, setActivePerson, activeGroupRoom, setActiveGroupRoom,
   navCollapsed, setNavCollapsed, mood, moodIsLive, piEmotion, user, onboardDepth, onAuth, onLogout,
+  onReplayTutorial, preferences, onResetTutorial,
 }: {
   page: AppPage
   setPage: (p: AppPage) => void
@@ -461,6 +524,9 @@ function AppShell({
   onboardDepth: number
   onAuth: (m: 'login' | 'register') => void
   onLogout: () => void
+  onReplayTutorial: () => void
+  preferences: UserPreferences | null
+  onResetTutorial: () => void
 }) {
   const inRoomChat = page === 'room' && Boolean(activePerson || activeGroupRoom)
   const [railCollapsed, setRailCollapsed] = useState(false)
@@ -583,7 +649,7 @@ function AppShell({
         </section>
       </aside>
 
-      <section className="page-area">
+      <section className="page-area" data-tutorial="today-input">
         {!inRoomChat && (
           <header className="page-header">
             <div className="page-head-main">
@@ -594,6 +660,7 @@ function AppShell({
               </div>
             </div>
             <div className="header-actions">
+              <button className="soft-button" onClick={() => setPage('privacy')} aria-label="隐私权限" title="隐私权限"><CuteIcon name="soft-privacy-eye" />隐私</button>
               <button className="round-action" aria-label="搜索" onClick={() => headerHint.show('全局搜索准备中')}><CuteIcon name="soft-search-spark" /></button>
               <button className="soft-button" onClick={() => void createPiReminder()}><CuteIcon name="soft-calendar-reminder" />提醒事项</button>
               {headerHint.hint && (
@@ -610,26 +677,35 @@ function AppShell({
             onHealthModeChange={setHealthModeActive}
           />
         )}
-        {page === 'goals' && <GoalsPage />}
-        {page === 'memory' && <MemoryPage />}
+        {page === 'goals' && <div data-tutorial="goal-workspace"><GoalsPage /></div>}
+        {page === 'memory' && <div data-tutorial="memory"><MemoryPage /></div>}
         {page === 'room' && (
-          <RoomPage
-            activePerson={activePerson}
-            setActivePerson={(person) => {
-              setActiveGroupRoom(null)
-              setActivePerson(person)
-            }}
-            activeGroupRoom={activeGroupRoom}
-            setActiveGroupRoom={(room) => {
-              setActivePerson(null)
-              setActiveGroupRoom(room)
-            }}
-          />
+          <div data-tutorial="piroom">
+            <RoomPage
+              activePerson={activePerson}
+              setActivePerson={(person) => {
+                setActiveGroupRoom(null)
+                setActivePerson(person)
+              }}
+              activeGroupRoom={activeGroupRoom}
+              setActiveGroupRoom={(room) => {
+                setActivePerson(null)
+                setActiveGroupRoom(room)
+              }}
+            />
+          </div>
         )}
         {page === 'club' && <PiClubPage onExit={() => setPage('today')} />}
-        {page === 'skills' && <SkillsPage onOpenHealth={openHealthMode} />}
-        {page === 'evolution' && <EvolutionPage />}
-        {page === 'privacy' && <PrivacyPage initialLevel={onboardDepth} />}
+        {page === 'skills' && <div data-tutorial="skills"><SkillsPage onOpenHealth={openHealthMode} /></div>}
+        {page === 'evolution' && <div data-tutorial="evolution"><EvolutionPage /></div>}
+        {page === 'privacy' && (
+          <PrivacyPage
+            initialLevel={onboardDepth}
+            onReplayTutorial={onReplayTutorial}
+            preferences={preferences}
+            onResetTutorial={onResetTutorial}
+          />
+        )}
       </section>
 
       {!inRoomChat && !railCollapsed && (
@@ -2256,28 +2332,34 @@ function GoalsPage() {
             <div className="progress-line"><span style={{ width: `${g.progress}%` }} /></div>
             <div className="goal-progress-cap">
               <span>进度 {g.progress}%</span>
-              <span>下一步：{g.next}</span>
+              <span className="goal-next">下一步：{g.next}</span>
             </div>
 
-            <div className="goal-meta-row">
-              <div><span>当前里程碑</span><strong>{g.milestone}</strong></div>
-              <div><span>复盘节奏</span><strong>{g.review}</strong></div>
-              <div><span>关联记忆</span><strong>{g.memory}</strong></div>
-            </div>
-
-            {/* 宠物生长值（替代原"关联技能"） */}
-            <div className="goal-growth">
-              <div className="goal-growth-head">
-                <CuteIcon name="soft-heart-favorite" />
-                <strong>Pi 伙伴 · Lv.{g.growthLevel}</strong>
-                <span>{g.growthLabel}</span>
+            {/* 折叠态精简：里程碑 / 复盘 / 关联记忆 进展开态 */}
+            {active && (
+              <div className="goal-meta-row">
+                <div><span>当前里程碑</span><strong>{g.milestone}</strong></div>
+                <div><span>复盘节奏</span><strong>{g.review}</strong></div>
+                <div><span>关联记忆</span><strong>{g.memory}</strong></div>
               </div>
-              <div className="growth-bar"><span style={{ width: `${Math.min(100, (g.growthXp % 150) / 1.5)}%` }} /></div>
-              <span className="growth-xp">{g.growthXp} XP</span>
-            </div>
+            )}
 
+            {/* 宠物生长值进展开态（折叠态与目标无关，避免分散注意力） */}
+            {active && (
+              <div className="goal-growth">
+                <div className="goal-growth-head">
+                  <CuteIcon name="soft-heart-favorite" />
+                  <strong>Pi 伙伴 · Lv.{g.growthLevel}</strong>
+                  <span>{g.growthLabel}</span>
+                </div>
+                <div className="growth-bar"><span style={{ width: `${Math.min(100, (g.growthXp % 150) / 1.5)}%` }} /></div>
+                <span className="growth-xp">{g.growthXp} XP</span>
+              </div>
+            )}
+
+            {/* 折叠态只展示前 2 个关联标签，避免标签海 */}
             <footer className="goal-related">
-              {g.related.map((r) => <span className="tag" key={r}>{r}</span>)}
+              {(active ? g.related : g.related.slice(0, 2)).map((r) => <span className="tag" key={r}>{r}</span>)}
             </footer>
 
             {/* 工作窗口触发节点：开启专属工作任务 */}
@@ -2317,12 +2399,32 @@ function GoalWorkspace({
   snippets: GoalSnippet[]
   onConfirmSkill: (snippet: GoalSnippet) => void
 }) {
-  const receipt = useMemo(() => receiptTemplates[goal.name] ?? [], [goal.name])
-  const doneTotal = receipt.filter((task) => task.done).length
-  const [receiptRun, setReceiptRun] = useState(0)
+  const [runState, setRunState] = useState<ReceiptRun | null>(null)
+  const [receiptAdvancing, setReceiptAdvancing] = useState(false)
+  const templateTasks = useMemo(() => receiptTemplates[goal.name] ?? [], [goal.name])
+  // Backend run steps are the source of truth once the user kicks off a run.
+  // Before that we render the static template so the panel still explains what
+  // EvoPi will do. Each backend step maps to a {title, status, outputSummary} row.
+  type ReceiptRow = { id: string; title: string; status: ReceiptRunStepStatus; outputSummary?: string; toolKind?: string }
+  const receiptRows: ReceiptRow[] = useMemo(() => {
+    if (runState?.steps?.length) {
+      return runState.steps.map((step) => ({
+        id: step.id,
+        title: step.title,
+        status: step.status,
+        outputSummary: step.outputSummary,
+        toolKind: step.tool?.kind,
+      }))
+    }
+    // Seed from the static template: done=true rows are "EvoPi 可做", others pending.
+    return templateTasks.map((task, index) => ({
+      id: `tpl_${index}`,
+      title: task.title,
+      status: task.done ? ('done' as ReceiptRunStepStatus) : ('pending' as ReceiptRunStepStatus),
+    }))
+  }, [runState, templateTasks])
+  const doneTotal = receiptRows.filter((row) => row.status === 'done').length
   const [receiptStarted, setReceiptStarted] = useState(false)
-  const [visibleDone, setVisibleDone] = useState(0)
-  const [announcedRun, setAnnouncedRun] = useState(0)
   const [messages, setMessages] = useState<ChatMsg[]>([
     {
       from: 'them',
@@ -2356,6 +2458,7 @@ function GoalWorkspace({
   const [showEvoMap, setShowEvoMap] = useState(false)
   const [showRuntime, setShowRuntime] = useState(false)
   const [showSkillTools, setShowSkillTools] = useState(false)
+  const [evomapConnectionMode, setEvomapConnectionMode] = useState<'test' | 'live' | 'unknown'>('unknown')
   const scrollRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
   const snippetFilters: Array<{ key: GoalSnippetFilter; label: string }> = [
@@ -2386,6 +2489,59 @@ function GoalWorkspace({
       .catch(() => setExternalSkills([]))
   }, [])
 
+  useEffect(() => {
+    getEvoMapConnection()
+      .then((result) => setEvomapConnectionMode(result.connection?.mode ?? 'unknown'))
+      .catch(() => setEvomapConnectionMode('unknown'))
+  }, [])
+
+  // When re-entering the workspace with a persisted receipt run, reload its
+  // latest step states so the receipt stream reflects real backend progress
+  // instead of the static template.
+  useEffect(() => {
+    if (!receiptRunRecordId) return
+    let cancelled = false
+    getReceiptRun(receiptRunRecordId)
+      .then(({ run }) => { if (!cancelled) setRunState(run) })
+      .catch(() => { /* run may have been pruned; fall back to template */ })
+    return () => { cancelled = true }
+  }, [receiptRunRecordId])
+
+  // Subscribe to the global evolution SSE stream and refresh the current run
+  // whenever a receipt_run.* event for it arrives. This makes the receipt panel
+  // update in real time as the backend advances each step (pending -> running ->
+  // done / blocked), without the user re-clicking anything. Events that target a
+  // different run (or non-receipt events) are ignored.
+  useEffect(() => {
+    if (!receiptRunRecordId) return
+    if (!('EventSource' in window)) return
+    let cancelled = false
+    const source = new EventSource(evolutionEventsStreamUrl(40))
+    const refresh = () => {
+      getReceiptRun(receiptRunRecordId)
+        .then(({ run }) => { if (!cancelled) setRunState(run) })
+        .catch(() => { /* ignore transient fetch errors */ })
+    }
+    source.addEventListener('evolution.event', (message) => {
+      if (cancelled) return
+      try {
+        const event = JSON.parse((message as MessageEvent).data)
+        const type = typeof event?.type === 'string' ? event.type : ''
+        const evidence = (event?.evidence && typeof event.evidence === 'object') ? event.evidence : {}
+        const eventRunId = typeof evidence.runId === 'string' ? evidence.runId : event?.subjectId
+        if (type.startsWith('receipt_run.') && eventRunId === receiptRunRecordId) {
+          refresh()
+        }
+      } catch {
+        /* malformed event payload; ignore */
+      }
+    })
+    return () => {
+      cancelled = true
+      source.close()
+    }
+  }, [receiptRunRecordId])
+
   const callableExternalSkills = isExternalAgentKind(externalKind)
     ? externalSkills.filter((skill) => skill.kind === externalKind)
     : []
@@ -2401,43 +2557,84 @@ function GoalWorkspace({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [goal.name, goal.workspace.title])
 
-  useEffect(() => {
-    if (receiptRun === 0 || visibleDone >= doneTotal) return
-    const timer = window.setTimeout(() => {
-      setVisibleDone((count) => Math.min(doneTotal, count + 1))
-    }, 420)
-    return () => window.clearTimeout(timer)
-  }, [receiptRun, visibleDone, doneTotal])
+  // Build backend steps from the static template: "done=true" template rows
+  // become auto-runnable steps (we bind the first one to an evomap search so the
+  // receipt stream shows a real tool call), and "done=false" rows become manual
+  // steps that block for user confirmation.
+  const buildReceiptRunSteps = () => templateTasks.map((task, index) => {
+    if (task.done) {
+      // First auto-task binds to an EvoMap search so the run produces a real
+      // referenced recipe instead of a no-op transition.
+      if (index === 0) {
+        return {
+          title: task.title,
+          tool: { kind: 'evomap' as const, input: { query: `${goal.name} ${goal.workspace.title}`, limit: 3 } },
+        }
+      }
+      return { title: task.title }
+    }
+    return { title: task.title, tool: { kind: 'manual' as const, input: {} } }
+  })
 
-  useEffect(() => {
-    if (!receiptStarted || receiptRun === 0 || visibleDone !== doneTotal || announcedRun === receiptRun) return
-    const finished = receipt.filter((task) => task.done).map((task) => task.title)
-    const timer = window.setTimeout(() => {
-      setMessages((current) => [
-        ...current,
-        {
-          from: 'them',
-          text: `我已完成小票里 ${doneTotal} 项可自动处理内容。未点亮的部分需要你确认或补充，我先把可用结果放到对话里。`,
-          time: '现在',
-          attached: finished.slice(0, 3),
-        },
-      ])
-      setContextCache((cache) => [
-        ...cache,
-        `补一版完成：${finished.join('；')}`,
-      ].slice(-10))
-      setAnnouncedRun(receiptRun)
-      setSkillSaved(false)
-    }, 0)
-    return () => window.clearTimeout(timer)
-  }, [announcedRun, doneTotal, receipt, receiptRun, receiptStarted, visibleDone])
-
-  const runReceipt = () => {
+  const runReceipt = async () => {
+    if (receiptAdvancing) return
     setReceiptStarted(true)
-    setVisibleDone(0)
-    setReceiptRun((run) => run + 1)
     setSkillSaved(false)
     setSavedSkill(null)
+    setReceiptAdvancing(true)
+    try {
+      const { run } = await createReceiptRun({
+        goalName: goal.name,
+        title: `${goal.workspace.title} · EvoPi 补一版`,
+        evomapSearchQuery: `${goal.name} ${goal.workspace.title}`,
+        referencedEvoMapIds,
+        autoAdvance: true,
+        steps: buildReceiptRunSteps(),
+      })
+      setRunState(run)
+      setReceiptRunRecordId(run.id)
+      const finished = (run.steps ?? [])
+        .filter((step) => step.status === 'done')
+        .map((step) => step.outputSummary || step.title)
+      if (finished.length) {
+        setMessages((current) => [
+          ...current,
+          {
+            from: 'them',
+            text: `我已完成 ${finished.length} 项可自动处理内容，未点亮的部分等你确认。${(run.steps ?? []).some((step) => step.status === 'blocked') ? '有一项需要你拍板，我已停在那里。' : ''}`,
+            time: '现在',
+            attached: finished.slice(0, 3),
+          },
+        ])
+        setContextCache((cache) => [...cache, `补一版完成：${finished.join('；')}`].slice(-10))
+      }
+    } catch (error) {
+      setMessages((current) => [
+        ...current,
+        { from: 'them', text: `补一版失败：${formatApiError(error)}`, time: '现在' },
+      ])
+    } finally {
+      setReceiptAdvancing(false)
+    }
+  }
+
+  // Confirm a blocked (manual) step and let the backend resume the run.
+  const confirmBlockedStep = async (stepId: string) => {
+    if (!receiptRunRecordId) return
+    setReceiptAdvancing(true)
+    try {
+      const { run } = await confirmReceiptStep(receiptRunRecordId, stepId, {
+        outputSummary: '用户已确认。',
+      })
+      setRunState(run)
+    } catch (error) {
+      setMessages((current) => [
+        ...current,
+        { from: 'them', text: `确认失败：${formatApiError(error)}`, time: '现在' },
+      ])
+    } finally {
+      setReceiptAdvancing(false)
+    }
   }
 
   const insertSnippet = (snippet: GoalSnippet) => {
@@ -2780,6 +2977,54 @@ function GoalWorkspace({
     }
   }
 
+  const [livePublishConfirm, setLivePublishConfirm] = useState(false)
+  const livePublish = async () => {
+    if (!savedSkill) return
+    if (!livePublishConfirm) {
+      setLivePublishConfirm(true)
+      setMessages((m) => [
+        ...m,
+        {
+          from: 'them',
+          text: '⚠️ 即将向 EvoMap 真实价值池发布（live 模式，不可逆）。再次点击「确认 live 发布」继续，或点击取消。',
+          time: '现在',
+        },
+      ])
+      return
+    }
+    setLivePublishConfirm(false)
+    setSkillSyncState('publishing')
+    try {
+      const { skill } = await testPublishEvoMapRecipe(savedSkill.id, { confirmLivePublish: true })
+      setSavedSkill(skill)
+      setSkillSyncState('idle')
+      setMessages((m) => [
+        ...m,
+        {
+          from: 'them',
+          text: `✅ EvoMap live publish 已完成：${skill.recipeLink?.evomapRecipeId ?? skill.name}。已进入真实价值池，正在同步 reuse graph。`,
+          time: '现在',
+          attached: [skill.name],
+        },
+      ])
+      await syncPublishedReuse(skill, { silentStart: true })
+    } catch (error) {
+      setSkillSyncState('error')
+      setMessages((m) => [
+        ...m,
+        {
+          from: 'them',
+          text: `EvoMap live publish 失败：${formatApiError(error)}`,
+          time: '现在',
+        },
+      ])
+    }
+  }
+
+  const cancelLivePublish = () => {
+    setLivePublishConfirm(false)
+  }
+
   const syncPublishedReuse = async (skillOverride?: Skill, options: { silentStart?: boolean } = {}) => {
     const skill = skillOverride ?? savedSkill
     if (!skill?.recipeLink?.evomapRecipeId) return
@@ -2872,9 +3117,11 @@ function GoalWorkspace({
     }
   }
 
-  const autoTasks = receipt.filter((task) => task.done)
-  const userTasks = receipt.filter((task) => !task.done)
-  const receiptProgress = receipt.length ? Math.round((visibleDone / receipt.length) * 100) : 0
+  const autoTasks = receiptRows.filter((row) => row.status !== 'blocked' && row.status !== 'pending')
+  const userTasks = receiptRows.filter((row) => row.status === 'blocked' || row.status === 'pending')
+  const receiptProgress = receiptRows.length
+    ? Math.round((doneTotal / receiptRows.length) * 100)
+    : 0
   const focusUserInput = () => {
     if (!input.trim()) {
       const taskTitle = userTasks[0]?.title ?? goal.workspace.title
@@ -2938,24 +3185,54 @@ function GoalWorkspace({
       <section className="ws-receipt-panel ws-receipt-panel-compact">
         <div className="ws-receipt-copy">
           <span className="tag mint">EvoPi 代办进度</span>
-          <strong>{receiptStarted ? `已完成 ${visibleDone} / ${autoTasks.length} 项` : `${autoTasks.length} 项可自动处理`}</strong>
-          <p>{userTasks.length ? `${userTasks.length} 项等你确认后继续。` : '当前小票没有阻塞项。'}</p>
-        </div>
-        <div className="ws-receipt-actions">
-          <span>{receiptStarted ? `${visibleDone} / ${receipt.length} 项` : '未开始'}</span>
+          <strong>{receiptStarted ? `已完成 ${doneTotal} / ${receiptRows.length} 项` : `${autoTasks.length} 项可自动处理`}</strong>
+          <p>
+            {receiptStarted
+              ? `${doneTotal} / ${receiptRows.length} 项 · ${userTasks.length ? `${userTasks.length} 项等你确认` : '无阻塞项'}${runState?.status === 'completed' ? ' · 小票已完成' : ''}${receiptAdvancing ? ' · 执行中…' : ''}`
+              : userTasks.length ? `${userTasks.length} 项等你确认后继续` : '当前小票没有阻塞项'}
+          </p>
         </div>
         <div className="ws-progress" aria-label="EvoPi 代办进度">
           <span style={{ width: `${receiptProgress}%` }} />
         </div>
         <div className="ws-receipt">
-          {receipt.map((task, index) => {
-            const doneOrder = task.done ? receipt.slice(0, index + 1).filter((item) => item.done).length : 0
-            const active = receiptStarted && task.done && doneOrder <= visibleDone
+          {receiptRows.map((row, index) => {
+            const stateClass = row.status === 'done'
+              ? 'done'
+              : row.status === 'running'
+                ? 'running'
+                : row.status === 'failed'
+                  ? 'failed'
+                  : row.status === 'blocked'
+                    ? 'blocked'
+                    : 'pending'
+            const label = row.status === 'done'
+              ? 'EvoPi 已完成'
+              : row.status === 'running'
+                ? '正在执行…'
+                : row.status === 'failed'
+                  ? '执行失败'
+                  : row.status === 'blocked'
+                    ? '等你确认'
+                    : 'EvoPi 可做'
+            const marker = row.status === 'done' ? '✓' : row.status === 'failed' ? '✕' : row.status === 'running' ? '…' : index + 1
             return (
-              <div className={`ws-task ${active ? 'done' : task.done ? 'queued' : 'pending'}`} key={task.title}>
-                <span>{active ? '✓' : index + 1}</span>
-                <strong>{task.title}</strong>
-                <em>{active ? 'EvoPi 已完成' : task.done ? 'EvoPi 可做' : '等你确认'}</em>
+              <div className={`ws-task ${stateClass}`} key={row.id}>
+                <span>{marker}</span>
+                <strong>{row.title}</strong>
+                <em>{label}</em>
+                {row.outputSummary && row.status !== 'pending' && (
+                  <small className="ws-task-output">{row.outputSummary}</small>
+                )}
+                {row.status === 'blocked' && (
+                  <button
+                    className="ghost-btn xs"
+                    disabled={receiptAdvancing}
+                    onClick={() => void confirmBlockedStep(row.id)}
+                  >
+                    <CuteIcon name="soft-shield-check" />确认并继续
+                  </button>
+                )}
               </div>
             )
           })}
@@ -3134,6 +3411,28 @@ function GoalWorkspace({
                 <button className="primary-btn sm" disabled={skillSyncState === 'publishing'} onClick={() => void testPublish()}>
                   <CuteIcon name="soft-sparkle-edit" />{savedSkill.status === 'test_published' ? '已测试发布' : '测试发布'}
                 </button>
+                {evomapConnectionMode === 'live' && (
+                  <>
+                    <button
+                      className={livePublishConfirm ? 'primary-btn sm warn' : 'ghost-btn sm warn'}
+                      disabled={skillSyncState === 'publishing' || savedSkill.status === 'published'}
+                      onClick={() => void livePublish()}
+                      title="将真实发布到 EvoMap 价值池（不可逆）"
+                    >
+                      <CuteIcon name="soft-success-check" />
+                      {savedSkill.status === 'published'
+                        ? '已 Live 发布'
+                        : livePublishConfirm
+                          ? '确认 live 发布'
+                          : 'Live 发布'}
+                    </button>
+                    {livePublishConfirm && (
+                      <button className="ghost-btn sm" onClick={cancelLivePublish}>
+                        取消
+                      </button>
+                    )}
+                  </>
+                )}
                 {savedSkill.recipeLink && (
                   <button className="ghost-btn sm" disabled={skillSyncState === 'reuse'} onClick={() => void syncPublishedReuse()}>
                     <CuteIcon name="soft-refresh-loop" />
@@ -5472,10 +5771,10 @@ function PiClubPage({ onExit }: { onExit: () => void }) {
                   <div className="club-room-stats">
                     {community.members} 位成员 · {community.piAgents} 个 EvoPi
                   </div>
+                  <button className="ghost-btn sm" onClick={() => enterCommunity(community.id)}>
+                    <CuteIcon name={community.joined ? 'soft-success-check' : 'soft-add-plus'} />{community.joined ? '进入' : '加入'}
+                  </button>
                 </div>
-                <button className="ghost-btn sm" onClick={() => enterCommunity(community.id)}>
-                  <CuteIcon name={community.joined ? 'soft-success-check' : 'soft-add-plus'} />{community.joined ? '进入' : '加入'}
-                </button>
               </article>
             ))}
           </div>
@@ -6087,14 +6386,6 @@ function SkillCard({
         <div className="skill-manage-panel">
           <div className="skill-manage-grid">
             <article>
-              <span>触发条件</span>
-              <strong>{skill.trigger}</strong>
-            </article>
-            <article>
-              <span>可用范围</span>
-              <strong>{skill.scope}</strong>
-            </article>
-            <article>
               <span>运行方式</span>
               <strong>{confirmBeforeRun ? '执行前先让你确认' : '低风险任务自动处理'}</strong>
             </article>
@@ -6343,9 +6634,23 @@ function EvolutionPage() {
             <strong>{stats.reuseEvents}</strong>
             <em>可复用资料与来源</em>
           </article>
+          <article className="evo-hero-density">
+            <span>最近活跃</span>
+            <div className="evo-density-bars" aria-label="最近活跃分布">
+              {densityBars.map((bar) => (
+                <span
+                  aria-label={`${bar.label}: ${bar.count} 条`}
+                  key={bar.key}
+                  style={{ height: `${Math.max(10, Math.round(bar.ratio * 100))}%` }}
+                  title={`${bar.label}: ${bar.count} 条`}
+                />
+              ))}
+            </div>
+            <em>{stats.recent} 条最近 · {events.length} 条总记录</em>
+          </article>
         </div>
         <div className="evo-live-strip evo-live-strip-compact" aria-label="最近操作记录">
-          {recentLiveEvents.length ? recentLiveEvents.map((event) => (
+          {recentLiveEvents.length ? recentLiveEvents.slice(0, 3).map((event) => (
             <div className={`evo-live-strip-item ${freshEventIds.includes(event.id) ? 'is-live' : ''}`} key={event.id}>
               <CuteIcon name={eventIcon(event.type)} />
               <div>
@@ -6362,22 +6667,6 @@ function EvolutionPage() {
               </div>
             </div>
           )}
-        </div>
-        <div className="evo-density-panel" aria-label="最近活跃记录">
-          <div>
-            <strong>最近活跃</strong>
-            <span>{stats.recent} 条最近 30 分钟 · {events.length} 条总记录</span>
-          </div>
-          <div className="evo-density-bars">
-            {densityBars.map((bar) => (
-              <span
-                aria-label={`${bar.label}: ${bar.count} 条`}
-                key={bar.key}
-                style={{ height: `${Math.max(10, Math.round(bar.ratio * 100))}%` }}
-                title={`${bar.label}: ${bar.count} 条`}
-              />
-            ))}
-          </div>
         </div>
       </section>
 
@@ -6435,17 +6724,6 @@ function EvolutionPage() {
                 <small>{filteredEvents.length} / {events.length} 条记录</small>
               </div>
               <div className="evo-console-tools">
-                <div className="evo-filter-tabs">
-                  {evolutionLanes.map((lane) => (
-                    <button
-                      className={laneFilter === lane.key ? 'active' : ''}
-                      key={lane.key}
-                      onClick={() => setLaneFilter(lane.key)}
-                    >
-                      {lane.label}
-                    </button>
-                  ))}
-                </div>
                 <button className="ghost-btn sm" disabled={!filteredEvents.length} onClick={toggleFilteredExpansion}>
                   <CuteIcon name="soft-log-lines" />{allFilteredExpanded ? '收起全部' : '展开全部'}
                 </button>
@@ -7857,17 +8135,280 @@ function EvoMapPrivacyPanel() {
           {message || 'EvoMap 状态读取失败'}
         </div>
       )}
+
+      {connected && <EvoMapWebhookManagerPanel />}
+      {connected && <EvoMapMonitoringPanel />}
     </section>
   )
 }
 
-function PrivacyPage({ initialLevel = 2 }: { initialLevel?: number }) {
+function EvoMapWebhookManagerPanel() {
+  const [registrations, setRegistrations] = useState<EvoMapWebhookRegistration[]>([])
+  const [url, setUrl] = useState('')
+  const [events, setEvents] = useState<string>('recipe.created,recipe.published')
+  const [status, setStatus] = useState<'idle' | 'loading' | 'error'>('idle')
+  const [message, setMessage] = useState('')
+  const [secretReveal, setSecretReveal] = useState<{ id: string; secret: string } | null>(null)
+  const registerAct = useActionState()
+
+  const refresh = async () => {
+    setStatus('loading')
+    try {
+      const result = await listEvoMapWebhooks()
+      setRegistrations(result.registrations ?? [])
+      setStatus('idle')
+    } catch (error) {
+      setMessage(formatApiError(error))
+      setStatus('error')
+    }
+  }
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => { void refresh() }, 0)
+    return () => window.clearTimeout(timer)
+  }, [])
+
+  const register = () => {
+    const trimmed = url.trim()
+    if (!trimmed) {
+      setMessage('请填写 HTTPS webhook URL（EvoMap 拒绝 localhost，需用隧道，例如 cloudflared）。')
+      setStatus('error')
+      return
+    }
+    if (!/^https:\/\//i.test(trimmed)) {
+      setMessage('webhook URL 必须是 https://（EvoMap 做 SSRF 校验）。')
+      setStatus('error')
+      return
+    }
+    const eventList = events.split(/[,\s]+/).map((e) => e.trim()).filter(Boolean)
+    registerAct.run(async () => {
+      try {
+        const result = await registerEvoMapWebhook({ url: trimmed, events: eventList })
+        setSecretReveal({ id: result.registration.id, secret: result.webhook.secret })
+        setUrl('')
+        await refresh()
+      } catch (error) {
+        setMessage(formatApiError(error))
+        setStatus('error')
+      }
+    }, { duration: 400 })
+  }
+
+  const ping = (webhookId: string) => {
+    pingEvoMapWebhook(webhookId)
+      .then(() => setMessage(`已向 webhook ${webhookId} 发送 ping，等待回执。`))
+      .catch((error) => { setMessage(formatApiError(error)); setStatus('error') })
+  }
+
+  const remove = (webhookId: string) => {
+    deleteEvoMapWebhook(webhookId)
+      .then(() => { setMessage(`已删除 webhook ${webhookId}。`); void refresh() })
+      .catch((error) => { setMessage(formatApiError(error)); setStatus('error') })
+  }
+
+  return (
+    <div className="evomap-webhook-manager">
+      <div className="setting-subhead">
+        <CuteIcon name="soft-log-lines" />
+        <strong>Webhook 管理</strong>
+        <span>在 EvoMap 注册回调，拿到真实 whsec_... 才能验签 live 事件</span>
+      </div>
+
+      <div className="evomap-webhook-form">
+        <input
+          className="text-input"
+          placeholder="https://<tunnel>.trycloudflare.com/api/webhooks/evomap"
+          value={url}
+          onChange={(e) => setUrl(e.target.value)}
+        />
+        <input
+          className="text-input evomap-events-input"
+          placeholder="recipe.created,recipe.published"
+          value={events}
+          onChange={(e) => setEvents(e.target.value)}
+        />
+        <button className="primary-btn sm" onClick={register} disabled={registerAct.status === 'loading'}>
+          <CuteIcon name="soft-import-data" />{registerAct.status === 'loading' ? '注册中' : '注册 webhook'}
+        </button>
+        <button className="ghost-btn sm" onClick={() => void refresh()} disabled={status === 'loading'}>
+          <CuteIcon name="soft-refresh-loop" />刷新
+        </button>
+      </div>
+
+      {secretReveal && (
+        <div className="inline-hint warn">
+          <CuteIcon name="soft-warning-triangle" />
+          <span>
+            新 webhook secret（仅显示一次，已加密保存到后端）：<code>{secretReveal.secret}</code>
+          </span>
+          <button className="ghost-btn xs" onClick={() => setSecretReveal(null)}>已记录</button>
+        </div>
+      )}
+
+      <div className="evomap-webhook-list">
+        {registrations.length === 0 ? (
+          <p className="muted">尚未在 EvoMap 注册 webhook。注册后 live 事件才能验签回流。</p>
+        ) : (
+          registrations.map((reg) => (
+            <article className="evomap-webhook-row" key={reg.id}>
+              <div>
+                <strong>{reg.id}</strong>
+                <span className="muted">{reg.url}</span>
+                <div className="evomap-webhook-events">
+                  {(reg.events ?? []).map((event) => <span className="tag" key={event}>{event}</span>)}
+                  {reg.active === false && <span className="tag warn">inactive</span>}
+                </div>
+              </div>
+              <div className="evomap-webhook-actions">
+                <button className="ghost-btn xs" onClick={() => ping(reg.id)}><CuteIcon name="soft-sparkle-twinkle" />Ping</button>
+                <button className="ghost-btn xs warn" onClick={() => remove(reg.id)}><CuteIcon name="soft-lock-keyhole" />删除</button>
+              </div>
+            </article>
+          ))
+        )}
+      </div>
+
+      {(message || status === 'error') && (
+        <div className="inline-hint">
+          <CuteIcon name={status === 'error' ? 'soft-warning-triangle' : 'soft-success-check'} />
+          {message}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function EvoMapMonitoringPanel() {
+  const [tokenStatus, setTokenStatus] = useState<EvoMapTokenStatus | null>(null)
+  const [usage, setUsage] = useState<unknown>(null)
+  const [deliveries, setDeliveries] = useState<Array<{ id: string; type?: string; livemode?: boolean; recipeId?: string; receivedAt: string; signatureScheme?: string }>>([])
+  const [status, setStatus] = useState<'idle' | 'loading' | 'error'>('idle')
+  const [message, setMessage] = useState('')
+  const [nowSec, setNowSec] = useState(() => Math.floor(Date.now() / 1000))
+
+  const refresh = async () => {
+    setNowSec(Math.floor(Date.now() / 1000))
+    setStatus('loading')
+    setMessage('')
+    try {
+      const [token, usageResult, deliv] = await Promise.all([
+        getEvoMapTokenStatus().catch((error) => { setMessage(formatApiError(error)); return null }),
+        getEvoMapUsage().catch((error) => { setMessage(formatApiError(error)); return null }),
+        listLocalWebhookDeliveries(30).catch((error) => { setMessage(formatApiError(error)); return null }),
+      ])
+      if (token) setTokenStatus(token)
+      if (usageResult) setUsage(usageResult.usage)
+      if (deliv) setDeliveries(deliv.deliveries ?? [])
+      setStatus('idle')
+    } catch (error) {
+      setMessage(formatApiError(error))
+      setStatus('error')
+    }
+  }
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => { void refresh() }, 0)
+    return () => window.clearTimeout(timer)
+  }, [])
+
+  const introspection = tokenStatus?.introspection
+  const expiresInSec = introspection?.exp ? introspection.exp - nowSec : undefined
+
+  return (
+    <div className="evomap-monitoring">
+      <div className="setting-subhead">
+        <CuteIcon name="soft-database-stack" />
+        <strong>监控与状态</strong>
+        <span>token 内省、用量、最近 webhook delivery</span>
+        <button className="ghost-btn xs" onClick={() => void refresh()} disabled={status === 'loading'}>
+          <CuteIcon name="soft-refresh-loop" />{status === 'loading' ? '刷新中' : '刷新'}
+        </button>
+      </div>
+
+      <div className="evomap-monitor-grid">
+        <article className="evomap-monitor-card">
+          <strong>Token 内省</strong>
+          {!introspection ? (
+            <span className="muted">未连接或查询失败</span>
+          ) : (
+            <>
+              <span className={`tag ${introspection.active ? 'mint' : 'warn'}`}>{introspection.active ? 'active' : 'inactive'}</span>
+              {expiresInSec !== undefined && (
+                <span className="muted">剩余 ≈ {Math.max(0, Math.floor(expiresInSec / 60))} 分钟</span>
+              )}
+              {introspection.scope && (
+                <div className="evomap-scope-list">
+                  {introspection.scope.split(/\s+/).filter(Boolean).map((s) => <span className="tag" key={s}>{s}</span>)}
+                </div>
+              )}
+              {introspection.client_id && <span className="muted">client {introspection.client_id.slice(0, 18)}…</span>}
+            </>
+          )}
+        </article>
+
+        <article className="evomap-monitor-card">
+          <strong>用量统计</strong>
+          {usage ? (
+            <pre className="evomap-usage-pre">{JSON.stringify(usage, null, 2)}</pre>
+          ) : (
+            <span className="muted">暂无用量数据</span>
+          )}
+        </article>
+      </div>
+
+      <div className="evomap-deliveries">
+        <strong>最近本地 delivery（验签通过）</strong>
+        {deliveries.length === 0 ? (
+          <p className="muted">还没有收到 webhook delivery。</p>
+        ) : (
+          <ul className="evomap-delivery-list">
+            {deliveries.map((d) => (
+              <li key={d.id}>
+                <span className="tag">{d.type ?? 'unknown'}</span>
+                <span className="muted">{shortIdentifier(d.id)}</span>
+                {d.livemode !== undefined && <span className={`tag ${d.livemode ? 'warn' : 'mint'}`}>{d.livemode ? 'live' : 'test'}</span>}
+                {d.recipeId && <span className="muted">{shortIdentifier(d.recipeId)}</span>}
+                <span className="muted">{formatEvolutionTime(d.receivedAt)}</span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+
+      {message && (
+        <div className="inline-hint">
+          <CuteIcon name={status === 'error' ? 'soft-warning-triangle' : 'soft-success-check'} />
+          {message}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function PrivacyPage({ initialLevel = 2, onReplayTutorial, preferences, onResetTutorial }: {
+  initialLevel?: number
+  onReplayTutorial?: () => void
+  preferences?: UserPreferences | null
+  onResetTutorial?: () => void
+}) {
   const [level, setLevel] = useState(initialLevel)
   // 一键暂停：可切换的会话内状态
   const [paused, setPaused] = useState(false)
   const pauseAct = useActionState()
   const pauseHint = useInlineHint(2600)
   const logHint = useInlineHint(2400)
+
+  // When the onboarding-derived depth loads (asynchronously from the backend) or
+  // changes, sync the collaboration-level slider so the default reflects the
+  // user's actual preference instead of staying at the mount-time default.
+  // We only auto-sync while the user hasn't manually overridden in this session
+  // (tracked via userTouchedLevel).
+  const [userTouchedLevel, setUserTouchedLevel] = useState(false)
+  useEffect(() => {
+    if (!userTouchedLevel && typeof initialLevel === 'number') {
+      setLevel(initialLevel)
+    }
+  }, [initialLevel, userTouchedLevel])
 
   const togglePause = () =>
     pauseAct.run(
@@ -7888,12 +8429,12 @@ function PrivacyPage({ initialLevel = 2 }: { initialLevel?: number }) {
             <span>决定 EvoPi 多主动。当前：<b>{collaborationLevels[level].label}模式</b></span>
           </div>
         </div>
-        <div className="level-control">
+        <div className="effectiveLevel-control">
           {collaborationLevels.map((lv, i) => (
             <button
               key={lv.code}
               className={level === i ? 'active' : ''}
-              onClick={() => setLevel(i)}
+              onClick={() => { setUserTouchedLevel(true); setLevel(i) }}
               title={lv.desc}
             >
               <span>{lv.code}</span>
@@ -7948,6 +8489,29 @@ function PrivacyPage({ initialLevel = 2 }: { initialLevel?: number }) {
           <CuteIcon name={paused ? 'soft-success-check' : 'soft-warning-triangle'} />
           {pauseHint.hint ?? logHint.hint}
         </div>
+      )}
+      {onReplayTutorial && (
+        <section className="setting-block" data-tutorial="privacy">
+          <div className="setting-head">
+            <CuteIcon name="soft-idea-bulb" />
+            <div>
+              <strong>新手教程与偏好</strong>
+              <span>
+                {preferences?.onboarding?.summary
+                  ? `你的偏好档：${preferences.onboarding.summary.slice(0, 48)}`
+                  : '忘了怎么用？重新看一遍分步引导。'}
+              </span>
+            </div>
+          </div>
+          <button className="ghost-btn lg" onClick={onReplayTutorial}>
+            <CuteIcon name="soft-play-circle" />重新看教程
+          </button>
+          {onResetTutorial && (
+            <button className="ghost-btn lg" onClick={onResetTutorial}>
+              <CuteIcon name="soft-arrow-left" />重置教程（下次登录再弹）
+            </button>
+          )}
+        </section>
       )}
     </div>
   )

@@ -757,8 +757,8 @@ export const integrations: Integration[] = [
     id: 'feishu',
     name: '飞书',
     icon: 'soft-folder-tab',
-    desc: '跳转到飞书文档与会议，快捷键回来',
-    url: 'feishu://',
+    desc: '自建应用接入，收发消息走后端 relay；点击进开发者后台',
+    url: 'https://open.feishu.cn/app',
     shortcut: '⌘ ⇧ F',
     agentSupported: true,
   },
@@ -779,7 +779,7 @@ export const integrations: Integration[] = [
    ============================================================ */
 export type OnboardQuestion = {
   id: string
-  dimension: '算法厌恶' | '信息过载' | '信任' | '协作'
+  dimension: '算法厌恶' | '信息过载' | '信任' | '协作' | '隐私边界'
   title: string
   desc: string
   options: Array<{ label: string; value: number; hint: string }> // value 影响初始介入深度
@@ -828,6 +828,30 @@ export const onboardingQuestions: OnboardQuestion[] = [
       { label: '先给我结论，细节我需要再展开', value: 3, hint: '结论优先' },
       { label: '给步骤，我跟着走', value: 2, hint: '步骤优先' },
       { label: '先解释清楚再操作', value: 1, hint: '解释优先' },
+    ],
+  },
+  {
+    id: 'q5',
+    dimension: '隐私边界',
+    title: '当 EvoPi 需要读取你的数据来帮你时，你的底线是？',
+    desc: '这决定了 EvoPi 默认的数据访问范围，可随时收紧。',
+    options: [
+      { label: '只读我主动给的，绝不主动碰其他', value: 0, hint: '最强隐私' },
+      { label: '可以读本地文件摘要，但不联网', value: 1, hint: '本地优先' },
+      { label: '可以读 + 联网检索，但不存储原文', value: 2, hint: '可用但不留存' },
+      { label: '可以存储整理后的结果', value: 3, hint: '完整能力' },
+    ],
+  },
+  {
+    id: 'q6',
+    dimension: '算法厌恶',
+    title: '如果 EvoPi 的判断和你的直觉冲突，你希望它？',
+    desc: '算法厌恶研究显示，人们反感“被机器纠正”。这决定 EvoPi 如何表达分歧。',
+    options: [
+      { label: '永远顺从我，只在我问时才提建议', value: 0, hint: '完全服从' },
+      { label: '温和提醒一次，我坚持就闭嘴', value: 1, hint: '提醒一次' },
+      { label: '给出理由，最终决定权在我', value: 2, hint: '有理有据' },
+      { label: '坚持它的判断，除非我明确反对', value: 3, hint: '强势建议' },
     ],
   },
 ]

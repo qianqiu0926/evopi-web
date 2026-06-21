@@ -12,7 +12,7 @@ export function Onboarding({
   onFinish,
 }: {
   userName: string
-  onFinish: (result: { depth: number; summary: string }) => void
+  onFinish: (result: { depth: number; summary: string; answers: Record<string, number> }) => void
 }) {
   const [step, setStep] = useState(0)
   const [answers, setAnswers] = useState<Record<string, number>>({})
@@ -28,7 +28,7 @@ export function Onboarding({
     const avg = vals.reduce((s, v) => s + v, 0) / Math.max(1, vals.length)
     const depth = Math.max(0, Math.min(3, Math.round(avg)))
     const summary = buildSummary(answers)
-    onFinish({ depth, summary })
+    onFinish({ depth, summary, answers })
   }
 
   return (
@@ -45,7 +45,7 @@ export function Onboarding({
           <span className="brand-mark">Pi</span>
           <div>
             <strong>欢迎，{userName}</strong>
-            <p>先回答 4 个问题，EvoPi 才能按你的方式配合你。完成后就能领养你的 Pi 伙伴。</p>
+            <p>先回答几个问题，EvoPi 才能按你的方式配合你。完成后就能领养你的 Pi 伙伴。</p>
           </div>
         </div>
 
@@ -95,5 +95,11 @@ function buildSummary(answers: Record<string, number>): string {
   if (a.q2 !== undefined) parts.push(a.q2 >= 3 ? '强化降噪：先给最关键的' : '关键与细节并重')
   if (a.q3 !== undefined) parts.push(a.q3 <= 0 ? '最小读取范围' : '可读日历/应用状态')
   if (a.q4 !== undefined) parts.push(a.q4 >= 3 ? '结论先行' : '步骤/解释优先')
+  if (a.q5 !== undefined) {
+    parts.push(a.q5 <= 0 ? '最强隐私：只读主动给的' : a.q5 <= 1 ? '本地优先，不联网' : a.q5 <= 2 ? '可联网但不留存原文' : '可存储整理结果')
+  }
+  if (a.q6 !== undefined) {
+    parts.push(a.q6 <= 0 ? '完全服从我的判断' : a.q6 <= 1 ? '分歧提醒一次就停' : a.q6 <= 2 ? '有理有据，我定夺' : '会坚持它的判断')
+  }
   return parts.join('；')
 }
