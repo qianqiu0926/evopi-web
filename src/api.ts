@@ -166,6 +166,47 @@ export type ExternalAgentConnection = {
   skills: ExternalAgentSkill[]
 }
 
+export type SchoolSession = {
+  id: string
+  status: 'qr_pending' | 'connected' | 'expired'
+  manualCode: string
+  qrDataUrl: string
+  expiresInSec: number
+  createdAt: string
+  displayName?: string
+}
+
+export type SchoolCourse = {
+  id: string
+  title: string
+  day: string
+  date: string
+  start: string
+  end: string
+  location: string
+  teacher: string
+  type: 'course' | 'lab' | 'sport'
+  color: string
+}
+
+export type SchoolCalendarEvent = {
+  id: string
+  title: string
+  date: string
+  time: string
+  location: string
+  source: 'JWXT' | 'YKT' | 'Calendar'
+}
+
+export type SchoolSchedule = {
+  generatedBy: 'minimax' | 'local'
+  weekLabel: string
+  courses: SchoolCourse[]
+  events: SchoolCalendarEvent[]
+  reminders: Array<{ id: string; title: string; due: string; course?: string }>
+  summary: string
+}
+
 export type ExternalAgentDiscovery = Omit<ExternalAgentConnection, 'id' | 'status'> & {
   detected: boolean
   warnings: string[]
@@ -878,6 +919,27 @@ export async function callExternalAgent(input: {
   timeoutSec?: number
 }) {
   return api<{ result: ExternalAgentCallResult; operation: ExternalAgentOperation }>('/api/external-agents/call', {
+    method: 'POST',
+    body: JSON.stringify(input),
+  })
+}
+
+export async function createSchoolSession() {
+  return api<{ session: SchoolSession }>('/api/school/session', {
+    method: 'POST',
+    body: JSON.stringify({}),
+  })
+}
+
+export async function confirmSchoolSession(sessionId: string, input: { manualCode?: string } = {}) {
+  return api<{ session: SchoolSession }>(`/api/school/session/${encodeURIComponent(sessionId)}/confirm`, {
+    method: 'POST',
+    body: JSON.stringify(input),
+  })
+}
+
+export async function importSchoolSchedule(input: { sessionId?: string } = {}) {
+  return api<{ schedule: SchoolSchedule }>('/api/school/schedule/import', {
     method: 'POST',
     body: JSON.stringify(input),
   })

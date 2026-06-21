@@ -79,6 +79,24 @@ async function handle(req, res) {
     return sendJson(res, 200, { personas: piRoomPersonas() })
   }
 
+  if (req.method === 'POST' && pathname === '/api/school/session') {
+    const session = createSchoolSession()
+    return sendJson(res, 200, { session })
+  }
+
+  const schoolSessionConfirmMatch = pathname.match(/^\/api\/school\/session\/([^/]+)\/confirm$/)
+  if (req.method === 'POST' && schoolSessionConfirmMatch) {
+    const input = await readJson(req)
+    const session = confirmSchoolSession(decodeURIComponent(schoolSessionConfirmMatch[1]), input)
+    return sendJson(res, 200, { session })
+  }
+
+  if (req.method === 'POST' && pathname === '/api/school/schedule/import') {
+    const input = await readJson(req).catch(() => ({}))
+    const schedule = await importSchoolSchedule(input)
+    return sendJson(res, 200, { schedule })
+  }
+
   if (req.method === 'GET' && pathname === '/api/piclub') {
     return sendJson(res, 200, piClubState())
   }
@@ -1010,8 +1028,193 @@ function defaultState() {
     skills: [],
     evolutionEvents: [],
     wechatSession: null,
+    schoolSession: null,
+    schoolSchedule: null,
     piClub: defaultPiClubState(),
   }
+}
+
+function createSchoolSession() {
+  const state = readState()
+  const manualCode = String(100000 + Math.floor(Math.random() * 900000))
+  const session = {
+    id: newId('school'),
+    status: 'qr_pending',
+    manualCode,
+    qrDataUrl: schoolQrDataUrl(manualCode),
+    expiresInSec: 300,
+    createdAt: new Date().toISOString(),
+  }
+  state.schoolSession = session
+  writeState(state)
+  addEvolutionEvent({
+    type: 'school.session.created',
+    subjectId: session.id,
+    summary: '学校服务一站通已生成企业微信扫码验证码',
+    evidence: { auth: 'qr_2fa', passwordStored: false },
+  })
+  return session
+}
+
+function confirmSchoolSession(sessionId, input = {}) {
+  const state = readState()
+  const session = state.schoolSession
+  if (!session || session.id !== sessionId) throw new HttpError(404, 'not_found', 'School session not found')
+  if (input.manualCode && String(input.manualCode) !== String(session.manualCode)) {
+    throw new HttpError(400, 'invalid_code', '验证码不匹配')
+  }
+  const connected = {
+    ...session,
+    status: 'connected',
+    displayName: 'SYSU 企业微信',
+    connectedAt: new Date().toISOString(),
+  }
+  state.schoolSession = connected
+  writeState(state)
+  addEvolutionEvent({
+    type: 'school.session.connected',
+    subjectId: sessionId,
+    summary: '学校服务一站通已通过企业微信双因子验证',
+    evidence: { auth: 'wechat_work_qr', passwordStored: false },
+  })
+  return connected
+}
+
+async function importSchoolSchedule(input = {}) {
+  const state = readState()
+  if (input.sessionId && (!state.schoolSession || state.schoolSession.id !== input.sessionId)) {
+    throw new HttpError(404, 'not_found', 'School session not found')
+  }
+  const schedule = await generateSchoolSchedule()
+  state.schoolSchedule = schedule
+  writeState(state)
+  addEvolutionEvent({
+    type: 'school.schedule.imported',
+    subjectId: state.schoolSession?.id ?? 'school-local',
+    summary: `学校课表已导入：${schedule.courses.length} 门课程，${schedule.events.length} 条日程`,
+    evidence: { generatedBy: schedule.generatedBy },
+  })
+  return schedule
+}
+
+async function generateSchoolSchedule() {
+  const fallback = defaultSchoolSchedule('local')
+  if (!minimaxApiKey) return fallback
+  try {
+    const prompt = [
+      '为 EvoPi 的学校服务一站通生成一份结构化校园课表 JSON。',
+      '只输出 JSON，不要 Markdown，不要解释。',
+      '字段必须是：weekLabel, summary, courses, events, reminders。',
+      'courses 每项字段：id,title,day,date,start,end,location,teacher,type,color。',
+      'day 只能使用 周一/周二/周三/周四/今天/周六/周日；date 用 2026-06-DD。',
+      'events 每项字段：id,title,date,time,location,source，source 用 JWXT/YKT/Calendar。',
+      'reminders 每项字段：id,title,due,course。',
+      '生成 6 门课、4 条日程、3 条提醒，内容贴近中大学生场景。',
+    ].join('\n')
+    const raw = await callMiniMax(prompt, null, '', 18_000)
+    const parsed = parseJsonObject(raw)
+    const normalized = normalizeSchoolSchedule(parsed)
+    return { ...normalized, generatedBy: 'minimax' }
+  } catch {
+    return fallback
+  }
+}
+
+function normalizeSchoolSchedule(input) {
+  const fallback = defaultSchoolSchedule('local')
+  if (!input || typeof input !== 'object') return fallback
+  const courses = Array.isArray(input.courses) ? input.courses.map((course, index) => ({
+    id: sanitizePlain(course.id || `course-${index + 1}`),
+    title: sanitizePlain(course.title || fallback.courses[index % fallback.courses.length].title),
+    day: sanitizeSchoolDay(course.day),
+    date: sanitizeDate(course.date, fallback.courses[index % fallback.courses.length].date),
+    start: sanitizeTime(course.start, '09:00'),
+    end: sanitizeTime(course.end, '10:30'),
+    location: sanitizePlain(course.location || '教学楼'),
+    teacher: sanitizePlain(course.teacher || '任课老师'),
+    type: ['course', 'lab', 'sport'].includes(course.type) ? course.type : 'course',
+    color: sanitizeTone(course.color, index),
+  })).slice(0, 8) : fallback.courses
+  const events = Array.isArray(input.events) ? input.events.map((event, index) => ({
+    id: sanitizePlain(event.id || `event-${index + 1}`),
+    title: sanitizePlain(event.title || fallback.events[index % fallback.events.length].title),
+    date: sanitizeDate(event.date, fallback.events[index % fallback.events.length].date),
+    time: sanitizeTime(event.time, '18:00'),
+    location: sanitizePlain(event.location || '校园'),
+    source: ['JWXT', 'YKT', 'Calendar'].includes(event.source) ? event.source : 'Calendar',
+  })).slice(0, 6) : fallback.events
+  const reminders = Array.isArray(input.reminders) ? input.reminders.map((reminder, index) => ({
+    id: sanitizePlain(reminder.id || `reminder-${index + 1}`),
+    title: sanitizePlain(reminder.title || fallback.reminders[index % fallback.reminders.length].title),
+    due: sanitizePlain(reminder.due || fallback.reminders[index % fallback.reminders.length].due),
+    course: sanitizePlain(reminder.course || ''),
+  })).slice(0, 5) : fallback.reminders
+  return {
+    generatedBy: 'local',
+    weekLabel: sanitizePlain(input.weekLabel || fallback.weekLabel),
+    summary: sanitizePlain(input.summary || fallback.summary),
+    courses,
+    events,
+    reminders,
+  }
+}
+
+function defaultSchoolSchedule(generatedBy = 'local') {
+  return {
+    generatedBy,
+    weekLabel: '2026 春季学期 · 第 17 周',
+    summary: '已从教务系统整理本周课表，并把雨课堂 DDL、讲座和训练安排合并成校园日程。',
+    courses: [
+      { id: 'ml', title: '机器学习导论', day: '今天', date: '2026-06-21', start: '09:00', end: '10:30', location: '教学楼 A302', teacher: '陈老师', type: 'course', color: 'mint' },
+      { id: 'product', title: '产品设计专题', day: '今天', date: '2026-06-21', start: '14:30', end: '16:00', location: '东校园实验室', teacher: '黄老师', type: 'lab', color: 'blue' },
+      { id: 'sport', title: '大学体育', day: '今天', date: '2026-06-21', start: '16:20', end: '17:30', location: '体育中心', teacher: '林老师', type: 'sport', color: 'yellow' },
+      { id: 'stats', title: '统计学习', day: '周一', date: '2026-06-17', start: '10:40', end: '12:10', location: '南校园 逸夫楼 204', teacher: '王老师', type: 'course', color: 'pink' },
+      { id: 'writing', title: '学术写作', day: '周三', date: '2026-06-19', start: '19:00', end: '20:30', location: '线上雨课堂', teacher: '李老师', type: 'course', color: 'mint' },
+      { id: 'seminar', title: 'AI 产品组会', day: '周四', date: '2026-06-20', start: '15:00', end: '16:30', location: '学院会议室 B210', teacher: '导师组', type: 'lab', color: 'blue' },
+    ],
+    events: [
+      { id: 'ddl-ykt', title: '雨课堂作业：产品访谈分析', date: '2026-06-21', time: '22:00', location: 'YKT', source: 'YKT' },
+      { id: 'career-talk', title: 'AI 产品经理宣讲会', date: '2026-06-22', time: '19:30', location: '就业指导中心', source: 'Calendar' },
+      { id: 'library-room', title: '图书馆研讨室预约', date: '2026-06-23', time: '14:00', location: 'libic 研讨室 3', source: 'Calendar' },
+      { id: 'leave-check', title: '请假进度确认', date: '2026-06-24', time: '09:30', location: 'JWXT', source: 'JWXT' },
+    ],
+    reminders: [
+      { id: 'r1', title: '课前 20 分钟提醒：机器学习导论', due: '今天 08:40', course: '机器学习导论' },
+      { id: 'r2', title: '提交雨课堂作业', due: '今天 21:30', course: '产品设计专题' },
+      { id: 'r3', title: '带学生证去体育中心', due: '今天 16:00', course: '大学体育' },
+    ],
+  }
+}
+
+function parseJsonObject(text) {
+  const trimmed = String(text ?? '').trim()
+  const direct = trimmed.match(/^\{[\s\S]*\}$/)
+  const block = trimmed.match(/```(?:json)?\s*([\s\S]*?)```/i)
+  const objectText = direct ? direct[0] : block ? block[1] : trimmed.slice(trimmed.indexOf('{'), trimmed.lastIndexOf('}') + 1)
+  return JSON.parse(objectText)
+}
+
+function sanitizeSchoolDay(value) {
+  const allowed = ['周一', '周二', '周三', '周四', '今天', '周六', '周日']
+  return allowed.includes(value) ? value : '今天'
+}
+
+function sanitizeDate(value, fallback) {
+  return /^\d{4}-\d{2}-\d{2}$/.test(String(value ?? '')) ? String(value) : fallback
+}
+
+function sanitizeTime(value, fallback) {
+  return /^\d{1,2}:\d{2}$/.test(String(value ?? '')) ? String(value).padStart(5, '0') : fallback
+}
+
+function sanitizeTone(value, index) {
+  const tones = ['mint', 'blue', 'yellow', 'pink']
+  return tones.includes(value) ? value : tones[index % tones.length]
+}
+
+function schoolQrDataUrl(code) {
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="184" height="184" viewBox="0 0 184 184"><rect width="184" height="184" rx="18" fill="#fff7d6"/><rect x="16" y="16" width="48" height="48" rx="8" fill="#dff5ea" stroke="#30313b" stroke-width="4"/><rect x="120" y="16" width="48" height="48" rx="8" fill="#dfeeff" stroke="#30313b" stroke-width="4"/><rect x="16" y="120" width="48" height="48" rx="8" fill="#ffe3ef" stroke="#30313b" stroke-width="4"/><g fill="#30313b">${Array.from(String(code)).map((digit, index) => `<rect x="${78 + (index % 3) * 18}" y="${78 + Math.floor(index / 3) * 18}" width="${8 + Number(digit) % 8}" height="${8 + (Number(digit) * 2) % 8}" rx="2"/>`).join('')}<rect x="91" y="122" width="18" height="18" rx="3"/><rect x="132" y="91" width="15" height="15" rx="3"/><rect x="112" y="140" width="38" height="10" rx="3"/></g><text x="92" y="176" text-anchor="middle" font-family="monospace" font-size="14" font-weight="700" fill="#30313b">${code}</text></svg>`
+  return `data:image/svg+xml;base64,${Buffer.from(svg).toString('base64')}`
 }
 
 function piClubState() {

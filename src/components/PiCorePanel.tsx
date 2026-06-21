@@ -1,5 +1,7 @@
 import { useMemo, useState } from 'react'
 import { PetSprite } from './PetSprite'
+import { AgentTasks } from './AgentTasks'
+import { Integrations } from './Integrations'
 import { adoptablePets, petAnimations, type PetMood } from '../data'
 
 type PiCoreEmotion = 'calm' | 'happy' | 'waiting'
@@ -101,6 +103,8 @@ export function PiCorePanel({
         </div>
       </section>
 
+      <AgentTasks />
+      <Integrations />
     </section>
   )
 }

@@ -53,6 +53,14 @@
   grid-template-columns: 78px minmax(0, 1fr) 286px;
 }
 
+.app-shell.health-mode.rail-collapsed {
+  grid-template-columns: 244px minmax(0, 1fr);
+}
+
+.app-shell.health-mode.nav-collapsed.rail-collapsed {
+  grid-template-columns: 78px minmax(0, 1fr);
+}
+
 .app-shell.wide-center {
   grid-template-columns: 244px minmax(0, 1fr);
   min-height: 100svh;
@@ -5302,21 +5310,6 @@ body[data-theme="glass"] .mm-core {
   background: color-mix(in srgb, var(--cute-mint) 22%, var(--surface));
 }
 
-.today-capability-section {
-  border: var(--border-w) solid var(--line);
-  border-radius: var(--r-lg);
-  padding: 16px;
-  background: var(--surface);
-  box-shadow: var(--shadow-offset) var(--shadow-offset) 0 var(--shadow-hard);
-}
-
-.today-capability-grid {
-  display: grid;
-  grid-template-columns: minmax(260px, 0.9fr) minmax(320px, 1.1fr) minmax(280px, 0.9fr);
-  gap: 12px;
-  align-items: start;
-}
-
 .today-health-card {
   display: grid;
   gap: 12px;
@@ -5394,37 +5387,6 @@ body[data-theme="glass"] .mm-core {
   font-weight: 900;
 }
 
-.today-capability-grid .agent-tasks,
-.today-capability-grid .integrations {
-  margin-top: 0;
-  padding-top: 0;
-  border-top: 0;
-}
-
-.skill-capability-console {
-  border: var(--border-w) solid var(--line);
-  border-radius: var(--r-lg);
-  padding: 16px;
-  background:
-    linear-gradient(135deg, color-mix(in srgb, var(--cute-mint) 20%, transparent), transparent 58%),
-    var(--surface);
-  box-shadow: var(--shadow-offset) var(--shadow-offset) 0 var(--shadow-hard);
-}
-
-.skill-capability-grid {
-  display: grid;
-  grid-template-columns: minmax(260px, 0.9fr) minmax(320px, 1.1fr) minmax(280px, 0.9fr);
-  gap: 12px;
-  align-items: start;
-}
-
-.skill-capability-grid .agent-tasks,
-.skill-capability-grid .integrations {
-  margin-top: 0;
-  padding-top: 0;
-  border-top: 0;
-}
-
 /* —— PiHealth 身心健康检测 —— */
 .health-coach-page {
   display: grid;
@@ -5436,7 +5398,7 @@ body[data-theme="glass"] .mm-core {
 .health-stage-card,
 .health-coach-card,
 .health-plan-list,
-.health-music-note,
+.health-tutorial-card,
 .pi-health-panel {
   border: var(--border-w) solid var(--line);
   border-radius: var(--r-lg);
@@ -5467,7 +5429,7 @@ body[data-theme="glass"] .mm-core {
 }
 
 .health-stage-head p,
-.health-music-note span {
+.health-tutorial-head span {
   margin: 0;
   color: var(--muted);
   font-size: 13px;
@@ -5656,7 +5618,7 @@ body[data-theme="glass"] .mm-core {
 
 .health-coach-head,
 .pi-health-preview,
-.health-music-note {
+.health-tutorial-head {
   display: grid;
   grid-template-columns: 38px minmax(0, 1fr);
   gap: 10px;
@@ -5664,7 +5626,7 @@ body[data-theme="glass"] .mm-core {
 }
 
 .health-coach-head .cute-icon,
-.health-music-note .cute-icon {
+.health-tutorial-head .cute-icon {
   width: 32px;
   height: 32px;
 }
@@ -5729,28 +5691,65 @@ body[data-theme="glass"] .mm-core {
   box-shadow: 2px 2px 0 var(--line-soft);
 }
 
-.health-music-note {
-  padding: 12px;
+.health-tutorial-card {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
   background:
     linear-gradient(135deg, color-mix(in srgb, var(--cute-mint) 24%, transparent), transparent 58%),
     color-mix(in srgb, var(--cute-blue) 20%, var(--surface));
 }
 
-.health-music-note strong {
+.health-tutorial-head strong {
   display: block;
   margin-bottom: 3px;
   font-size: 13px;
   font-weight: 950;
 }
 
-.health-music-note.status-playing {
-  background:
-    linear-gradient(135deg, color-mix(in srgb, var(--cute-yellow) 34%, transparent), transparent 58%),
-    color-mix(in srgb, var(--cute-mint) 28%, var(--surface));
+.health-tutorial-steps {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
 }
 
-.health-music-note.status-playing .cute-icon {
-  animation: breathe 1.6s ease-in-out infinite;
+.health-tutorial-steps li {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr);
+  gap: 9px;
+  align-items: flex-start;
+  border: 1.5px solid var(--line-soft);
+  border-radius: var(--r-md);
+  padding: 9px;
+  background: rgba(255, 255, 255, 0.76);
+}
+
+.health-tutorial-steps li.active {
+  border-color: var(--line);
+  background: color-mix(in srgb, var(--cute-yellow) 36%, var(--surface));
+  box-shadow: 2px 2px 0 var(--line-soft);
+}
+
+.health-tutorial-steps li > span {
+  display: grid;
+  width: 28px;
+  height: 28px;
+  place-items: center;
+  border: 1.5px solid var(--line);
+  border-radius: 50%;
+  background: var(--surface);
+  font-size: 12px;
+  font-weight: 950;
+}
+
+.health-tutorial-steps p {
+  margin: 0;
+  color: var(--text);
+  font-size: 12.5px;
+  font-weight: 860;
+  line-height: 1.45;
 }
 
 .pi-health-panel {
@@ -5832,7 +5831,6 @@ body[data-theme="glass"] .mm-core {
     grid-template-columns: 1fr;
   }
 
-  .app-shell.health-mode .app-nav,
   .app-shell.health-mode .state-rail {
     display: none;
   }
@@ -9005,14 +9003,6 @@ body[data-theme="glass"] .evo-evidence-chips em {
     position: static;
   }
 
-  .today-capability-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .skill-capability-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
   .app-shell.nav-collapsed {
     grid-template-columns: 78px minmax(0, 1fr);
   }
@@ -9083,14 +9073,6 @@ body[data-theme="glass"] .evo-evidence-chips em {
     padding: 0 10px;
     gap: 6px;
     font-size: 13px;
-  }
-
-  .today-capability-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .skill-capability-grid {
-    grid-template-columns: 1fr;
   }
 
   .today-capability-head strong,
@@ -10170,6 +10152,44 @@ body[data-theme="glass"] .pet-sprite {
     var(--surface);
 }
 
+.school-service-page {
+  display: grid;
+  gap: 14px;
+}
+
+.school-service-main {
+  border-radius: var(--r-lg);
+  padding: 18px;
+}
+
+.school-service-main .school-agent-head {
+  grid-template-columns: 54px minmax(0, 1fr);
+}
+
+.school-service-main .school-agent-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 16px;
+}
+
+.school-service-main .school-agent-icon .cute-icon {
+  width: 28px;
+  height: 28px;
+}
+
+.school-service-main .school-agent-head strong {
+  font-size: 22px;
+}
+
+.school-service-main .school-agent-head span {
+  font-size: 13px;
+}
+
+.school-service-main .school-agent-flow span {
+  min-height: 38px;
+  font-size: 12px;
+}
+
 .school-agent-head {
   display: grid;
   grid-template-columns: 34px minmax(0, 1fr);
@@ -10377,6 +10397,208 @@ body[data-theme="glass"] .pet-sprite {
   color: var(--muted);
   font-size: 10.5px;
   font-weight: 800;
+}
+
+.school-dashboard {
+  display: grid;
+  grid-template-columns: minmax(0, 1.45fr) minmax(300px, 0.8fr);
+  gap: 12px;
+  min-height: 440px;
+}
+
+.school-mini-calendar,
+.school-agenda-panel {
+  display: grid;
+  align-content: start;
+  gap: 12px;
+  min-width: 0;
+  border: var(--border-w) solid var(--line);
+  border-radius: var(--r-md);
+  padding: 12px;
+  background: color-mix(in srgb, var(--surface-soft) 72%, var(--surface));
+  box-shadow: 3px 3px 0 var(--line-soft);
+}
+
+.school-dashboard-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.school-dashboard-head strong,
+.school-dashboard-head span {
+  display: block;
+}
+
+.school-dashboard-head strong {
+  font-size: 15px;
+}
+
+.school-dashboard-head span {
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 11.5px;
+  font-weight: 850;
+  line-height: 1.4;
+}
+
+.school-dashboard-head em {
+  border: 1.5px solid var(--line);
+  border-radius: 999px;
+  padding: 4px 8px;
+  background: var(--cute-yellow);
+  font-size: 10.5px;
+  font-style: normal;
+  font-weight: 950;
+  white-space: nowrap;
+}
+
+.school-week-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.school-week-grid article {
+  display: grid;
+  align-content: start;
+  gap: 7px;
+  min-height: 310px;
+  min-width: 0;
+  border: 1.5px solid var(--line-soft);
+  border-radius: var(--r-sm);
+  padding: 9px;
+  background: var(--surface);
+}
+
+.school-week-grid article.today {
+  border-color: var(--line);
+  background: color-mix(in srgb, var(--cute-mint) 26%, var(--surface));
+  box-shadow: 2px 2px 0 var(--line-soft);
+}
+
+.school-week-grid article > strong,
+.school-week-grid article > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.school-week-grid article > strong {
+  font-size: 12.5px;
+}
+
+.school-week-grid article > span {
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 900;
+}
+
+.school-week-grid article > div {
+  display: grid;
+  gap: 6px;
+}
+
+.school-week-grid article em {
+  color: var(--muted);
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 850;
+}
+
+.school-calendar-pill {
+  display: grid;
+  gap: 2px;
+  width: 100%;
+  min-height: 54px;
+  border: 1.5px solid var(--line);
+  border-radius: var(--r-sm);
+  padding: 7px;
+  color: var(--text);
+  font-size: 10.5px;
+  font-weight: 900;
+  line-height: 1.25;
+  text-align: left;
+  box-shadow: 2px 2px 0 var(--line-soft);
+}
+
+.school-calendar-pill b {
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.school-calendar-pill.tone-mint {
+  background: var(--cute-mint);
+}
+
+.school-calendar-pill.tone-blue {
+  background: var(--cute-blue);
+}
+
+.school-calendar-pill.tone-yellow {
+  background: var(--cute-yellow);
+}
+
+.school-calendar-pill.tone-pink {
+  background: var(--cute-pink);
+}
+
+.school-event-list {
+  display: grid;
+  gap: 7px;
+}
+
+.school-event-list article {
+  display: grid;
+  gap: 3px;
+  border: 1.5px solid var(--line-soft);
+  border-radius: var(--r-sm);
+  padding: 9px;
+  background: var(--surface);
+}
+
+.school-event-list span {
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 950;
+}
+
+.school-event-list strong {
+  font-size: 12.5px;
+}
+
+.school-event-list em {
+  color: var(--muted);
+  font-size: 10.5px;
+  font-style: normal;
+  font-weight: 800;
+  line-height: 1.35;
+}
+
+.school-reminder-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.school-reminder-strip span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1.5px solid var(--line);
+  border-radius: 999px;
+  padding: 7px 10px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 11.5px;
+  font-weight: 900;
+  box-shadow: 2px 2px 0 var(--line-soft);
+}
+
+.school-reminder-strip .cute-icon {
+  width: 15px;
+  height: 15px;
 }
 
 /* 添加表单 */
@@ -11563,6 +11785,14 @@ body[data-theme="glass"] .onboard-card {
   .school-agent-flow,
   .school-schedule-preview {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .school-dashboard {
+    grid-template-columns: 1fr;
+  }
+
+  .school-week-grid {
+    grid-template-columns: repeat(4, minmax(130px, 1fr));
   }
 
   .school-qr-panel {

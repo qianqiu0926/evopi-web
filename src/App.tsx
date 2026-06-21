@@ -38,19 +38,19 @@ import { Tutorial, clearTutorialDoneLocally, loadTutorialDone, markTutorialDoneL
 import { IconThemeSwap } from './components/IconThemeSwap'
 import { TechCursor } from './components/TechCursor'
 import { EvolutionMapCanvas } from './components/EvolutionMapCanvas'
-import { AgentTasks } from './components/AgentTasks'
-import { Integrations } from './components/Integrations'
 import { emitPiCoreSignal, type PiCoreSignalKind } from './piCoreSignals'
 import {
   ApiError,
   attachEvoMapReference,
   bootstrapEvoMapDeveloperEnvironment,
   callExternalAgent,
+  confirmSchoolSession,
   confirmWeChatSession,
   createAppleReminder,
   createEvoMapDraft,
   createPhotoDrop,
   createPiClubPost,
+  createSchoolSession,
   commentPiClubPost,
   confirmReceiptStep,
   createReceiptRun,
@@ -70,6 +70,7 @@ import {
   getSkill,
   getWeChatSession,
   importExternalAgents,
+  importSchoolSchedule,
   getEvoMapConnectUrl,
   getEvoMapConnection,
   getEvoMapTokenStatus,
@@ -132,6 +133,9 @@ import {
   type PiClubPost,
   type PiClubState,
   type PiRoomPersona,
+  type SchoolCourse,
+  type SchoolSchedule,
+  type SchoolSession,
   type Skill,
   type UserPreferences,
   type WeChatRelayContract,
@@ -141,7 +145,7 @@ import { useActionState, useInlineHint, type ActionStatus } from './hooks/useAct
 /* ============================================================
    类型与基础
    ============================================================ */
-type AppPage = 'launch' | 'today' | 'goals' | 'memory' | 'room' | 'club' | 'skills' | 'evolution' | 'privacy'
+type AppPage = 'launch' | 'today' | 'goals' | 'memory' | 'room' | 'club' | 'skills' | 'school' | 'health' | 'evolution' | 'privacy'
 type Theme = 'cute' | 'notion' | 'glass'
 type PiCoreEmotion = 'calm' | 'happy' | 'waiting'
 type WorkspaceRuntimeKind = ExternalAgentKind | 'evomap-developers'
@@ -554,20 +558,12 @@ function AppShell({
     setPage(key as AppPage)
     setActivePerson(null)
     setActiveGroupRoom(null)
-    if (key !== 'today') setHealthModeActive(false)
+    setHealthModeActive(key === 'health')
     emitPiCoreSignal(key === 'goals' || key === 'club' ? 'work' : 'interaction')
   }
 
-  const openHealthMode = () => {
-    setPage('today')
-    setActivePerson(null)
-    setActiveGroupRoom(null)
-    setHealthModeActive(true)
-    emitPiCoreSignal('interaction', { mood: 'learning', duration: 9000 })
-  }
-
   return (
-    <main className={`app-shell ${inRoomChat ? 'wide-center' : ''} ${healthModeActive && page === 'today' ? 'health-mode' : ''} ${navCollapsed ? 'nav-collapsed' : ''} ${railCollapsed ? 'rail-collapsed' : ''}`}>
+    <main className={`app-shell ${inRoomChat ? 'wide-center' : ''} ${page === 'health' ? 'health-mode' : ''} ${navCollapsed ? 'nav-collapsed' : ''} ${railCollapsed ? 'rail-collapsed' : ''}`}>
       <div className="doodle-bg" aria-hidden="true">
         <span className="blob blob-a" />
         <span className="blob blob-b" />
@@ -673,6 +669,13 @@ function AppShell({
         {page === 'today' && (
           <TodayPage
             goRoom={() => { setActivePerson(null); setActiveGroupRoom(null); setPage('room') }}
+            healthModeActive={false}
+            onHealthModeChange={setHealthModeActive}
+          />
+        )}
+        {page === 'health' && (
+          <TodayPage
+            goRoom={() => { setActivePerson(null); setActiveGroupRoom(null); setPage('room') }}
             healthModeActive={healthModeActive}
             onHealthModeChange={setHealthModeActive}
           />
@@ -696,7 +699,8 @@ function AppShell({
           </div>
         )}
         {page === 'club' && <PiClubPage onExit={() => setPage('today')} />}
-        {page === 'skills' && <div data-tutorial="skills"><SkillsPage onOpenHealth={openHealthMode} /></div>}
+        {page === 'skills' && <div data-tutorial="skills"><SkillsPage /></div>}
+        {page === 'school' && <SchoolServicePage />}
         {page === 'evolution' && <div data-tutorial="evolution"><EvolutionPage /></div>}
         {page === 'privacy' && (
           <PrivacyPage
@@ -723,7 +727,7 @@ function AppShell({
             mood={mood}
             moodIsLive={moodIsLive}
             emotion={piEmotion}
-            healthActive={healthModeActive && page === 'today'}
+            healthActive={page === 'health'}
           />
         </aside>
       )}
@@ -754,6 +758,8 @@ function pageIcon(page: string): CuteIconName {
     room: 'soft-chat-bubble',
     club: 'soft-role-users',
     skills: 'soft-settings-gear',
+    school: 'soft-bookmark-study',
+    health: 'soft-heart-favorite',
     evolution: 'soft-log-lines',
     privacy: 'soft-privacy-eye',
   }
@@ -782,6 +788,9 @@ type HealthCoachPlan = {
   duration: string
   intent: string
   cue: string
+  tutorialTitle: string
+  tutorialSteps: string[]
+  beatCue: string
   frameCue: string
   focusJoints: string
   coachRule: string
@@ -985,6 +994,14 @@ const healthCoachPlans: HealthCoachPlan[] = [
     duration: '约 90 秒',
     intent: '唤醒腿部、腰背和核心，让久坐后的身体重新热起来。',
     cue: '下蹲时膝盖对准脚尖，落地先稳住，再跳起。',
+    tutorialTitle: '轻量波比跳怎么做',
+    tutorialSteps: [
+      '1-2：双脚与肩同宽，屈膝下蹲，双手轻触地面。',
+      '3-4：向后迈或跳到平板，核心收紧，腰背别塌。',
+      '5-6：收回双脚，脚掌轻落地，膝盖对准脚尖。',
+      '7-8：站直或小跳一下，落地轻一点，再进入下一次。',
+    ],
+    beatCue: '我会按 1 到 8 带节拍；膝盖跑偏或腰背塌陷时会马上打断纠正。',
     frameCue: '尽量让头、肩、髋、膝、脚踝都进入画面。',
     focusJoints: '肩、髋、膝、踝、核心稳定和落地节奏',
     coachRule: '重点判断膝盖是否内扣、落地是否稳定、腰背是否塌陷。',
@@ -997,6 +1014,14 @@ const healthCoachPlans: HealthCoachPlan[] = [
     duration: '低强度',
     intent: '放松肩颈和腰背，不追求出汗，只把身体从僵住的状态里带出来。',
     cue: '动作慢一点，肩膀放松，呼吸不要憋住。',
+    tutorialTitle: '30 秒轻松体操怎么做',
+    tutorialSteps: [
+      '1-2：双肩向上提，再慢慢放下，感受肩颈松开。',
+      '3-4：双臂向外打开，肩胛轻轻向后夹，不要耸肩。',
+      '5-6：手臂带动上背左右小幅转动，呼吸保持自然。',
+      '7-8：回到正中，肩膀放松，准备下一轮。',
+    ],
+    beatCue: '我会喊 1、2、3、4、5、6、7、8；看到你耸肩或动作太快会插话提醒。',
     frameCue: '让头、肩、手臂和上半身进入画面就够了。',
     focusJoints: '头颈、肩线、手臂摆动、上背放松程度',
     coachRule: '重点判断肩膀是否耸起、动作是否太急、呼吸是否憋住。',
@@ -1009,6 +1034,14 @@ const healthCoachPlans: HealthCoachPlan[] = [
     duration: '约 45 秒',
     intent: '缓解颈部紧绷和屏幕前前伸姿态。',
     cue: '幅度小一点，不要甩头，感觉到拉伸就好。',
+    tutorialTitle: '肩颈摇头晃脑怎么做',
+    tutorialSteps: [
+      '1-2：头慢慢向左转，眼睛看向左侧，肩膀保持放松。',
+      '3-4：回到中间，轻轻点头，不要猛甩。',
+      '5-6：头慢慢向右转，幅度到舒服的位置就停。',
+      '7-8：回到中间，双肩下沉，做一次自然呼吸。',
+    ],
+    beatCue: '我会带 1 到 8 的慢节拍；如果你甩头、耸肩或下巴前伸，我会立刻打断。',
     frameCue: '只需要头、脖子和双肩清楚入镜，不需要看到膝盖。',
     focusJoints: '头颈角度、双肩高度、下巴前伸、转动幅度',
     coachRule: '重点判断有没有甩头、耸肩、下巴前伸或左右幅度不均。',
@@ -1047,6 +1080,7 @@ function TodayPage({
   const [healthPlanId, setHealthPlanId] = useState<HealthSessionKind>('mobility')
   const [healthPoseStatus, setHealthPoseStatus] = useState<HealthPoseStatus>('idle')
   const [healthCoachText, setHealthCoachText] = useState(defaultHealthCoach)
+  const [healthBeat, setHealthBeat] = useState(0)
   const [healthRepCount, setHealthRepCount] = useState(0)
   const [healthAnalysisAt, setHealthAnalysisAt] = useState('')
   const [healthAudioStatus, setHealthAudioStatus] = useState<HealthAudioStatus>('idle')
@@ -1066,6 +1100,9 @@ function TodayPage({
   const healthMusicRef = useRef<HTMLAudioElement | null>(null)
   const healthAnalyzingRef = useRef(false)
   const latestPoseKeypointsRef = useRef<PoseKeypoint[]>([])
+  const autoHealthStartedRef = useRef(false)
+  const healthBeatRef = useRef(0)
+  const healthFrameMissRef = useRef(0)
   const lastSpokenCoachRef = useRef('')
   const recognitionRef = useRef<BrowserSpeechRecognition | null>(null)
   const speechRunRef = useRef(0)
@@ -1108,6 +1145,10 @@ function TodayPage({
 
   const activeContext = workbenchContexts.find((item) => item.id === activeContextId) ?? workbenchContexts[0]
   const activeHealthPlan = healthCoachPlans.find((plan) => plan.id === healthPlanId) ?? healthCoachPlans[0]
+  const currentHealthStepIndex = Math.min(
+    activeHealthPlan.tutorialSteps.length - 1,
+    Math.max(0, Math.ceil(Math.max(1, healthBeat) / 2) - 1),
+  )
   const videoWindowOpen = cameraStatus === 'on' || cameraStatus === 'requesting'
   const callMood: PetMood = voiceStatus === 'speaking'
     ? 'happy'
@@ -1241,6 +1282,9 @@ function TodayPage({
     setHealthPoseStatus('warming')
     setHealthCoachText(`${activeHealthPlan.frameCue} ${activeHealthPlan.cue}`)
     setHealthRepCount(0)
+    healthBeatRef.current = 0
+    setHealthBeat(0)
+    healthFrameMissRef.current = 0
     pulseLivePetMood('learning', 'interaction', 9000)
     void startHealthMusic()
     if (cameraStatus !== 'on' && cameraStatus !== 'requesting') {
@@ -1250,6 +1294,7 @@ function TodayPage({
 
   const stopHealthMode = () => {
     onHealthModeChange(false)
+    autoHealthStartedRef.current = false
     if (healthTimerRef.current !== null) {
       window.clearInterval(healthTimerRef.current)
       healthTimerRef.current = null
@@ -1260,7 +1305,16 @@ function TodayPage({
     setHealthPoseStatus('idle')
     setHealthCoachText(defaultHealthCoach)
     setHealthAnalysisAt('')
+    healthBeatRef.current = 0
+    setHealthBeat(0)
+    healthFrameMissRef.current = 0
   }
+
+  useEffect(() => {
+    if (!healthModeActive || autoHealthStartedRef.current) return
+    autoHealthStartedRef.current = true
+    void startHealthMode()
+  })
 
   const speakHealthCoach = useCallback(async (value: string) => {
     const clean = value.replace(/\*/g, '').trim()
@@ -1324,31 +1378,54 @@ function TodayPage({
     const rightAnkle = point('right_ankle')
     const shoulderGap = leftShoulder && rightShoulder ? Math.abs(leftShoulder.y - rightShoulder.y) : 0
     const visibleCount = keypoints.filter((item) => (item.score ?? 0) > 0.32).length
+    const nextBeat = () => {
+      const value = (healthBeatRef.current % 8) + 1
+      healthBeatRef.current = value
+      setHealthBeat(value)
+      return value
+    }
+    const beat = nextBeat()
+    const stepIndex = Math.min(plan.tutorialSteps.length - 1, Math.max(0, Math.ceil(beat / 2) - 1))
+    const stepText = plan.tutorialSteps[stepIndex]?.replace(/^\d-\d：/, '') ?? plan.cue
+    const teachingCue = `${beat}，${stepText}`
+    const keepTeaching = (frameHint: string) => {
+      healthFrameMissRef.current += 1
+      if (healthFrameMissRef.current >= 3) return frameHint
+      return teachingCue
+    }
+    const markInFrame = () => {
+      healthFrameMissRef.current = 0
+    }
 
     if (plan.id === 'neck') {
-      if (!nose || !leftShoulder || !rightShoulder) return plan.fallback
+      if (!nose && !leftShoulder && !rightShoulder) return keepTeaching(plan.fallback)
+      if (!leftShoulder || !rightShoulder) return keepTeaching('双肩稍微露出来一点，我继续带你做。')
+      markInFrame()
       if (shoulderGap > 36) return '肩膀有点一高一低，先把双肩放松放平。'
-      return '很好，头颈幅度稳定，继续慢慢转，不要甩头。'
+      return teachingCue
     }
 
     if (plan.id === 'mobility') {
-      if (!leftShoulder || !rightShoulder) return plan.fallback
+      if (!leftShoulder && !rightShoulder) return keepTeaching(plan.fallback)
+      if (!leftShoulder || !rightShoulder) return keepTeaching('把另一侧肩膀也放进画面，我继续带节拍。')
+      markInFrame()
       if (shoulderGap > 42) return '肩线有点歪，先放松肩膀，再慢慢带手臂。'
-      return '节奏不错，肩膀保持放松，呼吸继续跟上。'
+      return teachingCue
     }
 
     const lowerBodyReady = leftHip && rightHip && leftKnee && rightKnee && leftAnkle && rightAnkle
-    if (!lowerBodyReady || visibleCount < 10) return plan.fallback
+    if (!lowerBodyReady || visibleCount < 10) return keepTeaching(plan.fallback)
+    markInFrame()
     const leftKneeDrift = leftHip && leftKnee && leftAnkle ? Math.abs(leftKnee.x - ((leftHip.x + leftAnkle.x) / 2)) : 0
     const rightKneeDrift = rightHip && rightKnee && rightAnkle ? Math.abs(rightKnee.x - ((rightHip.x + rightAnkle.x) / 2)) : 0
     if (Math.max(leftKneeDrift, rightKneeDrift) > 72) return '膝盖有点跑偏，蹲下时让膝盖对准脚尖。'
-    return '这一组很稳，落地继续轻一点，核心别松。'
+    return teachingCue
   }, [])
 
   const applyHealthCoachFeedback = useCallback((value: string, plan: HealthCoachPlan, spoken = true) => {
     const shortReply = value.replace(/\*/g, '').trim().slice(0, 48)
     if (!shortReply) return
-    const positive = /(很好|不错|稳定|标准|继续|很稳|漂亮)/.test(shortReply)
+    const positive = /(很好|不错|稳定|标准|继续|很稳|漂亮|^[1-8]，)/.test(shortReply)
     setHealthCoachText(shortReply)
     setHealthPoseStatus(positive ? 'tracking' : 'adjusting')
     setHealthAnalysisAt(new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' }))
@@ -1375,9 +1452,12 @@ function TodayPage({
           '你是 EvoPi 的身心健康教练，正在根据摄像头单帧做姿态教学。',
           `当前只观察本动作需要的部位：${coachPlan.focusJoints}。`,
           `入镜要求：${coachPlan.frameCue}`,
+          `当前教学步骤：${coachPlan.tutorialSteps.join('；')}`,
+          `当前节拍：${healthBeatRef.current || 1}/8；优先接着这个节拍喊拍或纠正动作。`,
           `判断规则：${coachPlan.coachRule}`,
           '如果动作做得好，请直接鼓励一句，并点出保持哪个动作质量。',
           '如果动作不标准，请只说一个最需要修正的关节或姿态，并给一个马上能执行的小调整。',
+          '如果用户已经入镜，不要重复要求入镜；继续带练或打断纠正。',
           '不要要求用户露出本动作不需要的部位。例如肩颈训练不要要求看到膝盖。',
           '不要诊断疾病，不要输出技术字段，不要提 API。',
           '只回复一句轻松中文，最多 34 个字。语气像身边教练，及时、自然、可执行。',
@@ -1392,7 +1472,7 @@ function TodayPage({
         applyHealthCoachFeedback(shortReply, coachPlan)
       }
     } catch {
-      applyHealthCoachFeedback(coachPlan.fallback, coachPlan)
+      setHealthPoseStatus('tracking')
     } finally {
       healthAnalyzingRef.current = false
     }
@@ -1587,7 +1667,7 @@ function TodayPage({
     }
   }
 
-  const startCamera = async (mode: PiCallMode = piCallMode) => {
+  async function startCamera(mode: PiCallMode = piCallMode) {
     if (!navigator.mediaDevices?.getUserMedia) {
       setCameraStatus('error')
       setCameraError('当前浏览器不支持摄像头调用。')
@@ -1989,6 +2069,9 @@ function TodayPage({
                 onClick={() => {
                   setHealthPlanId(plan.id)
                   setHealthRepCount(0)
+                  setHealthBeat(0)
+                  healthBeatRef.current = 0
+                  healthFrameMissRef.current = 0
                   setHealthCoachText(`${plan.frameCue} ${plan.cue}`)
                   void analyzeHealthFrame(plan)
                 }}
@@ -2000,12 +2083,22 @@ function TodayPage({
             ))}
           </div>
 
-          <div className={`health-music-note status-${healthMusicStatus}`}>
-            <CuteIcon name="soft-waveform-audio" />
-            <div>
-              <strong>身心节律音乐</strong>
-              <span>{healthMusicStatus === 'playing' ? '舒缓轻电子正在陪练，让动作保持稳定节拍。' : healthMusicStatus === 'error' ? '点击训练音乐即可播放，浏览器可能需要一次手动确认。' : 'MiniMax 生成的舒缓节奏轻音乐，适合拉伸和轻量训练。'}</span>
+          <div className="health-tutorial-card">
+            <div className="health-tutorial-head">
+              <CuteIcon name="soft-book-open" />
+              <div>
+                <strong>{activeHealthPlan.tutorialTitle}</strong>
+                <span>{activeHealthPlan.beatCue}</span>
+              </div>
             </div>
+            <ol className="health-tutorial-steps">
+              {activeHealthPlan.tutorialSteps.map((step, index) => (
+                <li className={index === currentHealthStepIndex ? 'active' : ''} key={step}>
+                  <span>{index + 1}</span>
+                  <p>{step.replace(/^\d-\d：/, '')}</p>
+                </li>
+              ))}
+            </ol>
           </div>
         </aside>
       </div>
@@ -2212,40 +2305,6 @@ function TodayPage({
       {sendHint.hint && (
         <div className="inline-hint"><CuteIcon name="soft-success-check" />{sendHint.hint}</div>
       )}
-
-      <section className="today-capability-section">
-        <div className="section-title">
-          <CuteIcon name="soft-sparkle-edit" />
-          <strong>能力</strong>
-          <span>多模态检测、校园事务和自动代理都在这里管理</span>
-        </div>
-
-        <div className="today-capability-grid">
-          <article className={`today-health-card ${healthModeActive ? 'active' : ''}`}>
-            <div className="today-capability-head">
-              <span className="today-capability-icon">
-                <CuteIcon name="soft-heart-favorite" />
-              </span>
-              <div>
-                <strong>{healthModeActive ? '身心健康检测中' : '身心健康检测'}</strong>
-                <span>{healthModeActive ? '摄像头正在辅助观察动作线' : '视频动作检测、语音指导和训练音乐'}</span>
-              </div>
-            </div>
-            <div className="today-capability-metrics">
-              <span>动作追踪</span>
-              <span>轻音乐陪练</span>
-              <span>实时提醒</span>
-            </div>
-            <button className="primary-btn sm" onClick={() => void startHealthMode()} type="button">
-              <CuteIcon name="soft-privacy-eye" />
-              {healthModeActive ? '回到训练画面' : '开始检测'}
-            </button>
-          </article>
-
-          <AgentTasks />
-          <Integrations />
-        </div>
-      </section>
 
       <section className="eve-capture-actions">
         <button className="ghost-btn sm" onClick={captureAsSkill}>
@@ -5960,7 +6019,255 @@ function productStatusLabel(status: PiClubProduct['status']) {
 /* ============================================================
    技能中心 / 进化日志 / 设置
    ============================================================ */
-function SkillsPage({ onOpenHealth }: { onOpenHealth: () => void }) {
+function SchoolServicePage() {
+  const [schoolBound, setSchoolBound] = useState(false)
+  const [schoolStep, setSchoolStep] = useState<'idle' | 'qr' | 'binding' | 'bound' | 'importing' | 'synced'>('idle')
+  const [calendarSynced, setCalendarSynced] = useState(false)
+  const [schoolSession, setSchoolSession] = useState<SchoolSession | null>(null)
+  const [schoolSchedule, setSchoolSchedule] = useState<SchoolSchedule | null>(null)
+  const [schoolError, setSchoolError] = useState('')
+
+  const startSchoolBinding = async () => {
+    emitPiCoreSignal('delegate')
+    setSchoolError('')
+    setSchoolStep('qr')
+    setCalendarSynced(false)
+    try {
+      const result = await createSchoolSession()
+      setSchoolSession(result.session)
+    } catch (error) {
+      setSchoolError(formatApiError(error))
+    }
+  }
+
+  const confirmSchoolBinding = async () => {
+    emitPiCoreSignal('delegate')
+    if (!schoolSession) {
+      setSchoolError('请先生成企业微信扫码验证码。')
+      return
+    }
+    setSchoolError('')
+    setSchoolStep('binding')
+    try {
+      const result = await confirmSchoolSession(schoolSession.id, { manualCode: schoolSession.manualCode })
+      setSchoolSession(result.session)
+      setSchoolBound(true)
+      setSchoolStep('bound')
+    } catch (error) {
+      setSchoolStep('qr')
+      setSchoolError(formatApiError(error))
+    }
+  }
+
+  const importSchedule = async () => {
+    emitPiCoreSignal('delegate')
+    setSchoolError('')
+    setSchoolStep('importing')
+    try {
+      const result = await importSchoolSchedule({ sessionId: schoolSession?.id })
+      setSchoolSchedule(result.schedule)
+      setSchoolStep('synced')
+    } catch (error) {
+      setSchoolStep('bound')
+      setSchoolError(formatApiError(error))
+    }
+  }
+
+  const syncCalendar = () => {
+    emitPiCoreSignal('delegate')
+    setCalendarSynced(true)
+  }
+
+  const courses = schoolSchedule?.courses ?? []
+  const events = schoolSchedule?.events ?? []
+  const todayCourses = courses.filter((course) => course.day === '今天').slice(0, 4)
+  const visibleCourses = todayCourses.length ? todayCourses : courses.slice(0, 4)
+  const weekDays = buildSchoolWeek(courses)
+
+  return (
+    <div className="school-service-page">
+      <section className={`school-agent-card school-service-main ${schoolBound ? 'bound' : ''}`}>
+        <div className="school-agent-head">
+          <span className="school-agent-icon">
+            <CuteIcon name="soft-bookmark-study" />
+          </span>
+          <div>
+            <strong>学校服务一站通</strong>
+            <span>{schoolBound ? '企业微信已绑定 · 可导入课表和同步日历' : '通过企业微信扫码双因子验证，不保存账号密码'}</span>
+          </div>
+        </div>
+
+        <div className="school-agent-flow" aria-label="学校事务接入步骤">
+          <span className={schoolStep !== 'idle' ? 'active' : ''}>扫码验证</span>
+          <span className={schoolBound ? 'active' : ''}>绑定企业微信</span>
+          <span className={schoolStep === 'synced' || calendarSynced ? 'active' : ''}>导入课表</span>
+          <span className={calendarSynced ? 'active' : ''}>加入日历</span>
+        </div>
+
+        {schoolStep === 'qr' && (
+          <div className="school-qr-panel">
+            <div className="school-qr" aria-label="企业微信扫码验证二维码">
+              <span />
+              <span />
+              <span />
+              <i />
+            </div>
+            <div>
+              <strong>企业微信扫码确认</strong>
+              <span>
+                {schoolSession ? `验证码 ${schoolSession.manualCode} · ${schoolSession.expiresInSec}s 后过期。` : '正在生成企业微信扫码验证码。'}
+                扫码后在手机端完成学校身份二次验证，Pi 只接收授权回执。
+              </span>
+              <button className="primary-btn sm" onClick={confirmSchoolBinding}>我已扫码确认</button>
+            </div>
+          </div>
+        )}
+
+        <div className="school-agent-actions">
+          {!schoolBound ? (
+            <button className="primary-btn sm" onClick={startSchoolBinding}>
+              <CuteIcon name="soft-shield-check" />
+              {schoolSession ? '重新生成验证码' : '企业微信扫码绑定'}
+            </button>
+          ) : (
+            <>
+              <button className="ghost-btn sm" onClick={importSchedule} disabled={schoolStep === 'importing'}>
+                <CuteIcon name="soft-import-data" />
+                {schoolStep === 'importing' ? '导入中' : '导入课表'}
+              </button>
+              <button className="primary-btn sm" onClick={syncCalendar} disabled={schoolStep !== 'synced' || calendarSynced}>
+                <CuteIcon name="soft-calendar-reminder" />
+                {calendarSynced ? '已加入日历' : '加入日历'}
+              </button>
+            </>
+          )}
+        </div>
+
+        <div className="school-schedule-preview">
+          <article>
+            <span>今日课程</span>
+            <strong>{courses.length ? `${visibleCourses.length} 门` : '待导入'}</strong>
+          </article>
+          <article>
+            <span>日历同步</span>
+            <strong>{calendarSynced ? '已完成' : '未同步'}</strong>
+          </article>
+          <article>
+            <span>安全方式</span>
+            <strong>{schoolSession?.status === 'connected' ? '已授权' : '扫码授权'}</strong>
+          </article>
+        </div>
+
+        {schoolError && (
+          <div className="ws-evomap-error">
+            <CuteIcon name="soft-warning-triangle" />
+            <span>{schoolError}</span>
+          </div>
+        )}
+
+        {(schoolStep === 'binding' || schoolStep === 'importing') && (
+          <div className="agent-running">
+            <span className="agent-spin" />
+            {schoolStep === 'binding' ? 'Pi 正在确认企业微信授权回执。' : 'Pi 正在读取课表并整理成日历事件。'}
+          </div>
+        )}
+
+        <div className="school-dashboard">
+          <section className="school-mini-calendar">
+            <div className="school-dashboard-head">
+              <div>
+                <strong>{schoolSchedule?.weekLabel ?? '本周课表'}</strong>
+                <span>{schoolSchedule?.summary ?? '导入后会在这里形成一个校园小日历。'}</span>
+              </div>
+              <em>{schoolSchedule?.generatedBy === 'minimax' ? 'MiniMax 生成' : schoolSchedule ? '本地兜底' : '等待导入'}</em>
+            </div>
+            <div className="school-week-grid">
+              {weekDays.map((day) => (
+                <article className={day.isToday ? 'today' : ''} key={day.label}>
+                  <strong>{day.label}</strong>
+                  <span>{day.date}</span>
+                  <div>
+                    {day.courses.length ? day.courses.slice(0, 3).map((course) => (
+                      <button className={`school-calendar-pill tone-${course.color}`} key={course.id}>
+                        <b>{course.start}</b>
+                        {course.title}
+                      </button>
+                    )) : <em>空课</em>}
+                  </div>
+                </article>
+              ))}
+            </div>
+          </section>
+
+          <aside className="school-agenda-panel">
+            <div className="school-dashboard-head">
+              <div>
+                <strong>今日课程与日程</strong>
+                <span>{calendarSynced ? '已写入日历，可继续提醒。' : '确认后可以加入日历。'}</span>
+              </div>
+            </div>
+            <ul className="school-course-list">
+              {visibleCourses.length ? visibleCourses.map((course) => (
+                <li key={course.id}>
+                  <strong>{course.title}</strong>
+                  <span>{course.start}-{course.end} · {course.location} · {course.teacher}</span>
+                </li>
+              )) : (
+                <li><strong>等待课表导入</strong><span>绑定企业微信后，Pi 会把 JWXT 课表整理到这里。</span></li>
+              )}
+            </ul>
+            <div className="school-event-list">
+              {events.length ? events.slice(0, 4).map((event) => (
+                <article key={event.id}>
+                  <span>{event.source}</span>
+                  <strong>{event.title}</strong>
+                  <em>{event.date} · {event.time} · {event.location}</em>
+                </article>
+              )) : (
+                <article>
+                  <span>Calendar</span>
+                  <strong>暂无校园日程</strong>
+                  <em>导入后会显示雨课堂 DDL、讲座、场馆预约等。</em>
+                </article>
+              )}
+            </div>
+          </aside>
+        </div>
+
+        {schoolSchedule?.reminders?.length ? (
+          <div className="school-reminder-strip">
+            {schoolSchedule.reminders.slice(0, 3).map((reminder) => (
+              <span key={reminder.id}><CuteIcon name="soft-calendar-reminder" />{reminder.title} · {reminder.due}</span>
+            ))}
+          </div>
+        ) : null}
+
+        <p className="agent-note">
+          参考 SYSU-Anything 的校园 skill layer：优先走企业微信扫码、官方授权或既有登录态，可继续扩展教务、雨课堂、场馆、图书馆和就业事务。
+        </p>
+      </section>
+    </div>
+  )
+}
+
+function buildSchoolWeek(courses: SchoolCourse[]) {
+  const days = [
+    { label: '周一', date: '6/17' },
+    { label: '周二', date: '6/18' },
+    { label: '周三', date: '6/19' },
+    { label: '周四', date: '6/20' },
+    { label: '今天', date: '6/21' },
+    { label: '周六', date: '6/22' },
+    { label: '周日', date: '6/23' },
+  ]
+  return days.map((day) => ({
+    ...day,
+    isToday: day.label === '今天',
+    courses: courses.filter((course) => course.day === day.label),
+  }))
+}
+
+function SkillsPage() {
   // 会话内已安装的商店技能：点「安装」后并入已启用（刷新才重置）
   const [installed, setInstalled] = useState<Set<string>>(new Set())
   const [evomapConnection, setEvomapConnection] = useState<{
@@ -6123,38 +6430,6 @@ function SkillsPage({ onOpenHealth }: { onOpenHealth: () => void }) {
 
   return (
     <div className="library-page">
-      <section className="skill-capability-console">
-        <div className="section-title">
-          <CuteIcon name="soft-dashboard-tiles" />
-          <strong>能力控制台</strong>
-          <span>身心健康、校园事务和外部应用入口</span>
-        </div>
-        <div className="skill-capability-grid">
-          <article className="today-health-card">
-            <div className="today-capability-head">
-              <span className="today-capability-icon">
-                <CuteIcon name="soft-heart-favorite" />
-              </span>
-              <div>
-                <strong>身心健康检测</strong>
-                <span>视频动作检测、语音指导和训练音乐</span>
-              </div>
-            </div>
-            <div className="today-capability-metrics">
-              <span>动作追踪</span>
-              <span>轻音乐陪练</span>
-              <span>实时提醒</span>
-            </div>
-            <button className="primary-btn sm" onClick={onOpenHealth} type="button">
-              <CuteIcon name="soft-privacy-eye" />开始检测
-            </button>
-          </article>
-
-          <AgentTasks />
-          <Integrations />
-        </div>
-      </section>
-
       <SkillSection icon="soft-search-spark" title="EvoMap 经验网络">
         <section className="skill-evomap-panel">
           <div className="skill-evomap-status">
@@ -8398,18 +8673,6 @@ function PrivacyPage({ initialLevel = 2, onReplayTutorial, preferences, onResetT
   const pauseHint = useInlineHint(2600)
   const logHint = useInlineHint(2400)
 
-  // When the onboarding-derived depth loads (asynchronously from the backend) or
-  // changes, sync the collaboration-level slider so the default reflects the
-  // user's actual preference instead of staying at the mount-time default.
-  // We only auto-sync while the user hasn't manually overridden in this session
-  // (tracked via userTouchedLevel).
-  const [userTouchedLevel, setUserTouchedLevel] = useState(false)
-  useEffect(() => {
-    if (!userTouchedLevel && typeof initialLevel === 'number') {
-      setLevel(initialLevel)
-    }
-  }, [initialLevel, userTouchedLevel])
-
   const togglePause = () =>
     pauseAct.run(
       () => {
@@ -8434,7 +8697,7 @@ function PrivacyPage({ initialLevel = 2, onReplayTutorial, preferences, onResetT
             <button
               key={lv.code}
               className={level === i ? 'active' : ''}
-              onClick={() => { setUserTouchedLevel(true); setLevel(i) }}
+              onClick={() => setLevel(i)}
               title={lv.desc}
             >
               <span>{lv.code}</span>

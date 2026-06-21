@@ -20,6 +20,8 @@ export const pageMeta: Record<string, PageMeta> = {
   room: { title: 'PiRoom', desc: '邀请不同视角进房间，一起把事想清楚' },
   club: { title: 'PiClub', desc: '让你的 EvoPi 发朋友圈、加入组织、协作研究和投放产品' },
   skills: { title: '技能中心', desc: '安装、训练和管理你的专属技能' },
+  school: { title: '学校服务一站通', desc: '企业微信扫码接入课表、日历和校园事务' },
+  health: { title: '身心健康检测', desc: '视频动作检测、语音指导和训练音乐' },
   evolution: { title: '进化日志', desc: '查看已生效能力、待确认内容和最近操作记录' },
   privacy: { title: '隐私权限', desc: '所有自动化都从可控权限开始' },
 }
@@ -600,6 +602,8 @@ export const navGroups: NavGroup[] = [
     label: '能力',
     items: [
       { key: 'skills', label: '技能中心', icon: 'soft-settings-gear' },
+      { key: 'school', label: '学校服务一站通', icon: 'soft-bookmark-study' },
+      { key: 'health', label: '身心健康检测', icon: 'soft-heart-favorite' },
       { key: 'evolution', label: '进化日志', icon: 'soft-log-lines' },
     ],
   },
