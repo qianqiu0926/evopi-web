@@ -5288,6 +5288,30 @@ body[data-theme="glass"] .mm-core {
   border-top: 0;
 }
 
+.skill-capability-console {
+  border: var(--border-w) solid var(--line);
+  border-radius: var(--r-lg);
+  padding: 16px;
+  background:
+    linear-gradient(135deg, color-mix(in srgb, var(--cute-mint) 20%, transparent), transparent 58%),
+    var(--surface);
+  box-shadow: var(--shadow-offset) var(--shadow-offset) 0 var(--shadow-hard);
+}
+
+.skill-capability-grid {
+  display: grid;
+  grid-template-columns: minmax(260px, 0.9fr) minmax(320px, 1.1fr) minmax(280px, 0.9fr);
+  gap: 12px;
+  align-items: start;
+}
+
+.skill-capability-grid .agent-tasks,
+.skill-capability-grid .integrations {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: 0;
+}
+
 /* —— PiHealth 身心健康检测 —— */
 .health-coach-page {
   display: grid;
@@ -8839,6 +8863,10 @@ body[data-theme="glass"] .evo-evidence-chips em {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
+  .skill-capability-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .app-shell.nav-collapsed {
     grid-template-columns: 78px minmax(0, 1fr);
   }
@@ -8899,6 +8927,10 @@ body[data-theme="glass"] .evo-evidence-chips em {
   }
 
   .today-capability-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .skill-capability-grid {
     grid-template-columns: 1fr;
   }
 
